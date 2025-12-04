@@ -129,13 +129,21 @@ IMPORTANT FORMAT GUIDELINES:
 - Question numbers are typically on the left side
 - Multiple choice options are usually A, B, C, D, E in a row
 - Free response areas are larger text boxes below questions
+- Look for Candidate Name, Candidate Number/ID, Country, and Level at the top of the page
 
 Extract:
 1. Multiple choice answers - Question number and selected option (A, B, C, D, or E)
 2. Free response answers - Question number and the full written text
+3. Candidate Information - Name, Number/ID, Country, Level
 
 Return ONLY valid JSON in this exact format:
 {
+  "candidate_info": {
+    "name": "Candidate Name",
+    "id": "Candidate ID",
+    "country": "Country",
+    "level": "Level"
+  },
   "multiple_choice": [
     {"question": 1, "answer": "A"},
     {"question": 2, "answer": "C"}
@@ -152,6 +160,7 @@ Important:
 - Return ONLY the JSON, no additional text
 - Pay close attention to which bubble is filled/marked
 - Ignore faint marks, only count clear selections
+- If candidate info is missing, return empty strings
 """
             
             # Load image
@@ -186,49 +195,157 @@ Important:
             logger.error(f"AI extraction failed for {image_path}: {str(e)}")
             return {"multiple_choice": [], "free_response": [], "error": str(e)}
     
+    def _process_single_page(self, image_path: str, page_num: int, extraction_prompt: Optional[str] = None) -> Dict:
+        """
+        Process a single page (helper for parallel processing)
+        
+        Args:
+            image_path: Path to image
+            page_num: Page number (1-indexed)
+            extraction_prompt: Custom prompt
+            
+        Returns:
+            Dict with page results including page number
+        """
+        logger.info(f"Processing page {page_num}: {image_path}")
+        result = self.extract_from_image(image_path, extraction_prompt)
+        
+        # Add page number to all extracted items
+        if "candidate_info" in result:
+            result["candidate_info"]['page'] = page_num
+        
+        for mcq in result.get("multiple_choice", []):
+            mcq['page'] = page_num
+        for fr in result.get("free_response", []):
+            fr['page'] = page_num
+        
+        result['page_num'] = page_num
+        result['image_path'] = image_path
+        return result
+
     def extract_from_multiple_images(
         self,
         image_paths: List[str],
-        extraction_prompt: Optional[str] = None
+        extraction_prompt: Optional[str] = None,
+        submission_id: Optional[int] = None,
+        db=None,
+        use_parallel: bool = True,
+        max_workers: int = 4
     ) -> Dict:
         """
-        Extract answers from multiple exam sheet images
+        Extract answers from multiple exam sheet images (with optional parallel processing)
         
         Args:
             image_paths: List of image paths
             extraction_prompt: Custom prompt (uses default if None)
+            submission_id: Optional submission ID for logging
+            db: Optional database session for logging
+            use_parallel: Use multi-threading for parallel processing (default: True)
+            max_workers: Maximum number of parallel workers (default: 4)
             
         Returns:
             Combined dict with all extracted answers
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import time
+        
         all_mcq = []
         all_free_response = []
+        all_candidate_info = []
         errors = []
         
-        for i, image_path in enumerate(image_paths, start=1):
-            logger.info(f"Processing page {i}/{len(image_paths)}: {image_path}")
-            result = self.extract_from_image(image_path, extraction_prompt)
-            
-            if "error" in result:
-                errors.append(f"Page {i}: {result['error']}")
-            
-            # Add page number to each answer for tracking
-            for mcq in result.get("multiple_choice", []):
-                mcq['page'] = i
-            for fr in result.get("free_response", []):
-                fr['page'] = i
-            
-            all_mcq.extend(result.get("multiple_choice", []))
-            all_free_response.extend(result.get("free_response", []))
+        start_time = time.time()
         
-        # Don't remove duplicates - keep all answers from all pages
+        if use_parallel and len(image_paths) > 1:
+            logger.info(f"Processing {len(image_paths)} pages in parallel with {max_workers} workers")
+            
+            # Process pages in parallel
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all tasks
+                future_to_page = {
+                    executor.submit(self._process_single_page, image_path, i, extraction_prompt): i 
+                    for i, image_path in enumerate(image_paths, start=1)
+                }
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_page):
+                    page_num = future_to_page[future]
+                    try:
+                        result = future.result()
+                        
+                        if "error" in result:
+                            errors.append(f"Page {page_num}: {result['error']}")
+                        
+                        # Collect candidate info
+                        candidate_name = ""
+                        if "candidate_info" in result:
+                            all_candidate_info.append(result["candidate_info"])
+                            candidate_name = result["candidate_info"].get('name', "")
+                        
+                        all_mcq.extend(result.get("multiple_choice", []))
+                        all_free_response.extend(result.get("free_response", []))
+                        
+                        # Log progress to ProcessingLog if db and submission_id are provided
+                        if db is not None and submission_id is not None:
+                            from backend.db.models import ProcessingLog
+                            log_entry = ProcessingLog(
+                                submission_id=submission_id,
+                                action="page_progress",
+                                status="info",
+                                message=f"Processed page {page_num}",
+                                extra_data={"page": page_num, "candidate_name": candidate_name}
+                            )
+                            db.add(log_entry)
+                            db.commit()
+                            logger.info(f"Logged page_progress: submission={submission_id}, page={page_num}, candidate={candidate_name}")
+                    
+                    except Exception as e:
+                        logger.error(f"Error processing page {page_num}: {e}")
+                        errors.append(f"Page {page_num}: {str(e)}")
+        else:
+            # Sequential processing (original behavior)
+            logger.info(f"Processing {len(image_paths)} pages sequentially")
+            for i, image_path in enumerate(image_paths, start=1):
+                result = self._process_single_page(image_path, i, extraction_prompt)
+                
+                if "error" in result:
+                    errors.append(f"Page {i}: {result['error']}")
+                
+                # Collect candidate info
+                candidate_name = ""
+                if "candidate_info" in result:
+                    all_candidate_info.append(result["candidate_info"])
+                    candidate_name = result["candidate_info"].get('name', "")
+                
+                all_mcq.extend(result.get("multiple_choice", []))
+                all_free_response.extend(result.get("free_response", []))
+
+                # Log progress to ProcessingLog if db and submission_id are provided
+                if db is not None and submission_id is not None:
+                    from backend.db.models import ProcessingLog
+                    log_entry = ProcessingLog(
+                        submission_id=submission_id,
+                        action="page_progress",
+                        status="info",
+                        message=f"Processed page {i}",
+                        extra_data={"page": i, "candidate_name": candidate_name}
+                    )
+                    db.add(log_entry)
+                    db.commit()
+                    logger.info(f"Logged page_progress: submission={submission_id}, page={i}, candidate={candidate_name}")
+        
+        elapsed_time = time.time() - start_time
+        logger.info(f"Processing completed in {elapsed_time:.2f} seconds ({elapsed_time/len(image_paths):.2f}s per page)")
+        
         # Sort by page number first, then by question number
         result = {
             "multiple_choice": sorted(all_mcq, key=lambda x: (x.get('page', 0), x['question'])),
             "free_response": sorted(all_free_response, key=lambda x: (x.get('page', 0), x['question'])),
+            "candidate_info": all_candidate_info,
             "pages_processed": len(image_paths),
             "total_mcq": len(all_mcq),
-            "total_free_response": len(all_free_response)
+            "total_free_response": len(all_free_response),
+            "processing_time": round(elapsed_time, 2)
         }
         
         if errors:
@@ -315,7 +432,7 @@ LEARN FROM THESE EXAMPLES:
                     
                     example_image = Image.open(example_path)
                     prompt_parts.append(f"\n--- EXAMPLE {len([p for p in prompt_parts if isinstance(p, Image.Image)]) + 1} ---")
-                    prompt_parts.append(example_image)
+                    prompt_parts.append(str(example_image))
                     prompt_parts.append(f"\nExpected output for this example:\n{json.dumps(expected_output, indent=2)}\n")
         
         # Add the actual image to extract from
@@ -335,13 +452,11 @@ Return ONLY valid JSON in this exact format:
 """)
         
         actual_image = Image.open(image_path)
-        prompt_parts.append(actual_image)
-        
+        prompt_parts.append(str(actual_image))
         try:
             logger.info(f"Using few-shot learning with template: {template_name}")
             response = self.model.generate_content(prompt_parts)
             content = response.text
-            
             # Parse JSON response
             try:
                 result = json.loads(content)
@@ -353,10 +468,8 @@ Return ONLY valid JSON in this exact format:
                 else:
                     logger.error(f"Failed to parse JSON from response: {content}")
                     result = {"multiple_choice": [], "free_response": []}
-            
             logger.info(f"Extracted {len(result.get('multiple_choice', []))} MCQ and {len(result.get('free_response', []))} free response")
             return result
-            
         except Exception as e:
             logger.error(f"Template-based extraction failed: {str(e)}")
             # Fallback to regular extraction

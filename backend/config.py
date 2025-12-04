@@ -9,19 +9,15 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
-    # DigitalOcean Spaces
-    spaces_region: str = "sgp1"
-    spaces_endpoint: str = "https://sgp1.digitaloceanspaces.com"
-    spaces_key: str
-    spaces_secret: str
-    spaces_bucket: str = "exam-answer-sheets"
+    # Local storage
+    storage_root: str = "./storage"
     
     # Google Gemini
-    gemini_api_key: str
+    gemini_api_key: str = ""
     gemini_model: str = "gemini-1.5-flash"
     
     # Database
-    database_url: str
+    database_url: str = ""
     
     # Redis
     redis_url: str = "redis://localhost:6379/0"
@@ -38,9 +34,14 @@ class Settings(BaseSettings):
     # PDF Processing
     poppler_path: Optional[str] = None  # Optional: Path to Poppler binaries
     
+    # AI Extraction Performance
+    use_parallel_extraction: bool = True  # Enable multi-threading for faster extraction
+    max_extraction_workers: int = 4  # Number of parallel workers for page processing
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 @lru_cache()

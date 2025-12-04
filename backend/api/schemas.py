@@ -38,7 +38,7 @@ class UploadResponse(BaseModel):
     message: str
     submission_id: int
     filename: str
-    spaces_key: str
+    storage_path: str
 
 
 class ProcessingStatusResponse(BaseModel):
@@ -52,6 +52,8 @@ class ProcessingStatusResponse(BaseModel):
     mcq_count: int
     free_response_count: int
     error_message: Optional[str] = None
+    current_page: Optional[int] = None
+    current_candidate_name: Optional[str] = None
 
 
 class SubmissionDetailResponse(BaseModel):

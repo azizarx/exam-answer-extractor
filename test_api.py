@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 # Configuration
-API_BASE_URL = "http://localhost:8000/api/v1"
-TEST_PDF_PATH = "test_exam.pdf"  # Replace with your test PDF path
+API_BASE_URL = "http://localhost:8000"
+TEST_PDF_PATH = r"backend/examples/UZ1-35.pdf"  # Replace with your test PDF path
 
 
 def test_upload(pdf_path: str):

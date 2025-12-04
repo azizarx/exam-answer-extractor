@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 import json
 
-from backend.services.space_client import get_spaces_client
+from backend.services.local_storage import get_local_storage
 from backend.services.pdf_to_images import get_pdf_converter
 from backend.services.ocr_engine import get_ocr_engine, AnswerParser
 from backend.services.ai_extractor import get_ai_extractor
@@ -116,104 +116,68 @@ def example_2_ai_vision_extraction(pdf_path: str):
     return json_output
 
 
-def example_3_upload_to_spaces(json_data: str, filename: str):
+def example_3_save_results_locally(json_data: str, filename: str):
     """
-    Example 3: Upload results to DigitalOcean Spaces
+    Example 3: Save structured results to local storage
     """
     print("\n" + "="*60)
-    print("EXAMPLE 3: Upload to DigitalOcean Spaces")
+    print("EXAMPLE 3: Save Results Locally")
     print("="*60)
-    
-    try:
-        # Initialize Spaces client
-        print("\n1️⃣ Connecting to DigitalOcean Spaces...")
-        spaces_client = get_spaces_client()
-        
-        # Upload JSON
-        print("\n2️⃣ Uploading JSON results...")
-        result = spaces_client.upload_json(json_data, filename)
-        
-        print("   ✅ Upload successful!")
-        print(f"   File: {result['filename']}")
-        print(f"   Key: {result['key']}")
-        print(f"   URL: {result['url']}")
-        
-        # List files
-        print("\n3️⃣ Listing files in Spaces...")
-        files = spaces_client.list_files("results/")
-        print(f"   Found {len(files)} result files")
-        for file in files[:5]:
-            print(f"      - {file}")
-        
-        return result
-        
-    except Exception as e:
-        print(f"   ❌ Upload failed: {str(e)}")
-        print("   Make sure your Spaces credentials are configured in .env")
-        return None
+
+    storage = get_local_storage()
+    print("\n1️⃣ Persisting JSON to local storage...")
+    result = storage.save_json(json_data, filename)
+    print("   ✅ Saved successfully!")
+    print(f"   Relative Path: {result['relative_path']}")
+    print(f"   Absolute Path: {result['absolute_path']}")
+
+    print("\n2️⃣ Reading JSON back...")
+    raw = storage.read_json(result['relative_path'])
+    snippet = raw[:200] + "..." if raw and len(raw) > 200 else raw
+    print(f"   Preview: {snippet}")
+
+    return result
 
 
 def example_4_complete_workflow(pdf_path: str):
-    """
-    Example 4: Complete end-to-end workflow
-    PDF → Extract → Validate → Upload → Return results
-    """
+    """Complete workflow: PDF → Extract → Validate → Save JSON (local)."""
     print("\n" + "="*60)
     print("EXAMPLE 4: Complete Workflow")
     print("="*60)
-    
     try:
-        # 1. Convert PDF
         print("\n📄 Converting PDF...")
         pdf_converter = get_pdf_converter()
         image_paths = pdf_converter.convert_from_file(pdf_path)
-        
-        # 2. Extract with AI (better accuracy)
+        print(f"   Generated {len(image_paths)} page images")
         print("🤖 Extracting with AI...")
         ai_extractor = get_ai_extractor()
         extraction = ai_extractor.extract_from_multiple_images(image_paths)
-        
-        # 3. Validate
         print("✅ Validating...")
         validation = ai_extractor.validate_extraction(extraction)
-        
-        # 4. Generate JSON
         print("📝 Generating JSON...")
         json_gen = get_json_generator()
-        json_data = json_gen.generate_with_validation(
-            Path(pdf_path).name,
-            extraction,
-            validation
-        )
-        
-        # 5. Upload to Spaces
-        print("☁️  Uploading to Spaces...")
+        json_data = json_gen.generate_with_validation(Path(pdf_path).name, extraction, validation)
+        print("💾 Saving results locally...")
         json_filename = f"{Path(pdf_path).stem}_results.json"
-        upload_result = get_spaces_client().upload_json(json_data, json_filename)
-        
-        # 6. Display summary
+        upload_result = get_local_storage().save_json(json_data, json_filename)
         print("\n" + "="*60)
         print("✨ Workflow Complete!")
         print("="*60)
         print(f"📊 MCQ Answers: {len(extraction['multiple_choice'])}")
         print(f"✍️  Free Response: {len(extraction['free_response'])}")
-        print(f"🔗 JSON URL: {upload_result['url']}")
-        
-        # Display sample answers
+        print(f"🗂️  Stored JSON: {upload_result['relative_path']}")
         if extraction['multiple_choice']:
             print("\n📝 Sample MCQ Answers:")
             for mcq in extraction['multiple_choice'][:5]:
                 print(f"   Q{mcq['question']}: {mcq['answer']}")
-        
         return {
             "extraction": extraction,
             "validation": validation,
             "json_data": json_data,
             "upload_result": upload_result
         }
-        
     except Exception as e:
-        print(f"\n❌ Workflow failed: {str(e)}")
+        print(f"\n❌ Workflow failed: {e}")
         return None
 
 
@@ -249,9 +213,8 @@ def main():
         
         input("\nPress Enter to continue to Example 3...")
         
-        # Example 3: Upload to Spaces
         print("\n" + "🔄 Running Example 3...")
-        example_3_upload_to_spaces(json_output_ai, "example_results.json")
+        example_3_save_results_locally(json_output_ai, "example_results.json")
         
         input("\nPress Enter to continue to Example 4...")
         

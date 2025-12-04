@@ -68,9 +68,23 @@ class JSONGenerator:
         """
         mcq_answers = extraction_result.get("multiple_choice", [])
         fr_answers = extraction_result.get("free_response", [])
+        candidate_infos = extraction_result.get("candidate_info", [])
         
         # Organize answers by page
         pages_data = {}
+        
+        # Initialize pages with candidate info if available
+        for info in candidate_infos:
+            page = info.get('page', 1)
+            if page not in pages_data:
+                pages_data[page] = {
+                    "page_number": page,
+                    "candidate_info": {k: v for k, v in info.items() if k != 'page'},
+                    "multiple_choice": [],
+                    "free_response": []
+                }
+            else:
+                pages_data[page]["candidate_info"] = {k: v for k, v in info.items() if k != 'page'}
         
         # Process MCQ answers
         for mcq in mcq_answers:
@@ -100,34 +114,62 @@ class JSONGenerator:
                 "response": fr['response']
             })
         
-        # Convert to sorted list
-        pages_list = [pages_data[page] for page in sorted(pages_data.keys())]
+        # Convert to sorted list of submissions
+        submissions = []
+        for page in sorted(pages_data.keys()):
+            page_data = pages_data[page]
+            
+            # Get candidate info for this page, or default to empty
+            candidate_info = page_data.get("candidate_info", {
+                "name": "",
+                "id": "",
+                "country": "",
+                "level": ""
+            })
+            
+            # Build combined answers list: MCQ then Free Response (back-to-back)
+            combined_answers = []
+            for mc in page_data["multiple_choice"]:
+                combined_answers.append({
+                    "type": "mcq",
+                    "question": mc["question"],
+                    "answer": mc["answer"],
+                })
+            for fr_item in page_data["free_response"]:
+                combined_answers.append({
+                    "type": "free_response",
+                    "question": fr_item["question"],
+                    "response": fr_item["response"],
+                })
+
+            submission = {
+                "page_number": page,
+                "candidate_information": {
+                    "candidate_name": candidate_info.get("name", ""),
+                    "candidate_number": candidate_info.get("id", ""),
+                    "country": candidate_info.get("country", ""),
+                    "level": candidate_info.get("level", "")
+                },
+                "multiple_choice": page_data["multiple_choice"],
+                "free_response": page_data["free_response"],
+                "answers": combined_answers,
+                "summary": {
+                    "multiple_choice_count": len(page_data["multiple_choice"]),
+                    "free_response_count": len(page_data["free_response"])
+                }
+            }
+            submissions.append(submission)
         
         output = {
-            "candidate_information": {
-                "candidate_name": "",  # To be filled by user/extracted
-                "candidate_number": "",  # To be filled by user/extracted
-                "country": "",  # To be filled by user/extracted
-                "level": ""  # To be filled by user/extracted
-            },
             "document_information": {
                 "filename": filename,
                 "extraction_timestamp": datetime.utcnow().isoformat(),
                 "total_pages": len(pages_data),
+                "total_submissions": len(submissions),
                 "total_multiple_choice": len(mcq_answers),
                 "total_free_response": len(fr_answers)
             },
-            "pages": pages_list,
-            "summary": {
-                "multiple_choice_by_page": {
-                    str(page): len(data["multiple_choice"]) 
-                    for page, data in pages_data.items()
-                },
-                "free_response_by_page": {
-                    str(page): len(data["free_response"]) 
-                    for page, data in pages_data.items()
-                }
-            }
+            "submissions": submissions
         }
         
         # Add validation info

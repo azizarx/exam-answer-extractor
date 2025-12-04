@@ -1,6 +1,7 @@
+
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 // Create axios instance with default config
 const apiClient = axios.create({
@@ -75,6 +76,19 @@ export const examAPI = {
   },
 
   /**
+   * Download the actual structured JSON for a submission
+   * @param {number} submissionId - ID of the submission
+   * @returns {Promise} JSON object (structured)
+   */
+  downloadSubmissionJSON: async (submissionId) => {
+    const response = await apiClient.get(`/submission/${submissionId}/json`, {
+      responseType: 'json',
+      timeout: 120000, // allow more time for large files
+    });
+    return response.data;
+  },
+
+  /**
    * List all submissions with optional filtering
    * @param {Object} params - Query parameters
    * @returns {Promise} List of submissions
@@ -91,6 +105,16 @@ export const examAPI = {
    */
   deleteSubmission: async (submissionId) => {
     const response = await apiClient.delete(`/submission/${submissionId}`);
+    return response.data;
+  },
+
+  /**
+   * Get recent processing logs for a submission
+   * @param {number} submissionId
+   * @param {number} limit
+   */
+  getSubmissionLogs: async (submissionId, limit = 10) => {
+    const response = await apiClient.get(`/submission/${submissionId}/logs`, { params: { limit } });
     return response.data;
   },
 

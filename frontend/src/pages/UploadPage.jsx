@@ -56,9 +56,10 @@ const UploadPage = () => {
               Exam Answer Extractor
             </h1>
           </div>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+          <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-6">
             Upload your PDF exam answer sheet and let AI extract all answers automatically
           </p>
+          
           <div className="flex items-center justify-center gap-6 mt-6 text-sm text-slate-500">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
