@@ -11,15 +11,15 @@ alembic==1.13.1
 # (Removed S3/Spaces dependency)
 
 # PDF Processing
-pymupdf==1.24.0
+pymupdf>=1.24.0
 pdf2image==1.17.0
-Pillow==10.2.0
+Pillow>=10.4.0
 
 # OCR
 pytesseract==0.3.10
 
 # Google Gemini Integration
-google-generativeai==0.3.2
+google-generativeai>=0.8.0
 
 # Environment Variables
 python-dotenv==1.0.1
