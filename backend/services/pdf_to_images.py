@@ -2,7 +2,7 @@
 PDF to Images Conversion Service
 Converts PDF pages to PNG images for OCR processing using PyMuPDF (no external dependencies)
 """
-import fitz  # PyMuPDF
+import pymupdf  # PyMuPDF
 from typing import List
 from PIL import Image
 import logging
@@ -48,7 +48,7 @@ class PDFConverter:
             
             # Open PDF
             logger.info(f"Converting PDF: {pdf_path}")
-            pdf_document = fitz.open(pdf_path)
+            pdf_document = pymupdf.open(pdf_path)
             
             # Save images to disk
             image_paths = []
@@ -56,7 +56,7 @@ class PDFConverter:
             
             # Calculate zoom factor for DPI
             zoom = self.dpi / 72  # 72 is the default DPI
-            mat = fitz.Matrix(zoom, zoom)
+            mat = pymupdf.Matrix(zoom, zoom)
             
             for page_num in range(len(pdf_document)):
                 page = pdf_document[page_num]
@@ -126,12 +126,12 @@ class PDFConverter:
         """
         try:
             logger.info(f"Converting PDF to PIL images: {pdf_path}")
-            pdf_document = fitz.open(pdf_path)
+            pdf_document = pymupdf.open(pdf_path)
             images = []
             
             # Calculate zoom factor for DPI
             zoom = self.dpi / 72
-            mat = fitz.Matrix(zoom, zoom)
+            mat = pymupdf.Matrix(zoom, zoom)
             
             for page_num in range(len(pdf_document)):
                 page = pdf_document[page_num]
@@ -159,7 +159,7 @@ class PDFConverter:
             Number of pages
         """
         try:
-            pdf_document = fitz.open(pdf_path)
+            pdf_document = pymupdf.open(pdf_path)
             count = len(pdf_document)
             pdf_document.close()
             logger.info(f"PDF {pdf_path} has {count} pages")
