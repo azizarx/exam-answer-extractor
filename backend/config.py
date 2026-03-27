@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     
     # Google Gemini
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-1.5-flash"
+    # Use a supported Vision model (gemini-2.0-flash is stable & cost-efficient)
+    gemini_model: str = "gemini-2.0-flash"
     
     # Database
     database_url: str = ""
@@ -36,7 +37,23 @@ class Settings(BaseSettings):
     
     # AI Extraction Performance
     use_parallel_extraction: bool = True  # Enable multi-threading for faster extraction
-    max_extraction_workers: int = 4  # Number of parallel workers for page processing
+    max_extraction_workers: int = 2  # Number of parallel workers for page processing
+
+    # Output format
+    minimal_output: bool = True  # Generate minimal JSON output (answers + identifiers only)
+
+    # Prompt caching (to reduce repeated format analysis)
+    cache_page_prompts: bool = True
+    page_hash_size: int = 16
+
+    # DigitalOcean Spaces
+    spaces_endpoint: Optional[str] = None
+    spaces_bucket: Optional[str] = None
+    spaces_region: Optional[str] = None
+    spaces_key: Optional[str] = None
+    spaces_secret: Optional[str] = None
+    archive_images_to_spaces: bool = False
+    spaces_image_archive_folder: str = "exams-extraction-pics"
     
     class Config:
         env_file = ".env"

@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { CheckCircle2, Clock, AlertCircle, Loader2, FileCheck } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { Card, Badge, LoadingSpinner } from '../common';
 import examAPI from '../../services/api';
 import clsx from 'clsx';
 
 /**
  * StatusTracker Component
- * Real-time tracking of PDF processing status
+ * Real-time tracking of PDF processing status with dynamic stats
  */
 const StatusTracker = ({ submissionId, onComplete }) => {
   const [status, setStatus] = useState(null);
@@ -24,31 +24,28 @@ const StatusTracker = ({ submissionId, onComplete }) => {
 
     let interval;
     let isMounted = true;
-    
+
     const fetchStatus = async () => {
       try {
-        console.log('Fetching status for submission', submissionId);
         const data = await examAPI.getStatus(submissionId);
-        console.log('Status API response:', data);
-        
         if (!isMounted) return;
-        
+
         setStatus(data);
-        // Show transient page message when page increments
-        const cp = data.current_page !== undefined ? Number(data.current_page) : undefined;
+
+        // Transient page message
+        const cp = data.current_page != null ? Number(data.current_page) : undefined;
         if (cp !== undefined && prevPageRef.current !== cp) {
           prevPageRef.current = cp;
-          const candidate = data.current_candidate_name && data.current_candidate_name.trim() ? data.current_candidate_name : null;
-          setPageMessage(`Processed page ${cp}${candidate ? ` — ${candidate}` : ''}`);
+          const candidate = data.current_candidate_name?.trim() || null;
+          setPageMessage(`Processed page ${cp}${candidate ? ` \u2014 ${candidate}` : ''}`);
           setTimeout(() => setPageMessage(''), 4000);
         }
-        setLoading(false);
-        setError(''); // Clear any previous errors
 
-        // Stop polling if completed or failed
+        setLoading(false);
+        setError('');
+
         if (data.status === 'completed') {
           if (interval) clearInterval(interval);
-          // Only call onComplete once
           if (onComplete && !completedRef.current) {
             completedRef.current = true;
             onComplete(data);
@@ -59,25 +56,19 @@ const StatusTracker = ({ submissionId, onComplete }) => {
         }
       } catch (err) {
         if (!isMounted) return;
-        // Don't stop polling on timeout - backend is still processing
-        // Just show a warning but keep trying
-        console.error('Status check timed out or failed, backend still processing...', err);
+        console.error('Status check failed, retrying...', err);
         setLoading(false);
-        // Don't clear interval - keep retrying
       }
     };
 
-  // Initial fetch
     fetchStatus();
-
-    // Poll every 3 seconds (increased from 2 to reduce server load)
     interval = setInterval(fetchStatus, 3000);
 
     return () => {
       isMounted = false;
       if (interval) clearInterval(interval);
     };
-  }, [submissionId]); // Removed onComplete from dependencies to prevent re-polling
+  }, [submissionId]);
 
   if (loading) {
     return (
@@ -100,8 +91,7 @@ const StatusTracker = ({ submissionId, onComplete }) => {
       </Card>
     );
   }
-  
-  // Show processing message if we have status even with errors
+
   if (!status && !loading) {
     return (
       <Card className="border-blue-200 bg-blue-50">
@@ -109,8 +99,7 @@ const StatusTracker = ({ submissionId, onComplete }) => {
           <Loader2 className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1 animate-spin" />
           <div>
             <h3 className="font-semibold text-blue-800 mb-1">Processing in Background</h3>
-            <p className="text-blue-600">Your PDF is being processed. This may take 3-5 minutes for large files.</p>
-            <p className="text-blue-500 text-sm mt-2">Status updates will appear when available...</p>
+            <p className="text-blue-600">Your PDF is being processed. This may take 3\u20135 minutes for large files.</p>
           </div>
         </div>
       </Card>
@@ -151,12 +140,15 @@ const StatusTracker = ({ submissionId, onComplete }) => {
       bgColor: 'bg-red-100',
       badge: 'error',
       title: 'Failed',
-      description: 'Processing failed. Please try again.',
+      description: status.error_message || 'Processing failed. Please try again.',
     },
   };
 
   const config = statusConfig[status.status] || statusConfig.pending;
   const StatusIcon = config.icon;
+  const progress = status.current_page && status.pages_count > 0
+    ? Math.min(100, Math.round((Number(status.current_page) / Number(status.pages_count)) * 100))
+    : 0;
 
   return (
     <Card className="max-w-2xl mx-auto">
@@ -170,122 +162,132 @@ const StatusTracker = ({ submissionId, onComplete }) => {
             <h3 className="text-xl font-bold text-slate-800">{config.title}</h3>
             <Badge variant={config.badge}>{status.status}</Badge>
           </div>
+
+          {/* Transient page message */}
           {pageMessage && (
-            <div className="mb-2 bg-blue-50 border border-blue-100 rounded p-2 text-sm text-blue-700">{pageMessage}</div>
+            <div className="mb-2 bg-blue-50 border border-blue-100 rounded p-2 text-sm text-blue-700">
+              {pageMessage}
+            </div>
           )}
-          <div className="mt-2">
-            <button className="text-xs text-slate-500 hover:underline mr-4" onClick={async () => {
-              try {
-                const data = await examAPI.getSubmissionLogs(submissionId);
-                console.log('Fetched logs:', data);
-                setLogs(data);
-                setLogsOpen(true);
-              } catch (err) {
-                console.error('Failed to fetch logs', err);
-                alert('Failed to fetch logs');
-              }
-            }}>Show logs</button>
-          </div>
 
-          {/* Current page and candidate summary (visible at all times if available) */}
-          <div className="flex items-center gap-6 mb-4 text-sm text-slate-600">
-            <div>
-              <p className="text-xs text-slate-500">Current Page</p>
-              <p className="font-semibold text-slate-800">{status.current_page !== undefined ? Number(status.current_page) : '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Candidate</p>
-              <p className="font-semibold text-slate-800">{status.current_candidate_name && status.current_candidate_name.trim() ? status.current_candidate_name : 'No name detected'}</p>
-            </div>
-          </div>
+          <p className="text-slate-600 mb-4 text-sm">{config.description}</p>
 
-          <p className="text-slate-600 mb-4">{config.description}</p>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          {/* Stats grid \u2014 flexible labels based on what the AI found */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-4">
             <div>
-              <p className="text-slate-500 mb-1">Filename</p>
+              <p className="text-slate-500 text-xs mb-0.5">Filename</p>
               <p className="font-semibold text-slate-800 truncate">{status.filename}</p>
             </div>
-            
             <div>
-              <p className="text-slate-500 mb-1">Pages</p>
+              <p className="text-slate-500 text-xs mb-0.5">Pages</p>
               <p className="font-semibold text-slate-800">{status.pages_count || 0}</p>
             </div>
-            
             <div>
-              <p className="text-slate-500 mb-1">MCQ Answers</p>
-              <p className="font-semibold text-slate-800">{status.mcq_count || 0}</p>
+              <p className="text-slate-500 text-xs mb-0.5">Candidates</p>
+              <p className="font-semibold text-slate-800">{status.candidates_count || 0}</p>
             </div>
-            
             <div>
-              <p className="text-slate-500 mb-1">Free Response</p>
-              <p className="font-semibold text-slate-800">{status.free_response_count || 0}</p>
+              <p className="text-slate-500 text-xs mb-0.5">Answers</p>
+              <p className="font-semibold text-slate-800">
+                {(status.answers_count || 0)}
+                {(status.drawing_count || 0) > 0 && (
+                  <span className="text-xs text-slate-400 ml-1">
+                    (+{status.drawing_count} drawing)
+                  </span>
+                )}
+              </p>
             </div>
           </div>
 
-          { (status.current_page !== undefined || (status.current_candidate_name && status.current_candidate_name.trim())) && (
-            <div className="mt-4">
-              {/* Progress bar with dynamic width based on page / pages_count */}
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
-                {status.current_page !== undefined && status.pages_count > 0 ? (
+          {/* Progress bar */}
+          {(status.status === 'processing' || (status.current_page != null && status.pages_count > 0)) && (
+            <div className="mb-4">
+              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden mb-2">
+                {progress > 0 ? (
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
-                    style={{ width: `${Math.min(100, Math.round((Number(status.current_page) / Math.max(1, Number(status.pages_count))) * 100))}%` }}
-                    aria-hidden
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
                   />
                 ) : (
-                  <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 animate-pulse rounded-full" style={{ width: '30%' }} />
+                  <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 animate-pulse rounded-full" style={{ width: '15%' }} />
                 )}
               </div>
-
-              <div className="flex items-center justify-between gap-4 mb-2">
-                <div className="text-blue-700 text-sm">
-                  {status.current_page !== undefined && Number(status.pages_count) > 0 ? (
-                    <div>
-                      Processing Page <span className="font-semibold">{Number(status.current_page)}</span> of <span className="font-semibold">{Number(status.pages_count)}</span> — <span className="text-xs text-slate-500">{Math.min(100, Math.round((Number(status.current_page) / Math.max(1, Number(status.pages_count))) * 100))}%</span>
-                    </div>
-                  ) : (
-                    <div>Processing page <span className="font-semibold">{status.current_page || '...'}</span></div>
-                  )}
-                </div>
-                <div className="text-sm text-slate-500">
-                  {status.processed_at ? `Started at ${new Date(status.processed_at).toLocaleTimeString()}` : ''}
-                </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row md:items-center md:gap-6 md:justify-between text-blue-700 text-sm">
-                <div className="flex items-center gap-3">
-                  <div className="text-sm text-slate-500">Candidate</div>
-                    <div className="text-blue-700 font-semibold">{status.current_candidate_name && status.current_candidate_name.trim() ? status.current_candidate_name : 'Unknown'}</div>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <div>Page: <span className="font-semibold">{status.current_page || '—'}</span></div>
-                  <div>of <span className="font-semibold">{status.pages_count || '—'}</span></div>
-                </div>
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span>
+                  Page <strong>{status.current_page || '...'}</strong> of <strong>{status.pages_count || '...'}</strong>
+                  {progress > 0 && <span className="ml-2 text-slate-400">{progress}%</span>}
+                </span>
+                {status.current_candidate_name?.trim() && (
+                  <span className="text-blue-600">Current: {status.current_candidate_name}</span>
+                )}
               </div>
             </div>
           )}
 
-          <div className="mt-4">
+          {/* Error message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              onClick={async () => {
+                try {
+                  const data = await examAPI.getSubmissionLogs(submissionId);
+                  setLogs(data);
+                  setLogsOpen(!logsOpen);
+                } catch (err) {
+                  console.error('Failed to fetch logs', err);
+                }
+              }}
+              className="text-xs text-slate-500 hover:text-blue-600 hover:underline transition"
+            >
+              {logsOpen ? 'Hide' : 'Show'} logs
+            </button>
             <button
               onClick={() => setDebugOpen(!debugOpen)}
-              className="text-xs text-slate-500 hover:underline"
+              className="text-xs text-slate-500 hover:text-blue-600 hover:underline transition"
             >
-              {debugOpen ? 'Hide' : 'Show'} raw status JSON
+              {debugOpen ? 'Hide' : 'Show'} raw status
             </button>
-            {debugOpen && (
-                <pre className="mt-2 text-xs text-slate-700 bg-slate-50 p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap">
-                  {JSON.stringify(status, null, 2)}
-                </pre>
-              )}
-
-            {logsOpen && (
-              <div className="mt-2 bg-slate-50 p-2 rounded border">
-                <div className="text-sm font-semibold mb-2">Recent Logs</div>
-                <pre className="text-xs text-slate-700 max-h-44 overflow-auto whitespace-pre-wrap">{JSON.stringify(logs, null, 2)}</pre>
-              </div>
-            )}
           </div>
+
+          {/* Logs */}
+          {logsOpen && logs.length > 0 && (
+            <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
+              <div className="text-xs font-semibold text-slate-600 mb-2">Recent Logs ({logs.length})</div>
+              <div className="space-y-1 max-h-48 overflow-auto">
+                {logs.map((log, i) => (
+                  <div key={log.id || i} className="flex items-start gap-2 text-xs">
+                    <span className={clsx(
+                      'px-1.5 py-0.5 rounded font-medium',
+                      log.status === 'error' ? 'bg-red-100 text-red-700' :
+                      log.status === 'success' ? 'bg-green-100 text-green-700' :
+                      'bg-blue-100 text-blue-700'
+                    )}>
+                      {log.action}
+                    </span>
+                    <span className="text-slate-600 flex-1">{log.message}</span>
+                    {log.created_at && (
+                      <span className="text-slate-400 whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Debug JSON */}
+          {debugOpen && (
+            <pre className="mt-3 text-xs text-slate-700 bg-slate-50 p-3 rounded-lg max-h-40 overflow-auto whitespace-pre-wrap border border-slate-200">
+              {JSON.stringify(status, null, 2)}
+            </pre>
+          )}
         </div>
       </div>
     </Card>

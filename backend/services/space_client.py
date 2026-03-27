@@ -3,10 +3,14 @@ DigitalOcean Spaces Client Service
 Handles file upload/download operations with S3-compatible storage
 """
 import boto3
+import botocore
 from botocore.exceptions import ClientError
 from typing import Optional, BinaryIO
 import logging
 from backend.config import get_settings
+from datetime import datetime
+from pathlib import Path
+
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +21,7 @@ class SpacesClient:
     def __init__(self):
         settings = get_settings()
         
-        session = boto3.session.Session()
+        session = boto3.Session()
         self.client = session.client(
             's3',
             region_name=settings.spaces_region,
@@ -94,6 +98,44 @@ class SpacesClient:
             logger.error(f"Failed to upload JSON {filename}: {str(e)}")
             raise Exception(f"Upload failed: {str(e)}")
     
+    def upload_image(self, image_path: str, submission_id: int, original_pdf_name: str) -> Optional[str]:
+        """Uploads a single image file to a structured archive path in Spaces."""
+        settings = get_settings()
+        if not settings.archive_images_to_spaces:
+            return None
+        
+        try:
+            now = datetime.utcnow()
+            pdf_base_name = Path(original_pdf_name).stem
+            image_base_name = Path(image_path).name
+            
+            key = (
+                f"{settings.spaces_image_archive_folder}/"
+                f"{now.year}/{now.month:02d}/{now.day:02d}/"
+                f"submission_{submission_id}/{pdf_base_name}/{image_base_name}"
+            )
+            
+            with open(image_path, "rb") as f:
+                self.client.upload_fileobj(
+                    f,
+                    self.bucket,
+                    key,
+                    ExtraArgs={'ContentType': 'image/png'}
+                )
+            
+            logger.info(f"Archived image to Spaces: {key}")
+            return key
+        except FileNotFoundError:
+            logger.error(f"Image file not found for archiving: {image_path}")
+            return None
+        except ClientError as e:
+            logger.error(f"Failed to archive image {image_path} to Spaces: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to archive image to Spaces: {str(e)}")
+            # Decide if you want to re-raise or just log
+            return None
+
     def download_pdf(self, key: str, local_path: str) -> bool:
         """
         Download a PDF from Spaces to local filesystem
@@ -200,13 +242,15 @@ class SpacesClient:
             return None
 
 
+# ... existing code ...
 # Singleton instance
 _spaces_client = None
 
 
-def get_spaces_client() -> SpacesClient:
+def get_spaces_client() -> "SpacesClient":
     """Get or create SpacesClient singleton instance"""
     global _spaces_client
     if _spaces_client is None:
         _spaces_client = SpacesClient()
     return _spaces_client
+

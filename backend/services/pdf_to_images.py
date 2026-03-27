@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class PDFConverter:
     """Converts PDF files to images"""
     
-    def __init__(self, dpi: int = 300, fmt: str = 'PNG'):
+    def __init__(self, dpi: int = 200, fmt: str = 'PNG'):
         """
         Initialize PDF converter
         

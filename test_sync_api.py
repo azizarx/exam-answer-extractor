@@ -29,9 +29,23 @@ def test_sync_extraction():
         if response.status_code == 200:
             data = response.json()
             print("✅ Extraction successful!")
-            print(f"Filename: {data.get('filename')}")
-            print(f"MCQ Count: {data.get('total_multiple_choice')}")
-            print(f"Free Response Count: {data.get('total_free_response')}")
+            
+            # Check for document_information structure
+            if "document_information" in data:
+                doc_info = data["document_information"]
+                print(f"Filename: {doc_info.get('filename')}")
+                print(f"Total Pages: {doc_info.get('total_pages')}")
+                print(f"Total Submissions: {doc_info.get('total_submissions')}")
+                print(f"MCQ Count: {doc_info.get('total_multiple_choice')}")
+                print(f"Free Response Count: {doc_info.get('total_free_response')}")
+                print(f"Processing Time: {data.get('processing_time', 'N/A')}s")
+            else:
+                # Fallback to old structure
+                print(f"Filename: {data.get('filename')}")
+                print(f"MCQ Count: {data.get('total_multiple_choice')}")
+                print(f"Free Response Count: {data.get('total_free_response')}")
+                print(f"Pages Processed: {data.get('pages_processed')}")
+                print(f"Processing Time: {data.get('processing_time', 'N/A')}s")
             
             # Print a snippet of the result
             print("\nSnippet of results:")

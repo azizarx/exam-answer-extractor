@@ -19,13 +19,18 @@ const TrackingPage = () => {
 
   const handleStatusComplete = useCallback(async (statusData) => {
     if (statusData.status === 'completed' && !results) {
-      // Fetch full results only if we don't have them yet
       setLoading(true);
       try {
         const data = await examAPI.getSubmission(submissionId);
+        // Merge processed_at from status if not present
+        if (!data.processed_at && statusData.processed_at) {
+          data.processed_at = statusData.processed_at;
+        }
         setResults(data);
+        setError('');
       } catch (err) {
-        setError('Failed to load results');
+        console.error('Failed to load results:', err);
+        setError(err?.response?.data?.detail || 'Failed to load results');
       } finally {
         setLoading(false);
       }

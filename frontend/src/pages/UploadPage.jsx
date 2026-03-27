@@ -37,7 +37,20 @@ const UploadPage = () => {
       navigate(`/track/${response.submission_id}`);
     } catch (err) {
       console.error('Upload failed:', err);
-      setError(err.response?.data?.detail || 'Upload failed. Please try again.');
+      let message = 'Upload failed. Please try again.';
+      if (err.response) {
+        const status = err.response.status;
+        const data = err.response.data;
+        message = `Upload failed (${status})`;
+        if (data) {
+          if (typeof data === 'string') message += `: ${data}`;
+          else if (data.detail) message += `: ${data.detail}`;
+          else if (data.message) message += `: ${data.message}`;
+        }
+      } else if (err.request) {
+        message = 'Upload failed: no response from server.';
+      }
+      setError(message);
       setUploading(false);
       setUploadProgress(0);
     }

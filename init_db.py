@@ -3,7 +3,7 @@ Database initialization and management script
 """
 import sys
 from backend.db.database import init_db, drop_db, engine
-from backend.db.models import ExamSubmission, MultipleChoiceAnswer, FreeResponseAnswer, ProcessingLog
+from backend.db.models import ExamSubmission, MultipleChoiceAnswer, FreeResponseAnswer, ProcessingLog, CandidateResult, AnswerKey
 from sqlalchemy import inspect
 import logging
 
