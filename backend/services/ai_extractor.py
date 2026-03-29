@@ -457,6 +457,24 @@ class AIExtractor:
         }
 
 
-def get_ai_extractor() -> AIExtractor:
-    """Factory function to create AIExtractor instance"""
-    return AIExtractor()
+def get_ai_extractor():
+    """Factory function to create extractor instance.
+
+    Returns OptimizedAIExtractor if use_optimized_pipeline=True in config,
+    otherwise returns legacy AIExtractor.
+    """
+    settings = get_settings()
+
+    if settings.use_optimized_pipeline:
+        try:
+            from backend.services.optimized_extractor import OptimizedAIExtractor
+            logger.info("Using OPTIMIZED pipeline (CV preprocessing + token optimization)")
+            return OptimizedAIExtractor(
+                max_workers=settings.max_extraction_workers
+            )
+        except ImportError as e:
+            logger.warning(f"Failed to import OptimizedAIExtractor, falling back to legacy: {e}")
+            return AIExtractor()
+    else:
+        logger.info("Using LEGACY pipeline")
+        return AIExtractor()

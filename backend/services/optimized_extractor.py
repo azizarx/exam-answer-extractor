@@ -131,6 +131,44 @@ class OptimizedAIExtractor:
 
         return results
 
+    def validate_extraction(self, extraction_result: Dict) -> Dict:
+        """
+        Validate extracted data for common issues.
+        Backwards compatible with AIExtractor.validate_extraction()
+        """
+        warnings: List[str] = []
+        candidates = extraction_result.get("candidates", [])
+        valid_answers = {"A", "B", "C", "D", "E", "BL", "IN", "DR"}
+
+        total_answers = 0
+        total_drawing = 0
+
+        for i, candidate in enumerate(candidates):
+            answers = candidate.get("answers", {})
+            drawing = candidate.get("drawing_questions", {})
+            total_answers += len(answers)
+            total_drawing += len(drawing)
+
+            for q_num, answer in answers.items():
+                if answer not in valid_answers:
+                    warnings.append(
+                        f"Page {candidate.get('page_number', i + 1)}: "
+                        f"Unexpected answer '{answer}' for Q{q_num}"
+                    )
+
+        logger.info(
+            "Validation: %d candidates, %d answers, %d drawing, %d warnings",
+            len(candidates), total_answers, total_drawing, len(warnings)
+        )
+
+        return {
+            "is_valid": len(warnings) == 0,
+            "warnings": warnings,
+            "total_candidates": len(candidates),
+            "total_answers": total_answers,
+            "total_drawing_questions": total_drawing,
+        }
+
     def _extraction_to_dict(self, extraction: CandidateExtraction) -> Dict[str, Any]:
         """Convert CandidateExtraction to legacy dict format."""
         result = {
