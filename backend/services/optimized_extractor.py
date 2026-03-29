@@ -4,8 +4,7 @@ Provides backwards-compatible interface while using optimized internals.
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Callable
-from PIL import Image
+from typing import List, Dict, Any, Optional
 from dataclasses import asdict
 
 from backend.config import get_settings
@@ -48,11 +47,30 @@ class OptimizedAIExtractor:
         # Format cache (persists across extractions)
         self._format_cache: Dict[str, ExamFormat] = {}
 
-    def analyze_format(self, image: Image.Image) -> Dict[str, Any]:
+    def analyze_format(self, image_path: str) -> Dict[str, Any]:
         """
         Analyze exam format from a single image.
         Backwards compatible with existing AIExtractor.analyze_format()
         """
+        from PIL import Image
+
+        try:
+            image = Image.open(image_path)
+        except Exception as e:
+            logger.error(f"Failed to load image {image_path}: {e}")
+            # Return default format on error
+            return {
+                "header_fields": [
+                    {"key": "candidate_number", "label": "Candidate Number"},
+                    {"key": "candidate_name", "label": "Candidate Name"}
+                ],
+                "mcq_range": "1-30",
+                "drawing_range": None,
+                "answer_options": ["A", "B", "C", "D"],
+                "total_questions": 30,
+                "description": "Default format (image load failed)"
+            }
+
         analyzer = PageAnalyzer()
         layout = analyzer.analyze_page(image, page_number=1)
 
@@ -76,60 +94,103 @@ class OptimizedAIExtractor:
 
     def extract_from_image(
         self,
-        image: Image.Image,
-        format_info: Dict = None,
-        page_number: int = 1
+        image_path: str,
+        extraction_prompt: Optional[str] = None,
+        use_examples: bool = True
     ) -> Dict[str, Any]:
         """
         Extract data from a single image.
         Backwards compatible with existing AIExtractor.extract_from_image()
         """
+        from PIL import Image
+
+        try:
+            image = Image.open(image_path)
+        except Exception as e:
+            logger.error(f"Failed to load image {image_path}: {e}")
+            return {"error": str(e), "answers": {}, "drawing_questions": {}}
+
         # Analyze layout
         analyzer = PageAnalyzer()
-        layout = analyzer.analyze_page(image, page_number)
+        layout = analyzer.analyze_page(image, page_number=1)
 
         if layout.is_blank:
-            return self._empty_result(page_number)
+            return self._empty_result(1)
 
-        # Get or detect format
-        if format_info:
-            exam_format = self._dict_to_format(format_info, layout.layout_hash)
-        else:
-            exam_format = self.pipeline.format_detector.detect_format(image, layout)
-
-        # Extract using pipeline
+        # Detect format and extract
+        exam_format = self.pipeline.format_detector.detect_format(image, layout)
         extraction = self.pipeline._extract_page(image, layout, exam_format)
-        extraction.page_number = page_number
+        extraction.page_number = 1
 
         return self._extraction_to_dict(extraction)
 
     def extract_from_multiple_images(
         self,
-        images: List[Image.Image],
-        format_info: Dict = None,
-        progress_callback: Callable = None,
-        db_session=None,
-        submission_id: int = None
-    ) -> List[Dict[str, Any]]:
+        image_paths: List[str],
+        extraction_prompt: Optional[str] = None,
+        submission_id: Optional[int] = None,
+        db=None,
+        use_parallel: bool = True,
+        max_workers: int = 4
+    ) -> Dict[str, Any]:
         """
         Extract data from multiple images.
         Backwards compatible with existing AIExtractor.extract_from_multiple_images()
-        """
-        def wrapped_callback(message: str, current: int, total: int):
-            if progress_callback:
-                progress_callback(message, current, total)
-            # Log to database if session provided
-            if db_session and submission_id:
-                self._log_progress(db_session, submission_id, message, current, total)
 
-        extractions = self.pipeline.process_images(images, wrapped_callback)
+        Args:
+            image_paths: List of paths to image files
+            extraction_prompt: Ignored (kept for compatibility)
+            submission_id: Optional submission ID for logging
+            db: Optional database session for logging
+            use_parallel: Whether to use parallel processing
+            max_workers: Number of parallel workers
+        """
+        from PIL import Image
+        import time
+
+        start_time = time.time()
+
+        # Load images from paths
+        images = []
+        for path in image_paths:
+            try:
+                img = Image.open(path)
+                images.append(img)
+            except Exception as e:
+                logger.error(f"Failed to load image {path}: {e}")
+                continue
+
+        if not images:
+            return {
+                "candidates": [],
+                "pages_processed": 0,
+                "pages_with_data": 0,
+                "processing_time": 0,
+                "errors": ["No valid images loaded"]
+            }
+
+        def progress_callback(message: str, current: int, total: int):
+            # Log to database if session provided
+            if db and submission_id:
+                self._log_progress(db, submission_id, message, current, total)
+
+        # Use the pipeline
+        extractions = self.pipeline.process_images(images, progress_callback)
 
         # Convert to legacy format
-        results = []
+        candidates = []
         for ext in extractions:
-            results.append(self._extraction_to_dict(ext))
+            candidates.append(self._extraction_to_dict(ext))
 
-        return results
+        elapsed_time = time.time() - start_time
+        pages_with_data = sum(1 for c in candidates if c.get("answers"))
+
+        return {
+            "candidates": candidates,
+            "pages_processed": len(image_paths),
+            "pages_with_data": pages_with_data,
+            "processing_time": round(elapsed_time, 2),
+        }
 
     def validate_extraction(self, extraction_result: Dict) -> Dict:
         """
