@@ -18,6 +18,11 @@ Pillow>=10.4.0
 # OCR
 pytesseract==0.3.10
 
+# Computer Vision (for layout detection & bubble analysis)
+opencv-python>=4.9.0
+scikit-image>=0.22.0
+numpy>=1.26.0
+
 # Google Gemini Integration
 google-generativeai>=0.8.0
 

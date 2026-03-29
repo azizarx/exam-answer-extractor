@@ -1,0 +1,251 @@
+"""
+Integration layer connecting the refactored pipeline with existing API routes.
+Provides backwards-compatible interface while using optimized internals.
+"""
+
+import logging
+from typing import List, Dict, Any, Optional, Callable
+from PIL import Image
+from dataclasses import asdict
+
+from backend.config import get_settings
+from backend.services.extraction_pipeline import (
+    RefactoredPipeline,
+    CandidateExtraction,
+    ExamFormat
+)
+from backend.services.page_analyzer import PageAnalyzer, PageLayout
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+class OptimizedAIExtractor:
+    """
+    Drop-in replacement for AIExtractor using the refactored pipeline.
+    Maintains the same interface for backwards compatibility.
+    """
+
+    def __init__(
+        self,
+        api_key: str = None,
+        model_name: str = None,
+        use_parallel: bool = True,
+        max_workers: int = 3
+    ):
+        self.api_key = api_key or settings.gemini_api_key
+        self.model_name = model_name or settings.gemini_model
+        self.use_parallel = use_parallel
+        self.max_workers = max_workers
+
+        # Initialize refactored pipeline
+        self.pipeline = RefactoredPipeline(
+            gemini_api_key=self.api_key,
+            gemini_model=self.model_name,
+            max_workers=max_workers
+        )
+
+        # Format cache (persists across extractions)
+        self._format_cache: Dict[str, ExamFormat] = {}
+
+    def analyze_format(self, image: Image.Image) -> Dict[str, Any]:
+        """
+        Analyze exam format from a single image.
+        Backwards compatible with existing AIExtractor.analyze_format()
+        """
+        analyzer = PageAnalyzer()
+        layout = analyzer.analyze_page(image, page_number=1)
+
+        exam_format = self.pipeline.format_detector.detect_format(image, layout)
+
+        # Convert to legacy format
+        return {
+            "header_fields": exam_format.header_fields,
+            "mcq_range": self._range_to_string(exam_format.question_ranges.get("mcq")),
+            "drawing_range": self._range_to_string(exam_format.question_ranges.get("drawing")),
+            "answer_options": exam_format.answer_options,
+            "total_questions": exam_format.total_questions,
+            "description": exam_format.description
+        }
+
+    def _range_to_string(self, range_tuple: Optional[tuple]) -> Optional[str]:
+        """Convert (1, 30) to '1-30'"""
+        if range_tuple:
+            return f"{range_tuple[0]}-{range_tuple[1]}"
+        return None
+
+    def extract_from_image(
+        self,
+        image: Image.Image,
+        format_info: Dict = None,
+        page_number: int = 1
+    ) -> Dict[str, Any]:
+        """
+        Extract data from a single image.
+        Backwards compatible with existing AIExtractor.extract_from_image()
+        """
+        # Analyze layout
+        analyzer = PageAnalyzer()
+        layout = analyzer.analyze_page(image, page_number)
+
+        if layout.is_blank:
+            return self._empty_result(page_number)
+
+        # Get or detect format
+        if format_info:
+            exam_format = self._dict_to_format(format_info, layout.layout_hash)
+        else:
+            exam_format = self.pipeline.format_detector.detect_format(image, layout)
+
+        # Extract using pipeline
+        extraction = self.pipeline._extract_page(image, layout, exam_format)
+        extraction.page_number = page_number
+
+        return self._extraction_to_dict(extraction)
+
+    def extract_from_multiple_images(
+        self,
+        images: List[Image.Image],
+        format_info: Dict = None,
+        progress_callback: Callable = None,
+        db_session=None,
+        submission_id: int = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract data from multiple images.
+        Backwards compatible with existing AIExtractor.extract_from_multiple_images()
+        """
+        def wrapped_callback(message: str, current: int, total: int):
+            if progress_callback:
+                progress_callback(message, current, total)
+            # Log to database if session provided
+            if db_session and submission_id:
+                self._log_progress(db_session, submission_id, message, current, total)
+
+        extractions = self.pipeline.process_images(images, wrapped_callback)
+
+        # Convert to legacy format
+        results = []
+        for ext in extractions:
+            results.append(self._extraction_to_dict(ext))
+
+        return results
+
+    def _extraction_to_dict(self, extraction: CandidateExtraction) -> Dict[str, Any]:
+        """Convert CandidateExtraction to legacy dict format."""
+        result = {
+            "page_number": extraction.page_number,
+            "candidate_name": extraction.candidate_name,
+            "candidate_number": extraction.candidate_number,
+            "country": extraction.country,
+            "paper_type": extraction.paper_type,
+            "answers": extraction.answers,
+            "drawing_questions": {},  # Extracted from answers with "DR" values
+            "extra_fields": extraction.extra_fields,
+            "confidence": extraction.confidence
+        }
+
+        # Separate drawing questions
+        for q, answer in extraction.answers.items():
+            if answer == "DR" or (isinstance(answer, str) and len(answer) > 2):
+                result["drawing_questions"][q] = answer
+                result["answers"][q] = "DR"
+
+        return result
+
+    def _dict_to_format(self, format_dict: Dict, format_id: str) -> ExamFormat:
+        """Convert legacy format dict to ExamFormat."""
+        question_ranges = {}
+
+        if format_dict.get("mcq_range"):
+            mcq = format_dict["mcq_range"]
+            if isinstance(mcq, str) and "-" in mcq:
+                parts = mcq.split("-")
+                question_ranges["mcq"] = (int(parts[0]), int(parts[1]))
+            elif isinstance(mcq, dict):
+                question_ranges["mcq"] = (mcq["start"], mcq["end"])
+
+        if format_dict.get("drawing_range"):
+            dr = format_dict["drawing_range"]
+            if isinstance(dr, str) and "-" in dr:
+                parts = dr.split("-")
+                question_ranges["drawing"] = (int(parts[0]), int(parts[1]))
+            elif isinstance(dr, dict):
+                question_ranges["drawing"] = (dr["start"], dr["end"])
+
+        return ExamFormat(
+            format_id=format_id,
+            header_fields=format_dict.get("header_fields", []),
+            question_ranges=question_ranges,
+            answer_options=format_dict.get("answer_options", ["A", "B", "C", "D"]),
+            total_questions=format_dict.get("total_questions", 30),
+            description=format_dict.get("description", "")
+        )
+
+    def _empty_result(self, page_number: int) -> Dict[str, Any]:
+        """Return empty result for blank pages."""
+        return {
+            "page_number": page_number,
+            "candidate_name": None,
+            "candidate_number": None,
+            "country": None,
+            "paper_type": None,
+            "answers": {},
+            "drawing_questions": {},
+            "extra_fields": {},
+            "confidence": 0.0,
+            "is_blank": True
+        }
+
+    def _log_progress(
+        self,
+        db_session,
+        submission_id: int,
+        message: str,
+        current: int,
+        total: int
+    ):
+        """Log progress to database."""
+        from backend.db.models import ProcessingLog
+        try:
+            log = ProcessingLog(
+                submission_id=submission_id,
+                level="INFO",
+                message=message,
+                extra_data={"current": current, "total": total, "progress": current / total}
+            )
+            db_session.add(log)
+            db_session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to log progress: {e}")
+
+
+# Factory function for easy switching
+def get_extractor(optimized: bool = True, **kwargs) -> Any:
+    """
+    Get an extractor instance.
+
+    Args:
+        optimized: If True, returns OptimizedAIExtractor (new pipeline)
+                   If False, returns legacy AIExtractor
+
+    Returns:
+        Extractor instance
+    """
+    if optimized:
+        return OptimizedAIExtractor(**kwargs)
+    else:
+        from backend.services.ai_extractor import AIExtractor
+        return AIExtractor(**kwargs)
+
+
+# Singleton instance for reuse across requests
+_default_extractor = None
+
+
+def get_default_extractor() -> OptimizedAIExtractor:
+    """Get or create the default optimized extractor."""
+    global _default_extractor
+    if _default_extractor is None:
+        _default_extractor = OptimizedAIExtractor()
+    return _default_extractor
