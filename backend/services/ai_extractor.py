@@ -2,7 +2,6 @@
 AI Extractor Service
 Uses Google Gemini Vision API for intelligent answer extraction from exam sheets.
 """
-import google.generativeai as genai
 from typing import List, Dict, Optional
 import logging
 import json
@@ -13,6 +12,8 @@ from PIL import Image
 import hashlib
 
 from backend.config import get_settings
+from backend.services.gemini_client import create_gemini_model
+from backend.services.image_preprocessor import ImagePreprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,10 @@ class AIExtractor:
 
     def __init__(self, template_dir: Optional[str] = None):
         settings = get_settings()
-        # NOTE: google.generativeai is deprecated but still functional.
-        # The module API is not fully typed so we ignore type checks here.
-        genai.configure(api_key=settings.gemini_api_key)  # type: ignore[attr-defined]
-        self.model = genai.GenerativeModel(settings.gemini_model)  # type: ignore[attr-defined]
+        self.model, self.model_name = create_gemini_model(
+            api_key=settings.gemini_api_key,
+            preferred_model=settings.gemini_model,
+        )
         self.template_dir = template_dir or os.path.join(
             os.path.dirname(__file__), "templates"
         )
@@ -46,7 +47,25 @@ class AIExtractor:
         self._prompt_cache: Dict[str, str] = {}
         self._use_prompt_cache = settings.cache_page_prompts
         self._page_hash_size = settings.page_hash_size
-        logger.info("AIExtractor initialized | model=%s", settings.gemini_model)
+        self._preprocess_enabled = bool(settings.enable_image_preprocessing)
+        self._preprocess_mode = settings.preprocessing_mode
+        self._image_preprocessor = ImagePreprocessor()
+        logger.info(
+            "AIExtractor initialized | model=%s | preprocessing=%s(%s)",
+            self.model_name,
+            self._preprocess_enabled,
+            self._preprocess_mode,
+        )
+
+    def _load_image(self, image_path: str) -> Image.Image:
+        with Image.open(image_path) as raw:
+            image = raw.convert("RGB")
+        if not self._preprocess_enabled:
+            return image
+        return self._image_preprocessor.preprocess_pil_image(
+            image,
+            mode=self._preprocess_mode,
+        )
 
     def _compute_image_hash(self, image_path: str, size: Optional[int] = None) -> str:
         """Compute a lightweight hash of an image for layout similarity checks."""
@@ -108,7 +127,7 @@ class AIExtractor:
         )
 
         try:
-            image = Image.open(image_path)
+            image = self._load_image(image_path)
             logger.info("Analyzing format | path=%s | size=%s | mode=%s", image_path, image.size, image.mode)
             response = self.model.generate_content([prompt, image])
             content = response.text.strip()
@@ -163,7 +182,9 @@ class AIExtractor:
             mcq_section = (
                 f"\nMCQ QUESTIONS ({mcq_range}):\n"
                 f"- Answer options are: {', '.join(options)}\n"
-                f"- For a clearly marked single answer use the letter (e.g. {options[0]})\n"
+                f"- Return the PRINTED option label letter for the marked choice (e.g. {options[0]})\n"
+                "- A mark can be X/fill/shade/check/tick/dot or a colored box under the option label\n"
+                "- Do not infer by position index alone; use the visible printed option labels\n"
                 '- For a blank/unanswered question use "BL"\n'
                 '- For an invalid answer (two or more bubbles marked) use "IN"\n'
             )
@@ -179,6 +200,7 @@ class AIExtractor:
                 f"\nSHORT-ANSWER QUESTIONS ({mcq_range}):\n"
                 "- Each question has a boxed area; read the handwritten/typed answer.\n"
                 '- Return the text exactly (e.g. "34", "Wednesday", "12:35").\n'
+                "- If writing spills slightly outside the box, still read it for that question.\n"
                 '- If empty, use "BL".\n'
             )
             mcq_example = '  "answers": {\n    "1": "34",\n    "2": "BL",\n    "3": "41"\n  }'
@@ -217,7 +239,7 @@ class AIExtractor:
             "- Return ONLY the JSON object, no extra text.\n"
             '- For every MCQ question in the range, include an entry. Use "BL" if blank.\n'
             '- Use "IN" for invalid (multiple marks).\n'
-            "- Pay close attention to which bubble is filled/marked; ignore faint marks.\n"
+            "- Pay close attention to marked option areas (bubble/box/colored area under option label).\n"
             "- If a header field is not visible, return an empty string.\n"
         )
         logger.debug("Built extraction prompt (%d chars)", len(prompt))
@@ -232,7 +254,7 @@ class AIExtractor:
             if extraction_prompt is None:
                 extraction_prompt = self.build_extraction_prompt(DEFAULT_FORMAT)
 
-            image = Image.open(image_path)
+            image = self._load_image(image_path)
             logger.info("Sending to Gemini: %s (%dx%d)", os.path.basename(image_path), image.size[0], image.size[1])
 
             response = self.model.generate_content([extraction_prompt, image])
@@ -323,10 +345,14 @@ class AIExtractor:
         errors: List[str] = []
         detected_format: Optional[Dict] = None
         start_time = time.time()
+        total_pages = len(image_paths)
+        completed_pages = 0
 
         logger.info("Starting extraction: %d pages, parallel=%s, workers=%d", len(image_paths), use_parallel, max_workers)
 
         def _handle_result(result: Dict, page_num: int):
+            nonlocal completed_pages
+            completed_pages += 1
             if "error" in result:
                 errors.append(f"Page {page_num}: {result['error']}")
 
@@ -352,14 +378,27 @@ class AIExtractor:
                 label = str(result.get("candidate_number") or result.get("candidate_id") or "")
                 n_ans = len(result.get("answers", {}))
                 n_draw = int(result.get("_drawing_count", 0))
-                db.add(ProcessingLog(
-                    submission_id=submission_id,
-                    action="page_progress",
-                    status="info",
-                    message=f"Page {page_num}: {n_ans} answers, {n_draw} drawing",
-                    extra_data={"page": page_num, "label": label, "answers_count": n_ans, "drawing_count": n_draw},
-                ))
-                db.commit()
+                progress = completed_pages / max(total_pages, 1)
+                try:
+                    db.add(ProcessingLog(
+                        submission_id=submission_id,
+                        action="page_progress",
+                        status="info",
+                        message=f"Page {page_num}: {n_ans} answers, {n_draw} drawing ({completed_pages}/{total_pages})",
+                        extra_data={
+                            "page": page_num,
+                            "current": completed_pages,
+                            "total": total_pages,
+                            "progress": round(progress, 4),
+                            "label": label,
+                            "answers_count": n_ans,
+                            "drawing_count": n_draw,
+                        },
+                    ))
+                    db.commit()
+                except Exception as log_error:
+                    db.rollback()
+                    logger.warning("Failed to persist page_progress log for page %s: %s", page_num, log_error)
 
         # Step 2: Extract pages
         logger.info("Step 2: Extracting %d pages ...", len(image_paths))

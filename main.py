@@ -2,6 +2,13 @@
 Main FastAPI application
 Exam Answer Sheet Extraction System
 """
+import multiprocessing
+import sys
+
+# Windows multiprocessing fix - must be before other imports
+if sys.platform == 'win32':
+    multiprocessing.freeze_support()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging

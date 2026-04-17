@@ -479,6 +479,9 @@ All operations are logged with timestamps and details:
 - **Application logs**: Console output with configurable level
 - **Database logs**: ProcessingLog table tracks all actions
 - **Error tracking**: Failures captured with full stack traces
+- **OCR artifacts**: `storage/OCRResults/YYYY/MM/DD/<context>/<source>/<run>/`
+  - `OCRResults.json` summary (per-page confidence + status)
+  - `pages/page_001.txt`, `page_002.txt`, ... raw OCR text per page
 
 ## 🚀 Deployment
 

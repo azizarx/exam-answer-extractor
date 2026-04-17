@@ -7,6 +7,10 @@ from PIL import Image
 from typing import List, Dict, Optional
 import logging
 import re
+from pathlib import Path
+import shutil
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +28,46 @@ class OCREngine:
         """
         self.lang = lang
         self.config = config
+        self._configure_tesseract_executable()
         logger.info(f"Initialized OCREngine with language={lang}")
+
+    def _configure_tesseract_executable(self) -> None:
+        """
+        Resolve and configure Tesseract executable path for pytesseract.
+        """
+        settings = get_settings()
+
+        candidates = []
+        if settings.tesseract_cmd:
+            candidates.append(settings.tesseract_cmd)
+
+        which = shutil.which("tesseract")
+        if which:
+            candidates.append(which)
+
+        candidates.extend(
+            [
+                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+                r"C:\Users\azizn\AppData\Local\Programs\Tesseract-OCR\tesseract.exe",
+            ]
+        )
+
+        selected = None
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if Path(candidate).exists():
+                selected = str(Path(candidate))
+                break
+
+        if selected:
+            pytesseract.pytesseract.tesseract_cmd = selected
+            logger.info("Configured Tesseract executable: %s", selected)
+        else:
+            logger.warning(
+                "Tesseract executable was not found. Set TESSERACT_CMD or install Tesseract and add it to PATH."
+            )
     
     def extract_text(self, image_path: str) -> str:
         """

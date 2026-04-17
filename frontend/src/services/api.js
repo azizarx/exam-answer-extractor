@@ -17,7 +17,13 @@ const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', error);
+    const requestUrl = String(error?.config?.url || '');
+    const isPollingEndpoint = requestUrl.includes('/status/') || requestUrl.includes('/logs');
+    const isTimeout = error?.code === 'ECONNABORTED';
+
+    if (!(isTimeout && isPollingEndpoint)) {
+      console.error('API Error:', error);
+    }
     return Promise.reject(error);
   }
 );
@@ -61,7 +67,7 @@ export const examAPI = {
    */
   getStatus: async (submissionId) => {
     const response = await apiClient.get(`/status/${submissionId}`, {
-      timeout: 5000, // 5 seconds for quick status checks
+      timeout: 15000, // tolerate DB contention while extraction writes are in progress
     });
     return response.data;
   },
@@ -114,8 +120,11 @@ export const examAPI = {
    * @param {number} submissionId
    * @param {number} limit
    */
-  getSubmissionLogs: async (submissionId, limit = 10) => {
-    const response = await apiClient.get(`/submission/${submissionId}/logs`, { params: { limit } });
+  getSubmissionLogs: async (submissionId, limit = 50) => {
+    const response = await apiClient.get(`/submission/${submissionId}/logs`, {
+      params: { limit },
+      timeout: 15000,
+    });
     return response.data;
   },
 
@@ -124,7 +133,7 @@ export const examAPI = {
    * @returns {Promise} Health status
    */
   checkHealth: async () => {
-    const response = await axios.get('http://localhost:8001/health');
+    const response = await apiClient.get('/health');
     return response.data;
   },
 };

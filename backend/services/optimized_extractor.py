@@ -14,6 +14,7 @@ from backend.services.extraction_pipeline import (
     ExamFormat
 )
 from backend.services.page_analyzer import PageAnalyzer, PageLayout
+from backend.services.image_preprocessor import ImagePreprocessor
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -36,6 +37,9 @@ class OptimizedAIExtractor:
         self.model_name = model_name or settings.gemini_model
         self.use_parallel = use_parallel
         self.max_workers = max_workers
+        self._preprocess_enabled = bool(settings.enable_image_preprocessing)
+        self._preprocess_mode = settings.preprocessing_mode
+        self._image_preprocessor = ImagePreprocessor()
 
         # Initialize refactored pipeline
         self.pipeline = RefactoredPipeline(
@@ -43,19 +47,36 @@ class OptimizedAIExtractor:
             gemini_model=self.model_name,
             max_workers=max_workers
         )
+        self.model_name = self.pipeline.model_name
 
         # Format cache (persists across extractions)
         self._format_cache: Dict[str, ExamFormat] = {}
+        logger.info(
+            "OptimizedAIExtractor initialized | model=%s | preprocessing=%s(%s)",
+            self.model_name,
+            self._preprocess_enabled,
+            self._preprocess_mode,
+        )
+
+    def _load_image(self, image_path: str):
+        from PIL import Image
+
+        with Image.open(image_path) as raw:
+            image = raw.convert("RGB")
+        if not self._preprocess_enabled:
+            return image
+        return self._image_preprocessor.preprocess_pil_image(
+            image,
+            mode=self._preprocess_mode,
+        )
 
     def analyze_format(self, image_path: str) -> Dict[str, Any]:
         """
         Analyze exam format from a single image.
         Backwards compatible with existing AIExtractor.analyze_format()
         """
-        from PIL import Image
-
         try:
-            image = Image.open(image_path)
+            image = self._load_image(image_path)
         except Exception as e:
             logger.error(f"Failed to load image {image_path}: {e}")
             # Return default format on error
@@ -102,10 +123,8 @@ class OptimizedAIExtractor:
         Extract data from a single image.
         Backwards compatible with existing AIExtractor.extract_from_image()
         """
-        from PIL import Image
-
         try:
-            image = Image.open(image_path)
+            image = self._load_image(image_path)
         except Exception as e:
             logger.error(f"Failed to load image {image_path}: {e}")
             return {"error": str(e), "answers": {}, "drawing_questions": {}}
@@ -145,7 +164,6 @@ class OptimizedAIExtractor:
             use_parallel: Whether to use parallel processing
             max_workers: Number of parallel workers
         """
-        from PIL import Image
         import time
 
         start_time = time.time()
@@ -154,7 +172,7 @@ class OptimizedAIExtractor:
         images = []
         for path in image_paths:
             try:
-                img = Image.open(path)
+                img = self._load_image(path)
                 images.append(img)
             except Exception as e:
                 logger.error(f"Failed to load image {path}: {e}")
@@ -211,6 +229,12 @@ class OptimizedAIExtractor:
             total_drawing += len(drawing)
 
             for q_num, answer in answers.items():
+                normalized = str(answer).strip().upper() if answer is not None else ""
+                if normalized in valid_answers:
+                    continue
+                # Allow numeric/text free-response answers in the shared answers map.
+                if normalized:
+                    continue
                 if answer not in valid_answers:
                     warnings.append(
                         f"Page {candidate.get('page_number', i + 1)}: "
@@ -232,23 +256,39 @@ class OptimizedAIExtractor:
 
     def _extraction_to_dict(self, extraction: CandidateExtraction) -> Dict[str, Any]:
         """Convert CandidateExtraction to legacy dict format."""
+        normalized_answers: Dict[str, Any] = {}
+        drawing_questions: Dict[str, Any] = {}
+
+        for q, answer in (extraction.answers or {}).items():
+            q_key = str(q)
+            value = str(answer).strip() if answer is not None else ""
+
+            if not value:
+                normalized_answers[q_key] = "BL"
+                continue
+
+            upper = value.upper()
+            if upper == "DR":
+                # Keep DR in answers and mirror to drawing_questions for compatibility.
+                normalized_answers[q_key] = "DR"
+                drawing_questions[q_key] = "DR"
+            elif upper in {"A", "B", "C", "D", "E", "BL", "IN"}:
+                normalized_answers[q_key] = upper
+            else:
+                # Preserve numeric/text responses as-is (do not collapse to DR).
+                normalized_answers[q_key] = value
+
         result = {
             "page_number": extraction.page_number,
             "candidate_name": extraction.candidate_name,
             "candidate_number": extraction.candidate_number,
             "country": extraction.country,
             "paper_type": extraction.paper_type,
-            "answers": extraction.answers,
-            "drawing_questions": {},  # Extracted from answers with "DR" values
+            "answers": normalized_answers,
+            "drawing_questions": drawing_questions,
             "extra_fields": extraction.extra_fields,
             "confidence": extraction.confidence
         }
-
-        # Separate drawing questions
-        for q, answer in extraction.answers.items():
-            if answer == "DR" or (isinstance(answer, str) and len(answer) > 2):
-                result["drawing_questions"][q] = answer
-                result["answers"][q] = "DR"
 
         return result
 
@@ -309,9 +349,10 @@ class OptimizedAIExtractor:
         try:
             log = ProcessingLog(
                 submission_id=submission_id,
-                level="INFO",
+                action="page_progress",
+                status="info",
                 message=message,
-                extra_data={"current": current, "total": total, "progress": current / total}
+                extra_data={"current": current, "total": total, "progress": current / total if total > 0 else 0}
             )
             db_session.add(log)
             db_session.commit()

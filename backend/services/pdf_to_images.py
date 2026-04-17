@@ -77,13 +77,13 @@ class PDFConverter:
     
     def convert_from_bytes(self, pdf_bytes: bytes, output_dir: str = None, filename_prefix: str = "page") -> List[str]:
         """
-        Convert PDF bytes to images
-        
+        Convert PDF bytes to images using PyMuPDF
+
         Args:
             pdf_bytes: PDF file as bytes
             output_dir: Directory to save images (if None, uses temp directory)
             filename_prefix: Prefix for output filenames
-            
+
         Returns:
             List of image file paths
         """
@@ -91,25 +91,33 @@ class PDFConverter:
             # Create output directory if needed
             if output_dir is None:
                 output_dir = tempfile.mkdtemp()
-            
+
             os.makedirs(output_dir, exist_ok=True)
-            
-            # Convert PDF bytes to images
+
+            # Convert PDF bytes to images using PyMuPDF
             logger.info(f"Converting PDF from bytes")
-            images = convert_from_bytes(pdf_bytes, dpi=self.dpi)
-            
+            pdf_document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+
+            # Calculate zoom factor for DPI
+            zoom = self.dpi / 72
+            mat = pymupdf.Matrix(zoom, zoom)
+
             # Save images to disk
             image_paths = []
-            
-            for i, image in enumerate(images, start=1):
-                image_path = os.path.join(output_dir, f"{filename_prefix}_{i}.{self.fmt.lower()}")
-                image.save(image_path, self.fmt)
+
+            for page_num in range(len(pdf_document)):
+                page = pdf_document[page_num]
+                pix = page.get_pixmap(matrix=mat)
+
+                image_path = os.path.join(output_dir, f"{filename_prefix}_{page_num + 1}.{self.fmt.lower()}")
+                pix.save(image_path)
                 image_paths.append(image_path)
-                logger.debug(f"Saved page {i} to {image_path}")
-            
-            logger.info(f"Successfully converted {len(images)} pages from bytes")
+                logger.debug(f"Saved page {page_num + 1} to {image_path}")
+
+            pdf_document.close()
+            logger.info(f"Successfully converted {len(image_paths)} pages from bytes")
             return image_paths
-            
+
         except Exception as e:
             logger.error(f"Failed to convert PDF bytes: {str(e)}")
             raise Exception(f"PDF conversion failed: {str(e)}")

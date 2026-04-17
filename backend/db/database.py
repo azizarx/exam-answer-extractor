@@ -1,7 +1,7 @@
 """
 Database connection and session management
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from backend.config import get_settings
@@ -14,11 +14,33 @@ Base = declarative_base()
 
 # Create engine
 settings = get_settings()
-engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,  # Verify connections before using
-    echo=settings.debug  # Log SQL queries in debug mode
-)
+database_url = settings.database_url
+is_sqlite = database_url.strip().lower().startswith("sqlite")
+
+engine_kwargs = {
+    "pool_pre_ping": True,  # Verify connections before using
+    "echo": settings.debug,  # Log SQL queries in debug mode
+}
+if is_sqlite:
+    # SQLite concurrency tuning for API polling during background writes.
+    engine_kwargs["connect_args"] = {
+        "check_same_thread": False,
+        "timeout": 30,
+    }
+
+engine = create_engine(database_url, **engine_kwargs)
+
+if is_sqlite:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+            cursor.execute("PRAGMA busy_timeout=30000;")
+            cursor.execute("PRAGMA foreign_keys=ON;")
+        finally:
+            cursor.close()
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

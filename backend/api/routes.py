@@ -9,10 +9,11 @@ from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
 import logging
+import time
 
 from backend.db.database import get_db, SessionLocal
 from backend.db.models import (
-    ExamSubmission, MultipleChoiceAnswer, FreeResponseAnswer,
+    ExamSubmission,
     ProcessingLog, CandidateResult, AnswerKey,
     Exam, ExamDocument, GeneratedJSON,
 )
@@ -38,6 +39,8 @@ from backend.services.ai_extractor import get_ai_extractor
 from backend.services.json_generator import get_json_generator
 from backend.services.space_client import get_spaces_client
 from backend.services.image_preprocessor import ImagePreprocessor
+from backend.services.ocr_results_writer import get_ocr_results_writer
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -178,8 +181,13 @@ async def extract_exam_document(exam_id: int, document_id: int, db: Session = De
         db.refresh(record)
         return record
 
+    _save_ocr_results(
+        image_paths=valid_image_paths,
+        context_id=f"exam_{exam_id}_document_{document_id}",
+        source_filename=Path(absolute_pdf).name,
+    )
+
     ai_extractor = get_ai_extractor()
-    from backend.config import get_settings
     settings = get_settings()
 
     extraction_result = ai_extractor.extract_from_multiple_images(
@@ -236,8 +244,10 @@ async def download_json(json_id: int, db: Session = Depends(get_db)):
     record = db.query(GeneratedJSON).filter(GeneratedJSON.id == json_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="JSON not found")
+    if not record.file_path:
+        raise HTTPException(status_code=404, detail="No file associated with this record")
     abs_path = storage.get_absolute_path(record.file_path)
-    if not Path(abs_path).exists():
+    if not abs_path or not Path(abs_path).exists():
         raise HTTPException(status_code=404, detail="File missing")
     return JSONResponse(content=_json.loads(Path(abs_path).read_text(encoding="utf-8")))
 
@@ -248,41 +258,178 @@ async def delete_json(json_id: int, db: Session = Depends(get_db)):
     record = db.query(GeneratedJSON).filter(GeneratedJSON.id == json_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="JSON not found")
-    abs_path = storage.get_absolute_path(record.file_path)
-    try:
-        Path(abs_path).unlink(missing_ok=True)
-    except Exception:
-        pass
+    if record.file_path:
+        abs_path = storage.get_absolute_path(record.file_path)
+        if abs_path:
+            try:
+                Path(abs_path).unlink(missing_ok=True)
+            except Exception:
+                pass
     db.delete(record)
     db.commit()
     return {"status": "deleted"}
 
 
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _write_processing_log(
+    db: Session,
+    submission_id: int,
+    action: str,
+    status: str,
+    message: str,
+    extra_data: Optional[dict] = None,
+) -> None:
+    """Write a processing log entry without breaking the caller flow."""
+    try:
+        db.add(ProcessingLog(
+            submission_id=submission_id,
+            action=action,
+            status=status,
+            message=message,
+            extra_data=extra_data,
+        ))
+        db.commit()
+    except Exception as log_error:
+        db.rollback()
+        logger.warning("Failed to write log action=%s for submission=%s: %s", action, submission_id, log_error)
+
+
+def _save_ocr_results(
+    image_paths: List[str],
+    context_id: str,
+    source_filename: str,
+    db: Optional[Session] = None,
+    submission_id: Optional[int] = None,
+) -> Optional[dict]:
+    """Persist OCR debug artifacts to storage/OCRResults for troubleshooting."""
+    settings = get_settings()
+    if not settings.save_ocr_results or not image_paths:
+        return None
+
+    try:
+        writer = get_ocr_results_writer()
+        result = writer.save_from_images(
+            image_paths=image_paths,
+            context_id=context_id,
+            source_filename=source_filename,
+        )
+        logger.info(
+            "OCRResults saved | context=%s | summary=%s",
+            context_id,
+            result.get("relative_summary_path"),
+        )
+        if db is not None and submission_id is not None:
+            _write_processing_log(
+                db,
+                submission_id,
+                action="ocr_results_saved",
+                status="success",
+                message=f"OCRResults saved to {result.get('relative_summary_path')}",
+                extra_data=result,
+            )
+        return result
+    except Exception as ocr_error:
+        logger.warning("Failed to generate OCRResults for %s: %s", context_id, ocr_error)
+        if db is not None and submission_id is not None:
+            _write_processing_log(
+                db,
+                submission_id,
+                action="ocr_results_error",
+                status="warning",
+                message=f"OCRResults generation failed: {ocr_error}",
+                extra_data={"context_id": context_id},
+            )
+        return None
+
+
 def process_pdf_extraction(submission_id: int, pdf_path: str):
     """Background task to convert pages, extract answers, and persist JSON locally."""
     db = SessionLocal()
+    image_paths: List[str] = []
+    job_started = time.perf_counter()
     try:
         sub = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
         if not sub:
             logger.error(f"Submission {submission_id} not found")
             return
+
         setattr(sub, 'status', 'processing')
-        db.add(ProcessingLog(
-            submission_id=submission_id,
+        db.commit()
+
+        _write_processing_log(
+            db,
+            submission_id,
             action="extract_start",
             status="success",
-            message="Starting PDF extraction"
-        ))
-        db.commit()
+            message="Starting PDF extraction",
+            extra_data={"pdf_path": pdf_path},
+        )
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message="Converting PDF pages to images",
+            extra_data={"stage": "pdf_to_images"},
+        )
+
         logger.info(f"Converting PDF to images: {pdf_path}")
+        conversion_started = time.perf_counter()
         pdf_converter = get_pdf_converter()
         image_paths = pdf_converter.convert_from_file(pdf_path)
+        conversion_seconds = time.perf_counter() - conversion_started
+
         setattr(sub, 'pages_count', len(image_paths))
         db.commit()
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message=f"Converted PDF to {len(image_paths)} page images",
+            extra_data={
+                "stage": "pdf_to_images",
+                "pages": len(image_paths),
+                "duration_seconds": round(conversion_seconds, 2),
+            },
+        )
+
+        source_filename = str(getattr(sub, "filename") or Path(pdf_path).name)
+        _save_ocr_results(
+            image_paths=image_paths,
+            context_id=f"submission_{submission_id}",
+            source_filename=source_filename,
+            db=db,
+            submission_id=submission_id,
+        )
+
         logger.info(f"Extracting answers using AI from {len(image_paths)} pages")
         ai_extractor = get_ai_extractor()
-        from backend.config import get_settings
         settings = get_settings()
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message="AI extraction started",
+            extra_data={
+                "stage": "ai_extraction",
+                "parallel": bool(settings.use_parallel_extraction),
+                "workers": int(settings.max_extraction_workers),
+                "pages": len(image_paths),
+            },
+        )
+
+        extraction_started = time.perf_counter()
         extraction_result = ai_extractor.extract_from_multiple_images(
             image_paths,
             extraction_prompt=None,
@@ -291,6 +438,8 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
             use_parallel=settings.use_parallel_extraction,
             max_workers=settings.max_extraction_workers
         )
+        extraction_seconds = time.perf_counter() - extraction_started
+
         validation_result = ai_extractor.validate_extraction(extraction_result)
         json_gen = get_json_generator()
         json_data = json_gen.generate_with_validation(
@@ -303,8 +452,19 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
         save = storage.save_json(json_data, json_filename)
         setattr(sub, 'result_json_key', save['relative_path'])
 
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message=f"Saved JSON results to {save['relative_path']}",
+            extra_data={"stage": "save_json", "relative_path": save["relative_path"]},
+        )
+
         # Save per-candidate results to DB (supports dynamic header fields)
         KNOWN_COLUMNS = {"candidate_name", "candidate_number", "country", "paper_type"}
+        # Keys to exclude from extra_fields (internal/technical fields)
+        EXCLUDED_KEYS = {"page_number", "answers", "drawing_questions", "extra_fields", "confidence", "is_blank"}
         # Common AI aliases that should map to known columns
         FIELD_ALIASES = {
             "candidate_no": "candidate_number",
@@ -324,9 +484,13 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
                     pass
                 else:
                     normalized[mapped_key] = v
-            extra = {k: v for k, v in normalized.items()
-                     if k not in KNOWN_COLUMNS
-                     and k not in ("page_number", "answers", "drawing_questions")}
+            # Build extra_fields, excluding known columns and internal keys
+            # Also convert values to strings for schema compatibility
+            extra = {}
+            for k, v in normalized.items():
+                if k not in KNOWN_COLUMNS and k not in EXCLUDED_KEYS:
+                    # Convert to string for schema compatibility
+                    extra[k] = str(v) if v is not None else ''
             db.add(CandidateResult(
                 submission_id=submission_id,
                 page_number=normalized.get('page_number'),
@@ -339,35 +503,64 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
                 drawing_questions=normalized.get('drawing_questions', {}),
             ))
 
+        candidates = extraction_result.get('candidates', [])
+        answers_count = sum(len((candidate.get('answers') or {})) for candidate in candidates)
+        drawing_count = sum(
+            1
+            for candidate in candidates
+            for answer in (candidate.get('answers') or {}).values()
+            if str(answer).strip().upper() == "DR"
+        )
+        pages_processed = _safe_int(extraction_result.get('pages_processed'), len(image_paths))
+        pages_with_data = _safe_int(extraction_result.get('pages_with_data'), 0)
+        total_duration = time.perf_counter() - job_started
+
         setattr(sub, 'status', 'completed')
         setattr(sub, 'processed_at', datetime.utcnow())
-        db.add(ProcessingLog(
-            submission_id=submission_id,
+        db.commit()
+
+        _write_processing_log(
+            db,
+            submission_id,
             action="extract_complete",
             status="success",
-            message=f"Extracted {len(extraction_result.get('candidates', []))} candidates",
-        ))
-        db.commit()
+            message=f"Extracted {len(candidates)} candidates in {total_duration:.1f}s",
+            extra_data={
+                "candidate_count": len(candidates),
+                "answers_count": answers_count,
+                "drawing_count": drawing_count,
+                "pages_processed": pages_processed,
+                "pages_with_data": pages_with_data,
+                "conversion_seconds": round(conversion_seconds, 2),
+                "extraction_seconds": round(extraction_seconds, 2),
+                "total_seconds": round(total_duration, 2),
+            },
+        )
+
         logger.info(f"Successfully processed submission {submission_id}")
+
+    except Exception as e:
+        logger.exception(f"Failed to process submission {submission_id}: {e}")
+        db.rollback()
+        sub = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+        if sub:
+            setattr(sub, 'status', 'failed')
+            setattr(sub, 'error_message', str(e))
+            db.commit()
+            _write_processing_log(
+                db,
+                submission_id,
+                action="extract_error",
+                status="error",
+                message=str(e),
+                extra_data={"total_seconds": round(time.perf_counter() - job_started, 2)},
+            )
+    finally:
         for image_path in image_paths:
             try:
                 Path(image_path).unlink(missing_ok=True)
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup image {image_path}: {cleanup_error}")
-    except Exception as e:
-        logger.error(f"Failed to process submission {submission_id}: {e}")
-        sub = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
-        if sub:
-            setattr(sub, 'status', 'failed')
-            setattr(sub, 'error_message', str(e))
-            db.add(ProcessingLog(
-                submission_id=submission_id,
-                action="extract_error",
-                status="error",
-                message=str(e)
-            ))
-            db.commit()
-    finally:
         db.close()
 
 
@@ -450,64 +643,66 @@ async def get_status(submission_id: int, db: Session = Depends(get_db)):
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     
-    # Default progress info
-    current_page = None
-    current_candidate_name = None
-
-    # Get latest page/candidate info from ProcessingLog (if available)
     d = submission.__dict__
-    log = (
+    status_value = str(d.get("status") or "unknown")
+
+    # Progress log (latest page-level event)
+    progress_log = (
         db.query(ProcessingLog)
         .filter(ProcessingLog.submission_id == d.get("id"), ProcessingLog.action == "page_progress")
         .order_by(ProcessingLog.created_at.desc())
         .first()
     )
-    if log is not None and log.extra_data:
-        current_page = log.extra_data.get("page")
-        current_candidate_name = log.extra_data.get("label") or log.extra_data.get("candidate_name")
 
-    # If we don't have a page from logs, try to infer it from saved answers
-    if current_page is None:
-        try:
-            mcq_max = db.query(MultipleChoiceAnswer).filter(MultipleChoiceAnswer.submission_id == submission.id).order_by(MultipleChoiceAnswer.page_number.desc()).first()
-            fr_max = db.query(FreeResponseAnswer).filter(FreeResponseAnswer.submission_id == submission.id).order_by(FreeResponseAnswer.page_number.desc()).first()
-            max_mcq_page = mcq_max.page_number if mcq_max is not None else None
-            max_fr_page = fr_max.page_number if fr_max is not None else None
-            inferred_page = None
-            if max_mcq_page is not None and max_fr_page is not None:
-                inferred_page = max(max_mcq_page, max_fr_page)
-            elif max_mcq_page is not None:
-                inferred_page = max_mcq_page
-            elif max_fr_page is not None:
-                inferred_page = max_fr_page
-            if inferred_page is not None:
-                current_page = inferred_page
-        except Exception as e:
-            logger.debug(f"Failed to infer page from answers for submission {submission_id}: {e}")
+    current_page = None
+    current_candidate_name = None
+    if progress_log is not None and isinstance(progress_log.extra_data, dict):
+        current_page = progress_log.extra_data.get("page") or progress_log.extra_data.get("current")
+        current_candidate_name = (
+            progress_log.extra_data.get("label")
+            or progress_log.extra_data.get("candidate_name")
+        )
+
+    # Completion summary log (contains counters and timing)
+    summary_log = (
+        db.query(ProcessingLog)
+        .filter(ProcessingLog.submission_id == d.get("id"), ProcessingLog.action == "extract_complete")
+        .order_by(ProcessingLog.created_at.desc())
+        .first()
+    )
+    summary_extra = summary_log.extra_data if summary_log is not None and isinstance(summary_log.extra_data, dict) else {}
 
     created_at = d.get("created_at")
     if not isinstance(created_at, datetime) or created_at is None:
         created_at = datetime.utcnow()
 
-    # Count candidates and answers
-    cand_count = db.query(CandidateResult).filter(CandidateResult.submission_id == submission.id).count()
-    
-    # Sum up answers and drawing questions from CandidateResult rows
-    answers_count = 0
-    drawing_count = 0
-    cand_rows = db.query(CandidateResult).filter(CandidateResult.submission_id == submission.id).all()
-    for cr in cand_rows:
-        ans = getattr(cr, 'answers', None)
-        if isinstance(ans, dict):
-            answers_count += len(ans)
-        drw = getattr(cr, 'drawing_questions', None)
-        if isinstance(drw, dict):
-            drawing_count += len(drw)
+    cand_count = _safe_int(summary_extra.get("candidate_count"), 0)
+    answers_count = _safe_int(summary_extra.get("answers_count"), 0)
+    drawing_count = _safe_int(summary_extra.get("drawing_count"), 0)
+
+    # Keep status polling lightweight while processing.
+    if status_value == "completed" and cand_count == 0:
+        cand_rows = db.query(CandidateResult).filter(CandidateResult.submission_id == submission.id).all()
+        cand_count = len(cand_rows)
+        answers_count = 0
+        drawing_count = 0
+        for cr in cand_rows:
+            ans = getattr(cr, 'answers', None)
+            if isinstance(ans, dict):
+                answers_count += len(ans)
+            drw = getattr(cr, 'drawing_questions', None)
+            if isinstance(drw, dict) and drw:
+                drawing_count += len(drw)
+            elif isinstance(ans, dict):
+                drawing_count += sum(
+                    1 for value in ans.values()
+                    if str(value).strip().upper() == "DR"
+                )
 
     return ProcessingStatusResponse(
         submission_id=int(d.get("id") or 0),
         filename=str(d.get("filename") or ""),
-        status=str(d.get("status") or "unknown"),
+        status=status_value,
         created_at=created_at,
         processed_at=d.get("processed_at") if isinstance(d.get("processed_at"), datetime) or d.get("processed_at") is None else None,
         pages_count=int(d.get("pages_count") or 0),
@@ -546,18 +741,25 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
         clean_answers = {k: (str(v) if v is not None else '') for k, v in raw_answers.items()}
         raw_drawing = getattr(cr, 'drawing_questions') or {}
         clean_drawing = {k: (str(v) if v is not None else '') for k, v in raw_drawing.items()}
-        
+
         # Merge extra_fields into display: use candidate_no/candidate_id as candidate_number if empty
-        extra = getattr(cr, 'extra_fields') or {}
-        cand_name = str(getattr(cr, 'candidate_name') or '') or extra.get('name', '') or extra.get('student_name', '')
-        cand_number = str(getattr(cr, 'candidate_number') or '') or extra.get('candidate_no', '') or extra.get('candidate_id', '') or extra.get('student_number', '')
-        
+        raw_extra = getattr(cr, 'extra_fields') or {}
+        # Filter out internal keys and convert all values to strings for schema compatibility
+        clean_extra = {}
+        excluded_extra_keys = {'extra_fields', 'confidence', 'is_blank'}
+        for k, v in raw_extra.items():
+            if k not in excluded_extra_keys and v is not None and v != {}:
+                clean_extra[k] = str(v)
+
+        cand_name = str(getattr(cr, 'candidate_name') or '') or raw_extra.get('name', '') or raw_extra.get('student_name', '')
+        cand_number = str(getattr(cr, 'candidate_number') or '') or raw_extra.get('candidate_no', '') or raw_extra.get('candidate_id', '') or raw_extra.get('student_number', '')
+
         candidates.append(CandidateResultSchema(
             candidate_name=cand_name,
             candidate_number=cand_number,
             country=str(getattr(cr, 'country') or ''),
             paper_type=str(getattr(cr, 'paper_type') or ''),
-            extra_fields=extra if extra else None,
+            extra_fields=clean_extra if clean_extra else None,
             answers=clean_answers,
             drawing_questions=clean_drawing,
         ))
@@ -737,9 +939,14 @@ async def extract_json(file: UploadFile = File(...)):
         saved = storage.save_pdf(file.file, file.filename)
         image_paths = pdf_converter.convert_from_file(saved["absolute_path"]) 
 
+        _save_ocr_results(
+            image_paths=image_paths,
+            context_id=f"sync_extract_{Path(file.filename).stem}",
+            source_filename=file.filename,
+        )
+
         # Run extraction with parallel processing
         ai_extractor = get_ai_extractor()
-        from backend.config import get_settings
         settings = get_settings()
         extraction_result = ai_extractor.extract_from_multiple_images(
             image_paths,
@@ -965,8 +1172,13 @@ async def extract_and_mark(
         saved = storage.save_pdf(file.file, file.filename)
         image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
 
+        _save_ocr_results(
+            image_paths=image_paths,
+            context_id=f"sync_extract_mark_{Path(file.filename).stem}",
+            source_filename=file.filename,
+        )
+
         ai_extractor = get_ai_extractor()
-        from backend.config import get_settings
         settings = get_settings()
         extraction_result = ai_extractor.extract_from_multiple_images(
             image_paths,

@@ -180,7 +180,7 @@ class GeneratedJSONResponse(BaseModel):
     id: int
     exam_id: int
     filename: str
-    file_path: str
+    file_path: Optional[str]
     created_at: datetime
 
     class Config:

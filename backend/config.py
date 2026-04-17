@@ -14,8 +14,11 @@ class Settings(BaseSettings):
     
     # Google Gemini
     gemini_api_key: str = ""
-    # Use a supported Vision model (gemini-2.0-flash is stable & cost-efficient)
-    gemini_model: str = "gemini-2.0-flash"
+    # Primary model to use for extraction.
+    gemini_model: str = "gemini-2.5-pro"
+    # Ordered fallback list used when the primary model is unavailable.
+    gemini_fallback_models: str = "gemini-2.0-flash,gemini-2.0-flash-lite"
+    gemini_auto_fallback: bool = True
     
     # Database
     database_url: str = ""
@@ -48,6 +51,16 @@ class Settings(BaseSettings):
     # Prompt caching (to reduce repeated format analysis)
     cache_page_prompts: bool = True
     page_hash_size: int = 16
+
+    # Image preprocessing (improves contrast/clarity before extraction)
+    enable_image_preprocessing: bool = True
+    preprocessing_mode: str = "balanced"  # balanced | aggressive
+
+    # OCR debug artifact output
+    save_ocr_results: bool = True
+    ocr_results_folder_name: str = "OCRResults"
+    ocr_language: str = "eng"
+    tesseract_cmd: Optional[str] = None
 
     # DigitalOcean Spaces
     spaces_endpoint: Optional[str] = None

@@ -13,6 +13,7 @@ from backend.services.local_storage import get_local_storage
 from backend.services.pdf_to_images import get_pdf_converter
 from backend.services.ai_extractor import get_ai_extractor
 from backend.services.json_generator import get_json_generator
+from backend.services.ocr_results_writer import get_ocr_results_writer
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,31 @@ def process_exam_pdf(submission_id: int):
         image_paths = pdf_converter.convert_from_file(pdf_path)
         setattr(sub,'pages_count', len(image_paths))
         db.commit()
+
+        if settings.save_ocr_results and image_paths:
+            try:
+                writer = get_ocr_results_writer()
+                ocr_result = writer.save_from_images(
+                    image_paths=image_paths,
+                    context_id=f"celery_submission_{submission_id}",
+                    source_filename=str(getattr(sub, "filename") or Path(pdf_path).name),
+                )
+                db.add(ProcessingLog(
+                    submission_id=submission_id,
+                    action="ocr_results_saved",
+                    status="success",
+                    message=f"OCRResults saved to {ocr_result.get('relative_summary_path')}",
+                    extra_data=ocr_result,
+                ))
+                db.commit()
+            except Exception as ocr_error:
+                db.add(ProcessingLog(
+                    submission_id=submission_id,
+                    action="ocr_results_error",
+                    status="warning",
+                    message=f"OCRResults generation failed: {ocr_error}",
+                ))
+                db.commit()
         logger.info(f"Extracting answers using AI from {len(image_paths)} pages")
         ai_extractor = get_ai_extractor()
         extraction_result = ai_extractor.extract_from_multiple_images(
