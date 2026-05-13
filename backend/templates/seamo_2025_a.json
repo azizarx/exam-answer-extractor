@@ -1,0 +1,152 @@
+{
+  "id": "seamo_2025_a",
+  "name": "SEAMO 2025 \u2014 Papers A-F",
+  "brand": "seamo",
+  "year": 2025,
+  "paper": "A",
+  "reference_dpi": 300,
+  "page_size": {
+    "width": 2482,
+    "height": 3510
+  },
+  "anchor": {
+    "x": 134,
+    "y": 989,
+    "w": 695,
+    "h": 74,
+    "min_match_score": 0.45
+  },
+  "detection": {
+    "filename_pattern": "SEAMO.*2025",
+    "text_markers": [
+      "SEAMO",
+      "2025",
+      "Paper A"
+    ]
+  },
+  "header": {
+    "region": {
+      "x": 97,
+      "y": 200,
+      "w": 2287,
+      "h": 650
+    },
+    "fields": [
+      {
+        "key": "candidate_name",
+        "label": "Candidate Name",
+        "type": "text_line"
+      },
+      {
+        "key": "candidate_number",
+        "label": "Candidate No.",
+        "type": "grid_boxes",
+        "prefix": "CAN",
+        "max_length": 12
+      },
+      {
+        "key": "country",
+        "label": "Country",
+        "type": "text_line"
+      },
+      {
+        "key": "level",
+        "label": "Level",
+        "type": "text_line"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 20
+      },
+      "region": {
+        "x": 100,
+        "y": 1050,
+        "w": 800,
+        "h": 1800
+      },
+      "grid": {
+        "rows": 20,
+        "cols": 1,
+        "questions_per_col": [
+          20
+        ],
+        "options": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "row_positions": [
+          1099, 1186, 1273, 1360, 1447,
+          1534, 1621, 1708, 1795, 1882,
+          1969, 2056, 2143, 2230, 2317,
+          2404, 2491, 2578, 2665, 2752
+        ],
+        "col_positions": [
+          [285, 400, 516, 627, 740]
+        ],
+        "cell_width": 27,
+        "cell_height": 36,
+        "bubble_height": 25,
+        "row_pitch": 84.6,
+        "first_row_offset": 18
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 35,
+        "min_ratio": 1.12,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.1
+      }
+    },
+    {
+      "type": "numeric_grid",
+      "questions": {
+        "start": 21,
+        "end": 25
+      },
+      "region": {
+        "x": 800,
+        "y": 963,
+        "w": 900,
+        "h": 1200
+      },
+      "grid": {
+        "rows": 5,
+        "cols": 1,
+        "questions_per_col": [
+          5
+        ],
+        "cells_per_question": 8,
+        "row_positions": [
+          1188,
+          1405,
+          1622,
+          1839,
+          2056
+        ],
+        "col_positions": [
+          876,
+          973,
+          1070,
+          1167,
+          1264,
+          1361,
+          1458,
+          1555
+        ],
+        "cell_width": 96,
+        "cell_height": 97,
+        "row_pitch": 217.0
+      },
+      "extraction_strategy": "ocr"
+    }
+  ]
+}

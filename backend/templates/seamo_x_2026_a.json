@@ -1,0 +1,165 @@
+{
+  "id": "seamo_x_2026_a",
+  "name": "SEAMO X 2026 \u2014 Paper A (Lower Primary)",
+  "brand": "seamo_x",
+  "year": 2026,
+  "paper": "A",
+  "reference_dpi": 300,
+  "page_size": {
+    "width": 2482,
+    "height": 3510
+  },
+  "anchor": {
+    "x": 97,
+    "y": 853,
+    "w": 2287,
+    "h": 69,
+    "min_match_score": 0.45
+  },
+  "detection": {
+    "filename_pattern": "SEAMO.*X.*2026|ZONE.*Z",
+    "text_markers": [
+      "SEAMO X",
+      "2026",
+      "Paper A",
+      "LOWER PRIMARY"
+    ]
+  },
+  "header": {
+    "region": {
+      "x": 97,
+      "y": 200,
+      "w": 2287,
+      "h": 650
+    },
+    "fields": [
+      {
+        "key": "candidate_name",
+        "label": "Candidate Name",
+        "type": "text_line"
+      },
+      {
+        "key": "candidate_number",
+        "label": "Candidate No.",
+        "type": "grid_boxes",
+        "prefix": "CAN",
+        "max_length": 12
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "numeric_grid",
+      "questions": {
+        "start": 1,
+        "end": 20
+      },
+      "region": {
+        "x": 91,
+        "y": 1210,
+        "w": 2300,
+        "h": 1650
+      },
+      "grid": {
+        "rows": 20,
+        "cols": 3,
+        "questions_per_col": [
+          6,
+          7,
+          7
+        ],
+        "cells_per_question": 8,
+        "row_positions": [
+          1309,
+          1509,
+          1710,
+          1910,
+          2111,
+          2316,
+          1309,
+          1509,
+          1710,
+          1910,
+          2111,
+          2316,
+          2517,
+          1309,
+          1509,
+          1710,
+          1910,
+          2111,
+          2316,
+          2517
+        ],
+        "col_positions": [
+          [
+            100,
+            189,
+            279,
+            368,
+            458,
+            547,
+            637,
+            727
+          ],
+          [
+            883,
+            973,
+            1062,
+            1152,
+            1241,
+            1331,
+            1420,
+            1510
+          ],
+          [
+            1668,
+            1758,
+            1847,
+            1937,
+            2026,
+            2116,
+            2205,
+            2295
+          ]
+        ],
+        "cell_width": 88,
+        "cell_height": 90,
+        "row_pitch": 200.0
+      },
+      "extraction_strategy": "ocr",
+      "question_overrides": {
+        "4": {
+          "type": "diagram",
+          "region": {
+            "x": 100,
+            "y": 1810,
+            "w": 715,
+            "h": 280
+          },
+          "prompt_hint": "Read the time shown on the analog clock face. Return in HH:MM format."
+        },
+        "6": {
+          "type": "diagram",
+          "region": {
+            "x": 100,
+            "y": 2210,
+            "w": 715,
+            "h": 280
+          },
+          "prompt_hint": "Identify the pattern or answer represented in the 2x2 grid drawing."
+        },
+        "9": {
+          "type": "diagram",
+          "region": {
+            "x": 883,
+            "y": 1610,
+            "w": 715,
+            "h": 280
+          },
+          "prompt_hint": "Count the number of shaded sections in the pie chart / circle diagram. Return as an integer."
+        }
+      }
+    }
+  ]
+}

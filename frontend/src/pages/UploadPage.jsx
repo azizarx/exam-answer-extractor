@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
@@ -15,6 +15,12 @@ const UploadPage = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+
+  useEffect(() => {
+    examAPI.getTemplates().then(setTemplates).catch(() => {});
+  }, []);
 
   const handleFileSelect = (file) => {
     setSelectedFile(file);
@@ -24,6 +30,11 @@ const UploadPage = () => {
   const handleUpload = async (file) => {
     if (!file) return;
 
+    if (!selectedTemplate) {
+      setError('Please select an exam layout before uploading.');
+      return;
+    }
+
     setUploading(true);
     setError('');
     setUploadProgress(0);
@@ -31,7 +42,7 @@ const UploadPage = () => {
     try {
       const response = await examAPI.uploadPDF(file, (progress) => {
         setUploadProgress(progress);
-      });
+      }, selectedTemplate);
 
       // Navigate to tracking page with submission ID
       navigate(`/track/${response.submission_id}`);
@@ -93,6 +104,55 @@ const UploadPage = () => {
         {error && (
           <div className="mb-6">
             <Alert type="error">{error}</Alert>
+          </div>
+        )}
+
+        {/* Template Selector — image cards */}
+        {templates.length > 0 && (
+          <div className="mb-8">
+            <label className="block text-sm font-medium text-slate-700 mb-3">
+              Select the exam layout that matches your PDF
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {templates.map((t) => {
+                const isSelected = selectedTemplate === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { setSelectedTemplate(t.id); setError(''); }}
+                    className={`group relative rounded-lg border-2 overflow-hidden transition-all ${
+                      isSelected
+                        ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg scale-[1.02]'
+                        : 'border-slate-200 hover:border-slate-400 hover:shadow-md'
+                    }`}
+                  >
+                    {t.preview_url && (
+                      <img
+                        src={`http://localhost:8000${t.preview_url}`}
+                        alt={t.name}
+                        className="w-full h-40 object-contain object-top bg-white"
+                        loading="lazy"
+                      />
+                    )}
+                    <div className={`px-2 py-2 text-center ${isSelected ? 'bg-blue-50' : 'bg-slate-50'}`}>
+                      <div className="text-xs font-semibold text-slate-800 truncate">{t.name}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {t.total_questions}Q
+                        {t.has_mcq ? ' · MCQ' : ''}
+                        {t.has_free_response ? ' · Free' : ''}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

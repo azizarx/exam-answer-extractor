@@ -38,11 +38,21 @@ export const examAPI = {
    * @param {Function} onProgress - Progress callback (optional)
    * @returns {Promise} Upload response with submission_id
    */
-  uploadPDF: async (file, onProgress) => {
+  /**
+   * Get available exam layout templates
+   * @returns {Promise} List of template objects
+   */
+  getTemplates: async () => {
+    const response = await apiClient.get('/templates');
+    return response.data;
+  },
+
+  uploadPDF: async (file, onProgress, templateId) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await apiClient.post('/upload', formData, {
+    const params = templateId ? `?template_id=${encodeURIComponent(templateId)}` : '';
+    const response = await apiClient.post(`/upload${params}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

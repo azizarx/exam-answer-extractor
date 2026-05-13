@@ -62,9 +62,9 @@ class Settings(BaseSettings):
     ocr_language: str = "eng"
     tesseract_cmd: Optional[str] = None
 
-    # UZ-specific MCQ OCR solver (NewMcqSolution.py)
-    use_uz_mcq_solver: bool = True
-    uz_mcq_grid_path: str = "page1_grid.json"
+    # Mathpix OCR (for numeric grids and diagram detection)
+    mathpix_app_id: str = ""
+    mathpix_app_key: str = ""
 
     # DigitalOcean Spaces
     spaces_endpoint: Optional[str] = None

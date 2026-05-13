@@ -1,0 +1,140 @@
+{
+  "id": "seamo_x_2026_b",
+  "name": "SEAMO X 2026 \u2014 Paper B (Middle Primary)",
+  "brand": "seamo_x",
+  "year": 2026,
+  "paper": "B",
+  "reference_dpi": 300,
+  "page_size": {
+    "width": 2482,
+    "height": 3510
+  },
+  "anchor": {
+    "x": 97,
+    "y": 853,
+    "w": 2287,
+    "h": 69,
+    "min_match_score": 0.45
+  },
+  "detection": {
+    "filename_pattern": "SEAMO.*X.*2026|ZONE.*Z",
+    "text_markers": [
+      "SEAMO X",
+      "2026",
+      "Paper B",
+      "MIDDLE PRIMARY"
+    ]
+  },
+  "header": {
+    "region": {
+      "x": 97,
+      "y": 200,
+      "w": 2287,
+      "h": 650
+    },
+    "fields": [
+      {
+        "key": "candidate_name",
+        "label": "Candidate Name",
+        "type": "text_line"
+      },
+      {
+        "key": "candidate_number",
+        "label": "Candidate No.",
+        "type": "grid_boxes",
+        "prefix": "CAN",
+        "max_length": 12
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "numeric_grid",
+      "questions": {
+        "start": 1,
+        "end": 15
+      },
+      "region": {
+        "x": 91,
+        "y": 1525,
+        "w": 2300,
+        "h": 1275
+      },
+      "grid": {
+        "rows": 15,
+        "cols": 3,
+        "questions_per_col": [
+          5,
+          5,
+          5
+        ],
+        "cells_per_question": 8,
+        "row_positions": [
+          1621,
+          1822,
+          2022,
+          2223,
+          2423,
+          1621,
+          1822,
+          2022,
+          2223,
+          2423,
+          1621,
+          1822,
+          2022,
+          2223,
+          2423
+        ],
+        "col_positions": [
+          [
+            103,
+            193,
+            283,
+            372,
+            462,
+            551,
+            641,
+            730
+          ],
+          [
+            887,
+            976,
+            1066,
+            1155,
+            1245,
+            1334,
+            1424,
+            1514
+          ],
+          [
+            1672,
+            1761,
+            1851,
+            1940,
+            2030,
+            2119,
+            2209,
+            2298
+          ]
+        ],
+        "cell_width": 88,
+        "cell_height": 90,
+        "row_pitch": 200.0
+      },
+      "extraction_strategy": "ocr",
+      "question_overrides": {
+        "5": {
+          "type": "diagram",
+          "region": {
+            "x": 100,
+            "y": 2380,
+            "w": 600,
+            "h": 420
+          },
+          "prompt_hint": "Analyze the graph/network diagram. Identify the answer represented by the node or path drawing."
+        }
+      }
+    }
+  ]
+}

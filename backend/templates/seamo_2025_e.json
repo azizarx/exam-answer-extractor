@@ -1,0 +1,13 @@
+{
+  "id": "seamo_2025_e",
+  "name": "SEAMO 2025 Paper E - Intermediate",
+  "brand": "seamo",
+  "year": 2025,
+  "paper": "E",
+  "variant_of": "seamo_2025_a",
+
+  "detection": {
+    "filename_pattern": "SEAMO.*2025",
+    "text_markers": ["SEAMO", "2025", "Paper E"]
+  }
+}

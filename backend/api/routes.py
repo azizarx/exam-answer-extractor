@@ -1,8 +1,8 @@
 """
 FastAPI routes for exam answer sheet processing
 """
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Query
+from fastapi.responses import JSONResponse, FileResponse
 import json as _json
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -44,6 +44,103 @@ from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+# ---------------------------- Template APIs ----------------------------
+
+
+@router.get("/templates")
+async def list_templates():
+    """List all available exam layout templates with preview image URLs."""
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+
+    # Map template_id -> reference image filename
+    _PREVIEW_MAP = {
+        "seamo_2025_k": "seamo_2025_page1.png",
+        "seamo_2025_a": "seamo_2025_page2.png",
+        "seamo_x_2026_k": "seamo_x_2026_page1.png",
+        "seamo_x_2026_a": "seamo_x_2026_page2.png",
+        "seamo_x_2026_b": "seamo_x_2026_page3.png",
+        "seamo_x_2026_c": "seamo_x_2026_page4.png",
+    }
+
+    results = []
+    seen_previews = set()
+    for t in registry.list_templates():
+        base_id = t.variant_of or t.id
+        preview_file = _PREVIEW_MAP.get(base_id)
+        # Only show one card per unique layout (skip variants)
+        if preview_file and preview_file in seen_previews:
+            continue
+        if preview_file:
+            seen_previews.add(preview_file)
+        results.append({
+            "id": t.id,
+            "name": t.name,
+            "brand": t.brand,
+            "year": t.year,
+            "paper": t.paper,
+            "has_mcq": t.has_mcq,
+            "has_free_response": t.has_free_response,
+            "total_questions": t.total_questions,
+            "preview_url": f"/templates/{t.id}/preview" if preview_file else None,
+            "variant_of": t.variant_of,
+        })
+    return results
+
+
+@router.get("/templates/all")
+async def list_all_templates():
+    """List ALL templates including variants (for programmatic use)."""
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "brand": t.brand,
+            "year": t.year,
+            "paper": t.paper,
+            "has_mcq": t.has_mcq,
+            "has_free_response": t.has_free_response,
+            "total_questions": t.total_questions,
+            "variant_of": t.variant_of,
+        }
+        for t in registry.list_templates()
+    ]
+
+
+@router.get("/templates/{template_id}/preview")
+async def get_template_preview(template_id: str):
+    """Return the reference image for a template as a PNG."""
+    from backend.services.template_service import get_template_registry
+
+    _PREVIEW_MAP = {
+        "seamo_2025_k": "seamo_2025_page1.png",
+        "seamo_2025_a": "seamo_2025_page2.png",
+        "seamo_x_2026_k": "seamo_x_2026_page1.png",
+        "seamo_x_2026_a": "seamo_x_2026_page2.png",
+        "seamo_x_2026_b": "seamo_x_2026_page3.png",
+        "seamo_x_2026_c": "seamo_x_2026_page4.png",
+    }
+
+    registry = get_template_registry()
+    t = registry.get(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    base_id = t.variant_of or t.id
+    preview_file = _PREVIEW_MAP.get(base_id)
+    if not preview_file:
+        raise HTTPException(status_code=404, detail="No preview image for this template")
+
+    ref_dir = Path(__file__).resolve().parent.parent / "templates" / "reference_images"
+    img_path = ref_dir / preview_file
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Preview image file missing")
+
+    return FileResponse(str(img_path), media_type="image/png")
 
 
 # ---------------------------- Exams APIs ------------------------------
@@ -348,7 +445,7 @@ def _save_ocr_results(
         return None
 
 
-def process_pdf_extraction(submission_id: int, pdf_path: str):
+def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optional[str] = None):
     """Background task to convert pages, extract answers, and persist JSON locally."""
     db = SessionLocal()
     image_paths: List[str] = []
@@ -411,8 +508,8 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
             submission_id=submission_id,
         )
 
-        logger.info(f"Extracting answers using AI from {len(image_paths)} pages")
-        ai_extractor = get_ai_extractor()
+        logger.info(f"Extracting answers using AI from {len(image_paths)} pages (template={template_id})")
+        ai_extractor = get_ai_extractor(mcq_template_id=template_id)
         settings = get_settings()
 
         _write_processing_log(
@@ -426,6 +523,7 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
                 "parallel": bool(settings.use_parallel_extraction),
                 "workers": int(settings.max_extraction_workers),
                 "pages": len(image_paths),
+                "template_id": template_id,
             },
         )
 
@@ -436,7 +534,8 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
             submission_id=submission_id,
             db=db,
             use_parallel=settings.use_parallel_extraction,
-            max_workers=settings.max_extraction_workers
+            max_workers=settings.max_extraction_workers,
+            filename=str(getattr(sub, "filename", "")),
         )
         extraction_seconds = time.perf_counter() - extraction_started
 
@@ -568,26 +667,40 @@ def process_pdf_extraction(submission_id: int, pdf_path: str):
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    template_id: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
     Upload a PDF exam answer sheet for processing
-    
+
     Args:
         file: PDF file upload
+        template_id: Exam layout template ID (from GET /templates). All pages
+                     in the PDF must use this layout.
         db: Database session
-        
+
     Returns:
         Upload confirmation with submission ID
     """
     if not file or not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
+    # Validate template_id if provided
+    if template_id:
+        from backend.services.template_service import get_template_registry
+        registry = get_template_registry()
+        if registry.get(template_id) is None:
+            available = registry.list_ids()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown template_id '{template_id}'. Available: {available}"
+            )
+
     try:
         storage = get_local_storage()
         logger.info(f"Storing PDF locally: {file.filename}")
         upload_result = storage.save_pdf(file.file, file.filename)
-        
+
         # Create database entry
         submission = ExamSubmission(
             filename=file.filename,
@@ -597,19 +710,22 @@ async def upload_pdf(
         db.add(submission)
         db.commit()
         db.refresh(submission)
-        
+
         # Log upload
         log_entry = ProcessingLog(
             submission_id=submission.id,
             action="upload",
             status="success",
-            message=f"Stored {file.filename} at {upload_result['relative_path']}"
+            message=f"Stored {file.filename} at {upload_result['relative_path']}",
+            extra_data={"template_id": template_id},
         )
         db.add(log_entry)
         db.commit()
-        
+
         # Schedule background processing
-        background_tasks.add_task(process_pdf_extraction, submission.id, upload_result['absolute_path'])
+        background_tasks.add_task(
+            process_pdf_extraction, submission.id, upload_result['absolute_path'], template_id
+        )
         
         logger.info(f"Created submission {submission.id} for {file.filename}")
         

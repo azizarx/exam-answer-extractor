@@ -496,20 +496,26 @@ class AIExtractor:
         }
 
 
-def get_ai_extractor():
+def get_ai_extractor(mcq_template_id=None):
     """Factory function to create extractor instance.
 
     Returns OptimizedAIExtractor if use_optimized_pipeline=True in config,
     otherwise returns legacy AIExtractor.
+
+    Args:
+        mcq_template_id: If provided, pins the MCQ extractor to this template
+                         instead of auto-detecting per page.
     """
     settings = get_settings()
 
     if settings.use_optimized_pipeline:
         try:
             from backend.services.optimized_extractor import OptimizedAIExtractor
-            logger.info("Using OPTIMIZED pipeline (CV preprocessing + token optimization)")
+            logger.info("Using OPTIMIZED pipeline (CV preprocessing + token optimization) | template=%s",
+                        mcq_template_id or "auto")
             return OptimizedAIExtractor(
-                max_workers=settings.max_extraction_workers
+                max_workers=settings.max_extraction_workers,
+                mcq_template_id=mcq_template_id,
             )
         except ImportError as e:
             logger.warning(f"Failed to import OptimizedAIExtractor, falling back to legacy: {e}")

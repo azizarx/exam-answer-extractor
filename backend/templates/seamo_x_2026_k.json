@@ -1,0 +1,124 @@
+{
+  "id": "seamo_x_2026_k",
+  "name": "SEAMO X 2026 \u2014 Paper K (Kindergarten)",
+  "brand": "seamo_x",
+  "year": 2026,
+  "paper": "K",
+  "reference_dpi": 300,
+  "page_size": {
+    "width": 2482,
+    "height": 3510
+  },
+  "anchor": {
+    "x": 97,
+    "y": 853,
+    "w": 2287,
+    "h": 69,
+    "min_match_score": 0.45
+  },
+  "detection": {
+    "filename_pattern": "SEAMO.*X.*2026|ZONE.*Z",
+    "text_markers": [
+      "SEAMO X",
+      "2026",
+      "Paper K",
+      "KINDERGARTEN"
+    ]
+  },
+  "header": {
+    "region": {
+      "x": 97,
+      "y": 200,
+      "w": 2287,
+      "h": 650
+    },
+    "fields": [
+      {
+        "key": "candidate_name",
+        "label": "Candidate Name",
+        "type": "text_line"
+      },
+      {
+        "key": "candidate_number",
+        "label": "Candidate No.",
+        "type": "grid_boxes",
+        "prefix": "CAN",
+        "max_length": 12
+      },
+      {
+        "key": "qr_code",
+        "label": "QR CODE",
+        "type": "qr_code"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 15
+      },
+      "region": {
+        "x": 97,
+        "y": 926,
+        "w": 1600,
+        "h": 1800
+      },
+      "grid": {
+        "rows": 15,
+        "cols": 2,
+        "questions_per_col": [
+          10,
+          5
+        ],
+        "options": [
+          "A",
+          "B",
+          "C"
+        ],
+        "row_positions": [
+          1147,
+          1311,
+          1476,
+          1640,
+          1805,
+          1969,
+          2134,
+          2298,
+          2463,
+          2627,
+          1147,
+          1311,
+          1476,
+          1640,
+          1805
+        ],
+        "col_positions": [
+          [
+            318,
+            500,
+            680
+          ],
+          [
+            1105,
+            1287,
+            1467
+          ]
+        ],
+        "cell_width": 122,
+        "cell_height": 0,
+        "bubble_height": 31,
+        "row_pitch": 165.0
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 35,
+        "min_ratio": 1.12,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.1
+      }
+    }
+  ]
+}

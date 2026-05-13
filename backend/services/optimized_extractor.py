@@ -16,11 +16,7 @@ from backend.services.extraction_pipeline import (
 )
 from backend.services.page_analyzer import PageAnalyzer, PageLayout
 from backend.services.image_preprocessor import ImagePreprocessor
-
-try:
-    from NewMcqSolution import extract_uz_mcq_from_images
-except Exception:  # pragma: no cover - optional runtime import
-    extract_uz_mcq_from_images = None
+from backend.services.mcq_extractor import auto_extract_mcq
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -37,7 +33,8 @@ class OptimizedAIExtractor:
         api_key: str = None,
         model_name: str = None,
         use_parallel: bool = True,
-        max_workers: int = 3
+        max_workers: int = 3,
+        mcq_template_id: Optional[str] = None,
     ):
         self.api_key = api_key or settings.gemini_api_key
         self.model_name = model_name or settings.gemini_model
@@ -46,9 +43,7 @@ class OptimizedAIExtractor:
         self._preprocess_enabled = bool(settings.enable_image_preprocessing)
         self._preprocess_mode = settings.preprocessing_mode
         self._image_preprocessor = ImagePreprocessor()
-        self._use_uz_mcq_solver = bool(settings.use_uz_mcq_solver)
-        self._uz_mcq_grid_path = settings.uz_mcq_grid_path
-        self._project_root = Path(__file__).resolve().parents[2]
+        self._mcq_template_id = mcq_template_id
 
         # Initialize refactored pipeline
         self.pipeline = RefactoredPipeline(
@@ -61,11 +56,11 @@ class OptimizedAIExtractor:
         # Format cache (persists across extractions)
         self._format_cache: Dict[str, ExamFormat] = {}
         logger.info(
-            "OptimizedAIExtractor initialized | model=%s | preprocessing=%s(%s) | uz_mcq_solver=%s",
+            "OptimizedAIExtractor initialized | model=%s | preprocessing=%s(%s) | mcq_template=%s",
             self.model_name,
             self._preprocess_enabled,
             self._preprocess_mode,
-            self._use_uz_mcq_solver,
+            self._mcq_template_id or "auto-detect",
         )
 
     def _load_image(self, image_path: str):
@@ -160,7 +155,8 @@ class OptimizedAIExtractor:
         submission_id: Optional[int] = None,
         db=None,
         use_parallel: bool = True,
-        max_workers: int = 4
+        max_workers: int = 4,
+        filename: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Extract data from multiple images.
@@ -173,6 +169,7 @@ class OptimizedAIExtractor:
             db: Optional database session for logging
             use_parallel: Whether to use parallel processing
             max_workers: Number of parallel workers
+            filename: Original upload filename (used for MCQ template detection)
         """
         import time
 
@@ -210,7 +207,7 @@ class OptimizedAIExtractor:
         for ext in extractions:
             candidates.append(self._extraction_to_dict(ext))
 
-        self._apply_uz_mcq_overrides(candidates, image_paths)
+        self._apply_mcq_overrides(candidates, image_paths, filename=filename)
 
         elapsed_time = time.time() - start_time
         pages_with_data = sum(1 for c in candidates if c.get("answers"))
@@ -222,36 +219,39 @@ class OptimizedAIExtractor:
             "processing_time": round(elapsed_time, 2),
         }
 
-    def _apply_uz_mcq_overrides(self, candidates: List[Dict[str, Any]], image_paths: List[str]) -> None:
+    def _apply_mcq_overrides(
+        self,
+        candidates: List[Dict[str, Any]],
+        image_paths: List[str],
+        filename: Optional[str] = None,
+    ) -> None:
         """
-        Override MCQ answers using the dedicated UZ OCR solver from NewMcqSolution.py.
+        Override MCQ answers using template-based CV bubble extraction.
+
+        Auto-detects the exam template from the first page image (or uses
+        the explicit mcq_template_id if set). If a matching template with
+        MCQ sections is found, its CV-extracted answers overwrite the
+        LLM-extracted ones for higher accuracy on bubble sheets.
         """
-        if not self._use_uz_mcq_solver:
-            return
-        if extract_uz_mcq_from_images is None:
-            logger.warning("UZ MCQ solver is enabled but NewMcqSolution import is unavailable.")
-            return
         if not image_paths:
             return
 
-        grid_path = Path(self._uz_mcq_grid_path)
-        if not grid_path.is_absolute():
-            grid_path = (self._project_root / grid_path).resolve()
-        if not grid_path.exists():
-            logger.warning("UZ MCQ solver skipped: grid file not found at %s", grid_path)
-            return
-
         try:
-            answers_by_page, diagnostics = extract_uz_mcq_from_images(
+            answers_by_page, diagnostics, detected_id = auto_extract_mcq(
                 image_paths=image_paths,
-                grid_json_path=str(grid_path),
+                filename=filename,
+                template_id=self._mcq_template_id,
             )
         except Exception as exc:
-            logger.warning("UZ MCQ solver failed: %s", exc)
+            logger.warning("MCQ template extractor failed: %s", exc)
             return
 
         if not answers_by_page:
-            logger.info("UZ MCQ solver produced no accepted page overrides. diagnostics=%s", diagnostics)
+            if detected_id:
+                logger.info(
+                    "MCQ extractor (template=%s) produced no accepted pages. diagnostics=%s",
+                    detected_id, diagnostics,
+                )
             return
 
         applied_pages = 0
@@ -274,7 +274,8 @@ class OptimizedAIExtractor:
             applied_answers += len(page_answers)
 
         logger.info(
-            "Applied UZ MCQ OCR overrides: pages=%d answers=%d accepted_pages=%s",
+            "Applied MCQ CV overrides: template=%s pages=%d answers=%d accepted_pages=%s",
+            detected_id,
             applied_pages,
             applied_answers,
             sorted(list(answers_by_page.keys())),
