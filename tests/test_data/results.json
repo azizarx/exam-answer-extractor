@@ -1,0 +1,366 @@
+{
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3
+  },
+  "tests": [
+    {
+      "template_id": "seamo_2025_k",
+      "description": "SEAMO 2025 Paper K \u2014 15 MCQ \u00d7 3 options, 2 columns (10+5)",
+      "passed": true,
+      "correct": 15,
+      "total": 15,
+      "filled_image": "tests/test_data/seamo_2025_k_filled.png",
+      "diagnostics": {
+        "status": "ok",
+        "template_id": "seamo_2025_k",
+        "anchor_score": 1.0,
+        "dx": 0,
+        "dy": 0,
+        "coverage": 1.0,
+        "reason": null
+      },
+      "answers": [
+        {
+          "question": 1,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 2,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 3,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 4,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 5,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 6,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 7,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 8,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 9,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 10,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 11,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 12,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 13,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 14,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 15,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "template_id": "seamo_2025_a",
+      "description": "SEAMO 2025 Paper A \u2014 20 MCQ \u00d7 5 options, 1 column",
+      "passed": true,
+      "correct": 20,
+      "total": 20,
+      "filled_image": "tests/test_data/seamo_2025_a_filled.png",
+      "diagnostics": {
+        "status": "ok",
+        "template_id": "seamo_2025_a",
+        "anchor_score": 1.0,
+        "dx": 0,
+        "dy": 0,
+        "coverage": 1.0,
+        "reason": null
+      },
+      "answers": [
+        {
+          "question": 1,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 2,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 3,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 4,
+          "expected": "D",
+          "got": "D",
+          "pass": true
+        },
+        {
+          "question": 5,
+          "expected": "E",
+          "got": "E",
+          "pass": true
+        },
+        {
+          "question": 6,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 7,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 8,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 9,
+          "expected": "D",
+          "got": "D",
+          "pass": true
+        },
+        {
+          "question": 10,
+          "expected": "E",
+          "got": "E",
+          "pass": true
+        },
+        {
+          "question": 11,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 12,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 13,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 14,
+          "expected": "D",
+          "got": "D",
+          "pass": true
+        },
+        {
+          "question": 15,
+          "expected": "E",
+          "got": "E",
+          "pass": true
+        },
+        {
+          "question": 16,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 17,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 18,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 19,
+          "expected": "D",
+          "got": "D",
+          "pass": true
+        },
+        {
+          "question": 20,
+          "expected": "E",
+          "got": "E",
+          "pass": true
+        }
+      ]
+    },
+    {
+      "template_id": "seamo_x_2026_k",
+      "description": "SEAMO X 2026 Paper K \u2014 15 MCQ \u00d7 3 options, 2 columns (10+5)",
+      "passed": true,
+      "correct": 15,
+      "total": 15,
+      "filled_image": "tests/test_data/seamo_x_2026_k_filled.png",
+      "diagnostics": {
+        "status": "ok",
+        "template_id": "seamo_x_2026_k",
+        "anchor_score": 1.0,
+        "dx": 0,
+        "dy": 0,
+        "coverage": 1.0,
+        "reason": null
+      },
+      "answers": [
+        {
+          "question": 1,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 2,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 3,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 4,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 5,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 6,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 7,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 8,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 9,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 10,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 11,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 12,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        },
+        {
+          "question": 13,
+          "expected": "C",
+          "got": "C",
+          "pass": true
+        },
+        {
+          "question": 14,
+          "expected": "B",
+          "got": "B",
+          "pass": true
+        },
+        {
+          "question": 15,
+          "expected": "A",
+          "got": "A",
+          "pass": true
+        }
+      ]
+    }
+  ]
+}
