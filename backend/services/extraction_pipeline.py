@@ -64,6 +64,7 @@ class CandidateExtraction:
     paper_type: Optional[str] = None
     extra_fields: Dict[str, Any] = field(default_factory=dict)
     answers: Dict[str, str] = field(default_factory=dict)
+    drawing_questions: Dict[str, str] = field(default_factory=dict)
     confidence: float = 0.0
     extraction_method: str = "unknown"  # "cv_only", "llm_assisted", "llm_full"
     errors: List[str] = field(default_factory=list)
@@ -382,9 +383,10 @@ class AnswerClassifier:
         if total_mcq > 0 and len(cv_answers) < total_mcq * 0.8:
             return True
 
-        # If there are drawing questions, we need LLM
-        if format.question_ranges.get("drawing"):
-            return True
+        # If there are non-MCQ ranges (numeric/free-response or drawing), we need LLM vision extraction.
+        for q_type, q_range in (format.question_ranges or {}).items():
+            if q_type != "mcq" and q_range:
+                return True
 
         return False
 
@@ -675,6 +677,7 @@ CRITICAL RULES:
 2. FREE RESPONSE: Numbers/text WRITTEN in boxes → extract exact value ("99990", "328", "hello"), including slight overflow outside box
 3. DRAWING: Only for actual SKETCHES/DIAGRAMS that cannot be typed → return "DR"
 4. BLANK: Only if completely empty with no marks at all → return "BL"
+5. If any numbered question contains written text/number outside the detected ranges, still include it in "answers".
 
 NEVER return "DR" for numbers or text - those are free responses, not drawings!
 A drawing is a picture/sketch/diagram, NOT written characters.
@@ -858,7 +861,12 @@ Return ONLY valid JSON."""
             if mcq_range:
                 for q in range(mcq_range[0], mcq_range[1] + 1):
                     key = str(q)
-                    normalized[key] = self._normalize_mcq_answer(keyed_answers.get(key), options)
+                    raw_value = keyed_answers.get(key)
+                    if self._looks_like_mcq_answer(raw_value, options):
+                        normalized[key] = self._normalize_mcq_answer(raw_value, options)
+                    else:
+                        # If the detector mislabeled this question as MCQ, preserve written values.
+                        normalized[key] = self._normalize_open_answer(raw_value)
                     covered.add(key)
 
             for q_type, q_range in format.question_ranges.items():
@@ -932,6 +940,16 @@ Return ONLY valid JSON."""
             if k not in known_keys and v is not None
         }
 
+        normalized_answers = self._normalize_answers(data.get("answers", {}), format)
+        drawing_questions: Dict[str, str] = {}
+        drawing_range = self._normalize_range(format.question_ranges.get("drawing")) if format else None
+        if drawing_range:
+            for q in range(drawing_range[0], drawing_range[1] + 1):
+                key = str(q)
+                value = normalized_answers.get(key, "BL")
+                if value != "BL":
+                    drawing_questions[key] = value
+
         return CandidateExtraction(
             page_number=0,
             candidate_name=candidate_name,
@@ -939,7 +957,8 @@ Return ONLY valid JSON."""
             country=country,
             paper_type=paper_type,
             extra_fields=extra_fields,
-            answers=self._normalize_answers(data.get("answers", {}), format),
+            answers=normalized_answers,
+            drawing_questions=drawing_questions,
             extraction_method=extraction_method,
             confidence=0.9
         )
@@ -1091,22 +1110,73 @@ class RefactoredPipeline:
             image, layout, format
         )
 
-        # Determine extraction strategy
-        if not self.answer_classifier.needs_llm_extraction(layout, format, cv_answers):
-            # CV was sufficient
-            return CandidateExtraction(
-                page_number=layout.page_number,
-                answers=cv_answers,
-                extraction_method="cv_only",
-                confidence=0.95
-            )
-
-        # Need LLM extraction (with high-confidence CV seeds for MCQ where available)
-        return self.extractor.extract_full_page(
+        # Always run full-page vision extraction so free-response and drawing answers are not skipped.
+        # CV seeds are still used to stabilize MCQ.
+        candidate = self.extractor.extract_full_page(
             image,
             format,
             cv_seed_answers=cv_answers,
         )
+
+        if candidate.extraction_method != "failed":
+            candidate.page_number = layout.page_number
+            return candidate
+
+        logger.warning(
+            "LLM extraction failed for page %s; falling back to CV MCQ + header.",
+            layout.page_number,
+        )
+        return self._build_cv_header_candidate(image, layout, format, cv_answers)
+
+    def _extract_header_data(
+        self,
+        image: Image.Image,
+        layout: PageLayout,
+        format: ExamFormat,
+    ) -> Dict[str, Any]:
+        """Extract only header fields from a page image using the vision model."""
+        if not format.header_fields:
+            return {}
+
+        header_regions = [r for r in layout.regions if r.region_type == RegionType.HEADER]
+        if header_regions:
+            region = max(header_regions, key=lambda r: r.bbox.width * r.bbox.height)
+            left = max(0, int(region.bbox.x))
+            top = max(0, int(region.bbox.y))
+            right = min(image.width, int(region.bbox.x + region.bbox.width))
+            bottom = min(image.height, int(region.bbox.y + region.bbox.height))
+            if right > left and bottom > top:
+                header_image = image.crop((left, top, right, bottom))
+            else:
+                header_image = image.crop((0, 0, image.width, max(1, int(image.height * 0.20))))
+        else:
+            header_image = image.crop((0, 0, image.width, max(1, int(image.height * 0.20))))
+
+        return self.extractor.extract_header(header_image, format)
+
+    def _build_cv_header_candidate(
+        self,
+        image: Image.Image,
+        layout: PageLayout,
+        format: ExamFormat,
+        cv_answers: Dict[str, str],
+    ) -> CandidateExtraction:
+        """Fallback candidate result when full-page LLM extraction fails."""
+        header_data = self._extract_header_data(image, layout, format)
+        candidate = self.extractor._data_to_extraction(
+            {
+                "candidate_name": header_data.get("candidate_name"),
+                "candidate_number": header_data.get("candidate_number"),
+                "country": header_data.get("country"),
+                "paper_type": header_data.get("paper_type"),
+                "answers": cv_answers,
+            },
+            format,
+            extraction_method="cv_mcq_plus_header",
+        )
+        candidate.page_number = layout.page_number
+        candidate.confidence = 0.95
+        return candidate
 
     def to_output_format(
         self,
@@ -1119,7 +1189,8 @@ class RefactoredPipeline:
                 "candidate_name": ext.candidate_name,
                 "candidate_number": ext.candidate_number,
                 "country": ext.country,
-                "answers": ext.answers
+                "answers": ext.answers,
+                "drawing_questions": ext.drawing_questions,
             }
             if ext.paper_type:
                 candidate["paper_type"] = ext.paper_type

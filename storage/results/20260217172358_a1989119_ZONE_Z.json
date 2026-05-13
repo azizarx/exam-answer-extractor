@@ -1,0 +1,674 @@
+{
+  "document_information": {
+    "filename": "ZONE Z.pdf",
+    "extraction_timestamp": "2026-02-17T17:23:58.875852",
+    "total_candidates": 69,
+    "pages_processed": 69,
+    "pages_with_data": 0,
+    "processing_time": 361.32,
+    "detected_format": {
+      "header_fields": [
+        {
+          "key": "candidate_name",
+          "label": "Candidate Name"
+        },
+        {
+          "key": "candidate_number",
+          "label": "Candidate Number"
+        },
+        {
+          "key": "country",
+          "label": "Country"
+        },
+        {
+          "key": "paper_type",
+          "label": "Paper Type"
+        }
+      ],
+      "mcq_range": "1-30",
+      "drawing_range": "31-35",
+      "answer_options": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "description": "Standard bubble-sheet with MCQ + drawing questions"
+    }
+  },
+  "candidates": [
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    },
+    {
+      "candidate_name": "",
+      "candidate_number": "",
+      "country": "",
+      "paper_type": "",
+      "answers": {},
+      "drawing_questions": {}
+    }
+  ],
+  "logs": {
+    "validation": {
+      "is_valid": true,
+      "warnings": [],
+      "total_candidates": 69,
+      "total_answers": 0,
+      "total_drawing_questions": 0
+    },
+    "extraction_errors": [
+      "Page 1: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 2: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 3: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 4: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 5: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 6: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 7: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 8: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 10: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 9: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 11: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 12: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 13: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 14: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 15: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 16: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 17: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 18: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 19: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 20: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 21: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 22: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 23: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 24: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 25: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 26: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 27: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 28: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 29: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 30: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 31: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 32: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 33: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 34: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 35: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 36: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 37: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 38: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 39: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 40: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 41: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 42: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 43: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 44: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 45: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 46: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 47: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 48: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 49: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 50: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 51: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 52: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 53: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 54: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 55: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 56: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 57: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 58: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 59: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 60: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 61: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 62: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 63: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 64: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 65: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 66: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 67: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 68: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+      "Page 69: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods."
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "test_document", "target": "test_document", "relation": "semantically_similar_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "storage/uploads/20260314121536_1a2af95c_test.pdf", "source_location": null, "weight": 1.0}], "hyperedges": []}

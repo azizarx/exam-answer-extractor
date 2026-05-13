@@ -24,6 +24,18 @@ logger = logging.getLogger(__name__)
 
 class JSONGenerator:
     """Generates structured JSON from extracted exam data"""
+
+    @staticmethod
+    def _normalize_candidate(raw: Dict) -> Dict:
+        """Normalize candidate payload for exported JSON files."""
+        candidate = {
+            k: v for k, v in raw.items()
+            if k not in ("page_number",)
+        }
+        drawing = candidate.get("drawing_questions")
+        if not drawing:
+            candidate["drawing_questions"] = None
+        return candidate
     
     @staticmethod
     def generate(
@@ -40,12 +52,7 @@ class JSONGenerator:
 
         candidates = []
         for raw in candidates_raw:
-            # Copy every key EXCEPT internal metadata
-            candidate = {
-                k: v for k, v in raw.items()
-                if k not in ("page_number",)
-            }
-            candidates.append(candidate)
+            candidates.append(JSONGenerator._normalize_candidate(raw))
 
         json_str = json.dumps(candidates, indent=2, ensure_ascii=False)
         logger.info(f"Generated JSON for {filename}: {len(candidates)} candidates, {len(json_str)} bytes")
@@ -65,11 +72,7 @@ class JSONGenerator:
 
         candidates = []
         for raw in candidates_raw:
-            candidate = {
-                k: v for k, v in raw.items()
-                if k not in ("page_number",)
-            }
-            candidates.append(candidate)
+            candidates.append(JSONGenerator._normalize_candidate(raw))
 
         output = {
             "document_information": {
@@ -106,17 +109,7 @@ class JSONGenerator:
         filename: str,
         extraction_result: Dict,
     ) -> str:
-        """Generate a minimal JSON output for downstream consumption.
-
-        The output is a list of candidate objects with only the most important
-        fields:
-          - answers: mapping of question number → answer (including "DR" for drawing)
-          - candidate_number: identifier for the student
-          - paper_type: exam variant/type
-
-        This avoids including extra/unused header fields and keeps output stable
-        even when page formats vary.
-        """
+        """Generate a compact candidate list while preserving core extraction data."""
 
         candidates_raw = extraction_result.get("candidates", [])
         output_candidates = []
@@ -127,18 +120,21 @@ class JSONGenerator:
             for q in drawing.keys():
                 answers[str(q)] = "DR"
 
-            candidate_number = (
-                raw.get("candidate_number")
-                or raw.get("candidate_id")
-                or raw.get("id")
-                or ""
-            )
-            paper_type = raw.get("paper_type") or raw.get("paper") or ""
+            drawing_for_output = dict(drawing) if drawing else None
 
             output_candidates.append({
+                "candidate_name": raw.get("candidate_name") or "",
+                "candidate_number": (
+                    raw.get("candidate_number")
+                    or raw.get("candidate_id")
+                    or raw.get("id")
+                    or ""
+                ),
+                "country": raw.get("country") or "",
+                "paper_type": raw.get("paper_type") or raw.get("paper") or "",
                 "answers": answers,
-                "candidate_number": str(candidate_number) if candidate_number is not None else "",
-                "paper_type": str(paper_type) if paper_type is not None else "",
+                "drawing_questions": drawing_for_output,
+                "extra_fields": raw.get("extra_fields") or {},
             })
 
         json_str = json.dumps(output_candidates, indent=2, ensure_ascii=False)

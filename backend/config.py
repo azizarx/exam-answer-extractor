@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     use_optimized_pipeline: bool = True  # Set to False to use legacy pipeline
 
     # Output format
-    minimal_output: bool = True  # Generate minimal JSON output (answers + identifiers only)
+    minimal_output: bool = False  # Keep full candidate metadata in generated JSON by default
 
     # Prompt caching (to reduce repeated format analysis)
     cache_page_prompts: bool = True
@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     ocr_results_folder_name: str = "OCRResults"
     ocr_language: str = "eng"
     tesseract_cmd: Optional[str] = None
+
+    # UZ-specific MCQ OCR solver (NewMcqSolution.py)
+    use_uz_mcq_solver: bool = True
+    uz_mcq_grid_path: str = "page1_grid.json"
 
     # DigitalOcean Spaces
     spaces_endpoint: Optional[str] = None

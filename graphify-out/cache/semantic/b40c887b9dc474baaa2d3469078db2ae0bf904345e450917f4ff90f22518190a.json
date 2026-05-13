@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "zone_z_document", "target": "zone_z_document", "relation": "semantically_similar_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "storage/uploads/20260217163307_98e2762a_ZONE_Z.pdf", "source_location": null, "weight": 1.0}], "hyperedges": []}

@@ -741,6 +741,7 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
         clean_answers = {k: (str(v) if v is not None else '') for k, v in raw_answers.items()}
         raw_drawing = getattr(cr, 'drawing_questions') or {}
         clean_drawing = {k: (str(v) if v is not None else '') for k, v in raw_drawing.items()}
+        drawing_payload = clean_drawing if clean_drawing else None
 
         # Merge extra_fields into display: use candidate_no/candidate_id as candidate_number if empty
         raw_extra = getattr(cr, 'extra_fields') or {}
@@ -761,7 +762,7 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
             paper_type=str(getattr(cr, 'paper_type') or ''),
             extra_fields=clean_extra if clean_extra else None,
             answers=clean_answers,
-            drawing_questions=clean_drawing,
+            drawing_questions=drawing_payload,
         ))
     
     return SubmissionDetailResponse(

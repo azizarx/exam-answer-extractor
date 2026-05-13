@@ -6,6 +6,7 @@ Provides backwards-compatible interface while using optimized internals.
 import logging
 from typing import List, Dict, Any, Optional
 from dataclasses import asdict
+from pathlib import Path
 
 from backend.config import get_settings
 from backend.services.extraction_pipeline import (
@@ -15,6 +16,11 @@ from backend.services.extraction_pipeline import (
 )
 from backend.services.page_analyzer import PageAnalyzer, PageLayout
 from backend.services.image_preprocessor import ImagePreprocessor
+
+try:
+    from NewMcqSolution import extract_uz_mcq_from_images
+except Exception:  # pragma: no cover - optional runtime import
+    extract_uz_mcq_from_images = None
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -40,6 +46,9 @@ class OptimizedAIExtractor:
         self._preprocess_enabled = bool(settings.enable_image_preprocessing)
         self._preprocess_mode = settings.preprocessing_mode
         self._image_preprocessor = ImagePreprocessor()
+        self._use_uz_mcq_solver = bool(settings.use_uz_mcq_solver)
+        self._uz_mcq_grid_path = settings.uz_mcq_grid_path
+        self._project_root = Path(__file__).resolve().parents[2]
 
         # Initialize refactored pipeline
         self.pipeline = RefactoredPipeline(
@@ -52,10 +61,11 @@ class OptimizedAIExtractor:
         # Format cache (persists across extractions)
         self._format_cache: Dict[str, ExamFormat] = {}
         logger.info(
-            "OptimizedAIExtractor initialized | model=%s | preprocessing=%s(%s)",
+            "OptimizedAIExtractor initialized | model=%s | preprocessing=%s(%s) | uz_mcq_solver=%s",
             self.model_name,
             self._preprocess_enabled,
             self._preprocess_mode,
+            self._use_uz_mcq_solver,
         )
 
     def _load_image(self, image_path: str):
@@ -200,6 +210,8 @@ class OptimizedAIExtractor:
         for ext in extractions:
             candidates.append(self._extraction_to_dict(ext))
 
+        self._apply_uz_mcq_overrides(candidates, image_paths)
+
         elapsed_time = time.time() - start_time
         pages_with_data = sum(1 for c in candidates if c.get("answers"))
 
@@ -209,6 +221,64 @@ class OptimizedAIExtractor:
             "pages_with_data": pages_with_data,
             "processing_time": round(elapsed_time, 2),
         }
+
+    def _apply_uz_mcq_overrides(self, candidates: List[Dict[str, Any]], image_paths: List[str]) -> None:
+        """
+        Override MCQ answers using the dedicated UZ OCR solver from NewMcqSolution.py.
+        """
+        if not self._use_uz_mcq_solver:
+            return
+        if extract_uz_mcq_from_images is None:
+            logger.warning("UZ MCQ solver is enabled but NewMcqSolution import is unavailable.")
+            return
+        if not image_paths:
+            return
+
+        grid_path = Path(self._uz_mcq_grid_path)
+        if not grid_path.is_absolute():
+            grid_path = (self._project_root / grid_path).resolve()
+        if not grid_path.exists():
+            logger.warning("UZ MCQ solver skipped: grid file not found at %s", grid_path)
+            return
+
+        try:
+            answers_by_page, diagnostics = extract_uz_mcq_from_images(
+                image_paths=image_paths,
+                grid_json_path=str(grid_path),
+            )
+        except Exception as exc:
+            logger.warning("UZ MCQ solver failed: %s", exc)
+            return
+
+        if not answers_by_page:
+            logger.info("UZ MCQ solver produced no accepted page overrides. diagnostics=%s", diagnostics)
+            return
+
+        applied_pages = 0
+        applied_answers = 0
+        for candidate in candidates:
+            page_no_raw = candidate.get("page_number")
+            try:
+                page_no = int(page_no_raw)
+            except (TypeError, ValueError):
+                continue
+
+            page_answers = answers_by_page.get(page_no)
+            if not page_answers:
+                continue
+
+            answers = candidate.setdefault("answers", {})
+            for question, answer in page_answers.items():
+                answers[str(question)] = str(answer).strip().upper()
+            applied_pages += 1
+            applied_answers += len(page_answers)
+
+        logger.info(
+            "Applied UZ MCQ OCR overrides: pages=%d answers=%d accepted_pages=%s",
+            applied_pages,
+            applied_answers,
+            sorted(list(answers_by_page.keys())),
+        )
 
     def validate_extraction(self, extraction_result: Dict) -> Dict:
         """
@@ -259,6 +329,12 @@ class OptimizedAIExtractor:
         normalized_answers: Dict[str, Any] = {}
         drawing_questions: Dict[str, Any] = {}
 
+        for q, response in (extraction.drawing_questions or {}).items():
+            q_key = str(q)
+            value = str(response).strip() if response is not None else ""
+            if value:
+                drawing_questions[q_key] = value
+
         for q, answer in (extraction.answers or {}).items():
             q_key = str(q)
             value = str(answer).strip() if answer is not None else ""
@@ -271,12 +347,17 @@ class OptimizedAIExtractor:
             if upper == "DR":
                 # Keep DR in answers and mirror to drawing_questions for compatibility.
                 normalized_answers[q_key] = "DR"
-                drawing_questions[q_key] = "DR"
+                drawing_questions.setdefault(q_key, "DR")
             elif upper in {"A", "B", "C", "D", "E", "BL", "IN"}:
                 normalized_answers[q_key] = upper
             else:
                 # Preserve numeric/text responses as-is (do not collapse to DR).
                 normalized_answers[q_key] = value
+
+        # Ensure any extracted drawing responses are mirrored in answers.
+        for q_key, response in drawing_questions.items():
+            if q_key not in normalized_answers or not str(normalized_answers[q_key]).strip():
+                normalized_answers[q_key] = response
 
         result = {
             "page_number": extraction.page_number,

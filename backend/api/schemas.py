@@ -28,8 +28,8 @@ class CandidateResultSchema(BaseModel):
         default_factory=dict,
         description='MCQ answers as {"1": "D", "2": "B", "3": "BL", "4": "IN", ...}'
     )
-    drawing_questions: Dict[str, str] = Field(
-        default_factory=dict,
+    drawing_questions: Optional[Dict[str, str]] = Field(
+        None,
         description='Free-response / drawing answers as {"31": "student text..."}'
     )
 

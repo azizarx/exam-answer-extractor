@@ -1,0 +1,23 @@
+{
+  "document_information": {
+    "filename": "test.pdf",
+    "extraction_timestamp": "2026-04-16T02:29:24.825080",
+    "total_candidates": 0,
+    "pages_processed": 0,
+    "pages_with_data": 0,
+    "processing_time": 0
+  },
+  "candidates": [],
+  "logs": {
+    "validation": {
+      "is_valid": true,
+      "warnings": [],
+      "total_candidates": 0,
+      "total_answers": 0,
+      "total_drawing_questions": 0
+    },
+    "extraction_errors": [
+      "No valid images loaded"
+    ]
+  }
+}

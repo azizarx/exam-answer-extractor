@@ -1,0 +1,20 @@
+{
+  "document_information": {
+    "filename": "test.pdf",
+    "extraction_timestamp": "2026-03-14T12:15:36.356685",
+    "total_candidates": 0,
+    "pages_processed": 0,
+    "pages_with_data": 0,
+    "processing_time": 0.0
+  },
+  "candidates": [],
+  "logs": {
+    "validation": {
+      "is_valid": true,
+      "warnings": [],
+      "total_candidates": 0,
+      "total_answers": 0,
+      "total_drawing_questions": 0
+    }
+  }
+}
