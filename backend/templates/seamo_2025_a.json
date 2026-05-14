@@ -82,25 +82,20 @@
           "D",
           "E"
         ],
-        "row_positions": [
-          1099, 1186, 1273, 1360, 1447,
-          1534, 1621, 1708, 1795, 1882,
-          1969, 2056, 2143, 2230, 2317,
-          2404, 2491, 2578, 2665, 2752
-        ],
+        "row_positions": [],
         "col_positions": [
           [285, 400, 516, 627, 740]
         ],
         "cell_width": 27,
         "cell_height": 36,
         "bubble_height": 25,
-        "row_pitch": 84.6,
-        "first_row_offset": 18
+        "row_pitch": 84.578947,
+        "first_row_offset": 67
       },
       "extraction_strategy": "cv_then_llm",
       "scoring": {
-        "min_ink_pixels": 35,
-        "min_ratio": 1.12,
+        "min_ink_pixels": 10,
+        "min_ratio": 1.05,
         "binary_threshold": 180,
         "min_page_coverage": 0.6,
         "min_avg_ratio": 1.1
