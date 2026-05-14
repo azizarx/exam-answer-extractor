@@ -17,7 +17,6 @@ from backend.services.extraction_pipeline import (
 from backend.services.page_analyzer import PageAnalyzer, PageLayout
 from backend.services.image_preprocessor import ImagePreprocessor
 from backend.services.mcq_extractor import auto_extract_mcq
-from backend.services.section_extractor import extract_section
 from backend.services.template_service import get_template_registry
 
 logger = logging.getLogger(__name__)
@@ -290,8 +289,12 @@ class OptimizedAIExtractor:
         image_paths: List[str],
     ) -> None:
         """
-        Extract answers from non-MCQ sections (numeric_grid, open_response,
-        diagram) using the template and Mathpix OCR, then merge into candidates.
+        Process diagram questions using Mathpix OCR.
+
+        For sections with diagram question_overrides, crops the diagram
+        region and sends it to Mathpix for recognition. Only handles
+        diagram-type questions — numeric_grid and open_response are
+        already handled by the Gemini pipeline.
         """
         if not self._mcq_template_id or not image_paths:
             return
@@ -301,20 +304,26 @@ class OptimizedAIExtractor:
         if not template:
             return
 
-        # Only process if the template has non-MCQ sections
-        non_mcq_sections = [s for s in template.sections if s.type != "mcq_grid"]
-        if not non_mcq_sections:
+        # Only process sections that have diagram overrides
+        diagram_sections = [
+            s for s in template.sections
+            if s.question_overrides and any(
+                ov.type == "diagram" for ov in s.question_overrides.values()
+            )
+        ]
+        if not diagram_sections:
             return
 
-        # Check if Mathpix is available
-        use_mathpix = bool(settings.mathpix_app_id and settings.mathpix_app_key)
-        if use_mathpix:
-            logger.info("Using Mathpix OCR for non-MCQ sections")
-        else:
-            logger.info("Mathpix not configured, using Tesseract for non-MCQ sections")
+        has_mathpix = bool(settings.mathpix_app_id and settings.mathpix_app_key)
+        if not has_mathpix:
+            logger.info("Mathpix not configured, skipping diagram extraction")
+            return
+
+        logger.info("Using Mathpix OCR for diagram questions")
 
         import cv2
         from backend.services.mcq_extractor import _match_anchor
+        from backend.services.mathpix_client import ocr_image
 
         # Build anchor from first page if needed
         if template.anchor.region.w > 0 and template.id not in registry._anchor_images:
@@ -333,7 +342,6 @@ class OptimizedAIExtractor:
             if img is None:
                 continue
 
-            # Find the matching candidate
             candidate = None
             for c in candidates:
                 try:
@@ -345,39 +353,52 @@ class OptimizedAIExtractor:
             if candidate is None:
                 continue
 
-            # Anchor match for dx/dy
             score, dx, dy, _ = _match_anchor(img, template, registry)
             if score < template.anchor.min_match_score:
                 continue
 
-            # Extract each non-MCQ section
             answers = candidate.setdefault("answers", {})
             drawing_questions = candidate.setdefault("drawing_questions", {})
 
-            for section in non_mcq_sections:
-                try:
-                    sec_result = extract_section(img, section, dx, dy, use_mathpix)
+            for section in diagram_sections:
+                for q_num, override in section.question_overrides.items():
+                    if override.type != "diagram":
+                        continue
+                    if not override.region or override.region.w == 0:
+                        continue
 
-                    for q, ans in sec_result.answers.items():
-                        if ans and ans.strip() and ans != "DR":
-                            answers[str(q)] = ans.strip()
-                        elif ans == "DR":
-                            answers[str(q)] = "DR"
-                            drawing_questions[str(q)] = "DR"
+                    try:
+                        r = override.region
+                        x, y = r.x + dx, r.y + dy
+                        img_h, img_w = img.shape[:2]
+                        x = max(0, min(x, img_w - 1))
+                        y = max(0, min(y, img_h - 1))
+                        w = min(r.w, img_w - x)
+                        h = min(r.h, img_h - y)
 
-                    # Store diagram crops info
-                    for q, diag_data in sec_result.diagrams.items():
-                        drawing_questions[str(q)] = diag_data.get("prompt_hint", "DR")
-                        if str(q) not in answers or not answers[str(q)].strip():
-                            answers[str(q)] = "DR"
+                        if w <= 0 or h <= 0:
+                            continue
 
-                    applied_total += len(sec_result.answers)
-                except Exception as exc:
-                    logger.warning("Section extraction failed for page %d: %s", page_num, exc)
+                        crop = img[y : y + h, x : x + w]
+                        result = ocr_image(crop, include_line_data=True)
+
+                        text = result.get("text", "").strip()
+                        prompt_hint = override.prompt_hint or ""
+
+                        answers[str(q_num)] = text if text else "DR"
+                        drawing_questions[str(q_num)] = text if text else prompt_hint
+                        applied_total += 1
+
+                        logger.debug(
+                            "Diagram Q%d: mathpix_text=%r confidence=%.2f",
+                            q_num, text[:50], result.get("confidence", 0),
+                        )
+                    except Exception as exc:
+                        logger.warning("Diagram extraction failed Q%d page %d: %s", q_num, page_num, exc)
 
         logger.info(
-            "Applied section overrides: template=%s answers=%d mathpix=%s",
-            self._mcq_template_id, applied_total, use_mathpix,
+            "Applied diagram overrides via Mathpix: template=%s diagrams=%d",
+            self._mcq_template_id, applied_total,
         )
 
     def validate_extraction(self, extraction_result: Dict) -> Dict:
