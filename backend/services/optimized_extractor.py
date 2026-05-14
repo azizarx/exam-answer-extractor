@@ -17,6 +17,8 @@ from backend.services.extraction_pipeline import (
 from backend.services.page_analyzer import PageAnalyzer, PageLayout
 from backend.services.image_preprocessor import ImagePreprocessor
 from backend.services.mcq_extractor import auto_extract_mcq
+from backend.services.section_extractor import extract_section
+from backend.services.template_service import get_template_registry
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -208,6 +210,7 @@ class OptimizedAIExtractor:
             candidates.append(self._extraction_to_dict(ext))
 
         self._apply_mcq_overrides(candidates, image_paths, filename=filename)
+        self._apply_section_overrides(candidates, image_paths)
 
         elapsed_time = time.time() - start_time
         pages_with_data = sum(1 for c in candidates if c.get("answers"))
@@ -279,6 +282,102 @@ class OptimizedAIExtractor:
             applied_pages,
             applied_answers,
             sorted(list(answers_by_page.keys())),
+        )
+
+    def _apply_section_overrides(
+        self,
+        candidates: List[Dict[str, Any]],
+        image_paths: List[str],
+    ) -> None:
+        """
+        Extract answers from non-MCQ sections (numeric_grid, open_response,
+        diagram) using the template and Mathpix OCR, then merge into candidates.
+        """
+        if not self._mcq_template_id or not image_paths:
+            return
+
+        registry = get_template_registry()
+        template = registry.get(self._mcq_template_id)
+        if not template:
+            return
+
+        # Only process if the template has non-MCQ sections
+        non_mcq_sections = [s for s in template.sections if s.type != "mcq_grid"]
+        if not non_mcq_sections:
+            return
+
+        # Check if Mathpix is available
+        use_mathpix = bool(settings.mathpix_app_id and settings.mathpix_app_key)
+        if use_mathpix:
+            logger.info("Using Mathpix OCR for non-MCQ sections")
+        else:
+            logger.info("Mathpix not configured, using Tesseract for non-MCQ sections")
+
+        import cv2
+        from backend.services.mcq_extractor import _match_anchor
+
+        # Build anchor from first page if needed
+        if template.anchor.region.w > 0 and template.id not in registry._anchor_images:
+            first_img = cv2.imread(str(image_paths[0]))
+            if first_img is not None:
+                r = template.anchor.region
+                h, w = first_img.shape[:2]
+                if r.y + r.h <= h and r.x + r.w <= w:
+                    anchor = first_img[r.y : r.y + r.h, r.x : r.x + r.w].copy()
+                    registry._anchor_images[template.id] = anchor
+
+        applied_total = 0
+        for page_idx, image_path in enumerate(image_paths):
+            page_num = page_idx + 1
+            img = cv2.imread(str(image_path))
+            if img is None:
+                continue
+
+            # Find the matching candidate
+            candidate = None
+            for c in candidates:
+                try:
+                    if int(c.get("page_number", 0)) == page_num:
+                        candidate = c
+                        break
+                except (TypeError, ValueError):
+                    continue
+            if candidate is None:
+                continue
+
+            # Anchor match for dx/dy
+            score, dx, dy, _ = _match_anchor(img, template, registry)
+            if score < template.anchor.min_match_score:
+                continue
+
+            # Extract each non-MCQ section
+            answers = candidate.setdefault("answers", {})
+            drawing_questions = candidate.setdefault("drawing_questions", {})
+
+            for section in non_mcq_sections:
+                try:
+                    sec_result = extract_section(img, section, dx, dy, use_mathpix)
+
+                    for q, ans in sec_result.answers.items():
+                        if ans and ans.strip() and ans != "DR":
+                            answers[str(q)] = ans.strip()
+                        elif ans == "DR":
+                            answers[str(q)] = "DR"
+                            drawing_questions[str(q)] = "DR"
+
+                    # Store diagram crops info
+                    for q, diag_data in sec_result.diagrams.items():
+                        drawing_questions[str(q)] = diag_data.get("prompt_hint", "DR")
+                        if str(q) not in answers or not answers[str(q)].strip():
+                            answers[str(q)] = "DR"
+
+                    applied_total += len(sec_result.answers)
+                except Exception as exc:
+                    logger.warning("Section extraction failed for page %d: %s", page_num, exc)
+
+        logger.info(
+            "Applied section overrides: template=%s answers=%d mathpix=%s",
+            self._mcq_template_id, applied_total, use_mathpix,
         )
 
     def validate_extraction(self, extraction_result: Dict) -> Dict:
