@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+graphify-out/**
 *.py[cod]
 *$py.class
 *.so
