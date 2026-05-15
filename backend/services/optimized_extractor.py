@@ -176,15 +176,21 @@ class OptimizedAIExtractor:
 
         start_time = time.time()
 
-        # Load images from paths
-        images = []
-        for path in image_paths:
-            try:
-                img = self._load_image(path)
-                images.append(img)
-            except Exception as e:
-                logger.error(f"Failed to load image {path}: {e}")
-                continue
+        # Load and preprocess images in parallel
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        images_ordered = [None] * len(image_paths)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {
+                executor.submit(self._load_image, path): i
+                for i, path in enumerate(image_paths)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    images_ordered[idx] = future.result()
+                except Exception as e:
+                    logger.error(f"Failed to load image {image_paths[idx]}: {e}")
+        images = [img for img in images_ordered if img is not None]
 
         if not images:
             return {

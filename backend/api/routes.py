@@ -500,13 +500,6 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optio
         )
 
         source_filename = str(getattr(sub, "filename") or Path(pdf_path).name)
-        _save_ocr_results(
-            image_paths=image_paths,
-            context_id=f"submission_{submission_id}",
-            source_filename=source_filename,
-            db=db,
-            submission_id=submission_id,
-        )
 
         logger.info(f"Extracting answers using AI from {len(image_paths)} pages (template={template_id})")
         ai_extractor = get_ai_extractor(mcq_template_id=template_id)
@@ -538,6 +531,15 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optio
             filename=str(getattr(sub, "filename", "")),
         )
         extraction_seconds = time.perf_counter() - extraction_started
+
+        # OCR debug artifacts (moved after extraction so they don't block the critical path)
+        _save_ocr_results(
+            image_paths=image_paths,
+            context_id=f"submission_{submission_id}",
+            source_filename=source_filename,
+            db=db,
+            submission_id=submission_id,
+        )
 
         validation_result = ai_extractor.validate_extraction(extraction_result)
         json_gen = get_json_generator()

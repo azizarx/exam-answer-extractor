@@ -515,14 +515,19 @@ Return ONLY the JSON object."""
         Uses two-pass approach for better MCQ detection.
         """
         try:
-            # Check if we have MCQ questions - use focused extraction
+            # Check if we have MCQ questions - use focused extraction only when CV insufficient
             mcq_range = format.question_ranges.get("mcq")
+            mcq_answers = {}
 
             if mcq_range:
-                # PASS 1: Focused MCQ extraction
-                mcq_answers = self._extract_mcq_focused(image, mcq_range, format.answer_options)
-            else:
-                mcq_answers = {}
+                expected_count = mcq_range[1] - mcq_range[0] + 1
+                cv_coverage = len(cv_seed_answers or {}) / expected_count if expected_count > 0 else 0
+
+                if cv_coverage < 0.8:
+                    # CV didn't get enough MCQ answers — use Gemini as fallback
+                    mcq_answers = self._extract_mcq_focused(image, mcq_range, format.answer_options)
+                else:
+                    logger.info(f"Skipping MCQ Gemini pass: CV covered {cv_coverage:.0%} of {expected_count} questions")
 
             # PASS 2: Header + other answers
             prompt = self._build_full_extraction_prompt(format)
@@ -1028,13 +1033,19 @@ class RefactoredPipeline:
         if progress_callback:
             progress_callback("Analyzing page layouts...", 0, total_pages)
 
-        layouts = []
-        for i, img in enumerate(images):
-            layout = self.page_analyzer.analyze_page(img, i + 1)
-            layouts.append(layout)
-            logger.debug(f"Page {i + 1}: blank={layout.is_blank}, hash={layout.layout_hash}")
-            if progress_callback:
-                progress_callback(f"Analyzed page {i+1}", i + 1, total_pages)
+        from concurrent.futures import ThreadPoolExecutor, as_completed as _as_completed
+        layouts = [None] * total_pages
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {
+                executor.submit(self.page_analyzer.analyze_page, img, i + 1): i
+                for i, img in enumerate(images)
+            }
+            for future in _as_completed(futures):
+                idx = futures[future]
+                layouts[idx] = future.result()
+                logger.debug(f"Page {idx + 1}: blank={layouts[idx].is_blank}, hash={layouts[idx].layout_hash}")
+                if progress_callback:
+                    progress_callback(f"Analyzed page {idx+1}", idx + 1, total_pages)
 
         # Filter non-blank pages
         valid_layouts = [l for l in layouts if not l.is_blank]

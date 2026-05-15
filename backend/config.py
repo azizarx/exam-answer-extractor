@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     
     # AI Extraction Performance
     use_parallel_extraction: bool = True  # Enable multi-threading for faster extraction
-    max_extraction_workers: int = 2  # Number of parallel workers for page processing
+    max_extraction_workers: int = 4  # Number of parallel workers for page processing
 
     # NEW: Use optimized pipeline (CV preprocessing + token optimization)
     use_optimized_pipeline: bool = True  # Set to False to use legacy pipeline
