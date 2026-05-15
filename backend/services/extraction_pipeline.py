@@ -641,6 +641,12 @@ These are questions where students WRITE numbers or text in boxes.
 - These are NOT drawings - they contain readable characters
 - If writing crosses slightly outside box boundaries, still capture it for that question
 - Return "BL" only if the boxes are completely empty
+- MATH NOTATION: Express any mathematical content as LaTeX:
+  * Fractions → \\frac{{a}}{{b}}  (e.g. 7/2 → \\frac{{7}}{{2}})
+  * Square roots → \\sqrt{{x}}  (e.g. √10 → \\sqrt{{10}})
+  * Exponents → x^{{n}}  (e.g. x² → x^{{2}}, cm² → \\text{{cm}}^{{2}})
+  * Mixed numbers → whole\\frac{{num}}{{den}}  (e.g. 3½ → 3\\frac{{1}}{{2}})
+  * Plain integers/decimals stay as-is: "42", "3.14"
 """
 
         # Build drawing instructions if present
@@ -677,7 +683,11 @@ CRITICAL RULES:
 2. FREE RESPONSE: Numbers/text WRITTEN in boxes → extract exact value ("99990", "328", "hello"), including slight overflow outside box
 3. DRAWING: Only for actual SKETCHES/DIAGRAMS that cannot be typed → return "DR"
 4. BLANK: Only if completely empty with no marks at all → return "BL"
-5. If any numbered question contains written text/number outside the detected ranges, still include it in "answers".
+5. If any numbered question contains written text/number outside the detected ranges, still include it in "answers"
+6. MATH AS LATEX: Any mathematical notation in free response answers must use LaTeX:
+   - Fractions: \frac{a}{b}  - Roots: \sqrt{x}  - Exponents: x^{2}
+   - Plain numbers stay as-is: "42", "3.14"
+   - Examples: "7/2" → "\frac{7}{2}", "√10" → "\sqrt{10}", "3½" → "3\frac{1}{2}", "cm²" → "\text{cm}^{2}"
 
 NEVER return "DR" for numbers or text - those are free responses, not drawings!
 A drawing is a picture/sketch/diagram, NOT written characters.
