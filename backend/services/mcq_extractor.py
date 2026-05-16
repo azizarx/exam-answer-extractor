@@ -77,15 +77,24 @@ class SectionResult:
 
 @dataclass
 class PageResult:
-    """Full extraction result for a single page image."""
+    """Full extraction result for a single page image.
+
+    Status semantics in the new pipeline:
+      "ok"     — extraction ran (whether confident or not). The user picked
+                 this template; we emit whatever we got. `warning` may flag
+                 quality concerns the caller can surface.
+      "error"  — extraction couldn't run (image unreadable, anchor not
+                 present at all, etc.). No answers.
+    """
     page_number: int
     template_id: str
-    status: str  # "ok", "rejected", "error"
+    status: str
     anchor_score: float = 0.0
     dx: int = 0
     dy: int = 0
     sections: List[SectionResult] = field(default_factory=list)
-    reason: Optional[str] = None
+    reason: Optional[str] = None  # set when status == "error"
+    warning: Optional[str] = None  # advisory; set when CV quality was low
 
     @property
     def answers(self) -> Dict[str, str]:
@@ -111,6 +120,7 @@ class PageResult:
             "dy": self.dy,
             "coverage": round(self.coverage, 4),
             "reason": self.reason,
+            "warning": self.warning,
         }
 
 
@@ -407,27 +417,34 @@ def extract_page(
     """
     # Step 1: Anchor matching
     anchor_score, dx, dy, _ = _match_anchor(image, template, registry)
+    logger.info(
+        "MCQ[%d/%s] anchor score=%.3f offset=(%d,%d) min_required=%.2f",
+        page_number, template.id, anchor_score, dx, dy, template.anchor.min_match_score,
+    )
 
+    low_anchor_warning: Optional[str] = None
     if anchor_score < template.anchor.min_match_score:
-        return PageResult(
-            page_number=page_number,
-            template_id=template.id,
-            status="rejected",
-            anchor_score=anchor_score,
-            reason="anchor_match_low",
-        )
+        # Advisory only — the user picked this template; we still attempt
+        # extraction with whatever offset matchTemplate produced. Bad anchor
+        # likely means a wrong template choice (user error per policy).
+        logger.info("MCQ[%d/%s] ADVISORY anchor_match_low score=%.3f",
+                    page_number, template.id, anchor_score)
+        low_anchor_warning = "anchor_match_low"
 
     # Step 2: Binarize
     mcq_sections = [s for s in template.sections if s.type == "mcq_grid"]
     if not mcq_sections:
+        # No MCQ on this template — return ok with empty sections. The caller
+        # will simply have nothing to overlay on the LLM result.
+        logger.info("MCQ[%d/%s] no mcq sections; nothing to do", page_number, template.id)
         return PageResult(
             page_number=page_number,
             template_id=template.id,
-            status="rejected",
+            status="ok",
             anchor_score=anchor_score,
             dx=dx,
             dy=dy,
-            reason="no_mcq_sections",
+            warning=low_anchor_warning,
         )
 
     # Use the threshold from the first MCQ section (usually consistent)
@@ -444,7 +461,7 @@ def extract_page(
         sr = extract_mcq_section(bin_inv, section, dx, dy)
         section_results.append(sr)
 
-    # Step 4: Page-level quality check
+    # Step 4: Page-level quality check (advisory only).
     result = PageResult(
         page_number=page_number,
         template_id=template.id,
@@ -453,29 +470,37 @@ def extract_page(
         dx=dx,
         dy=dy,
         sections=section_results,
+        warning=low_anchor_warning,
     )
 
-    # Check coverage and avg ratio thresholds
     scoring = mcq_sections[0].scoring or ScoringParams()
     all_rows = [r for s in section_results for r in s.rows]
 
     if not all_rows:
-        result.status = "rejected"
-        result.reason = "no_rows_extracted"
+        logger.info("MCQ[%d/%s] no rows extracted", page_number, template.id)
+        if not result.warning:
+            result.warning = "no_rows_extracted"
         return result
 
     avg_ratio = sum(r.ratio for r in all_rows) / len(all_rows)
+    logger.info(
+        "MCQ[%d/%s] coverage=%.2f avg_ratio=%.2f (advisory thresholds: cov>=%.2f ratio>=%.2f) rows=%d resolved=%d",
+        page_number, template.id, result.coverage, avg_ratio,
+        scoring.min_page_coverage, scoring.min_avg_ratio,
+        len(all_rows), sum(s.resolved_count for s in section_results),
+    )
 
-    if result.coverage < scoring.min_page_coverage:
-        result.status = "rejected"
-        result.reason = "low_mcq_confidence"
-        return result
+    if result.coverage < scoring.min_page_coverage and not result.warning:
+        result.warning = "low_coverage"
+    elif avg_ratio < scoring.min_avg_ratio and not result.warning:
+        result.warning = "low_avg_ratio"
 
-    if avg_ratio < scoring.min_avg_ratio:
-        result.status = "rejected"
-        result.reason = "low_mcq_confidence"
-        return result
-
+    logger.info(
+        "MCQ[%d/%s] ACCEPT answers=%d warning=%s",
+        page_number, template.id,
+        sum(s.resolved_count for s in section_results),
+        result.warning,
+    )
     return result
 
 

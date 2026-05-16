@@ -35,11 +35,11 @@ from backend.api.schemas import (
 )
 from backend.services.local_storage import get_local_storage
 from backend.services.pdf_to_images import get_pdf_converter
-from backend.services.ai_extractor import get_ai_extractor
+from backend.services.template_extractor import TemplateExtractor
 from backend.services.json_generator import get_json_generator
 from backend.services.space_client import get_spaces_client
 from backend.services.image_preprocessor import ImagePreprocessor
-from backend.services.ocr_results_writer import get_ocr_results_writer
+from backend.services.run_logger import attach_run_log, detach_run_log, step_timer
 from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -219,7 +219,16 @@ async def upload_student_pdf(exam_id: int, country: Optional[str] = None, file: 
 
 
 @router.post("/exams/{exam_id}/extract/{document_id}", response_model=GeneratedJSONResponse)
-async def extract_exam_document(exam_id: int, document_id: int, db: Session = Depends(get_db)):
+async def extract_exam_document(
+    exam_id: int,
+    document_id: int,
+    template_id: str = Query(..., description="Exam layout template id; required."),
+    db: Session = Depends(get_db),
+):
+    # template_id is mandatory: trust-the-template policy.
+    from backend.services.template_service import get_template_registry
+    if get_template_registry().get(template_id) is None:
+        raise HTTPException(status_code=400, detail=f"Unknown template_id '{template_id}'")
     exam = db.query(Exam).filter(Exam.id == exam_id).first()
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
@@ -278,22 +287,14 @@ async def extract_exam_document(exam_id: int, document_id: int, db: Session = De
         db.refresh(record)
         return record
 
-    _save_ocr_results(
-        image_paths=valid_image_paths,
-        context_id=f"exam_{exam_id}_document_{document_id}",
-        source_filename=Path(absolute_pdf).name,
-    )
-
-    ai_extractor = get_ai_extractor()
     settings = get_settings()
-
-    extraction_result = ai_extractor.extract_from_multiple_images(
-        valid_image_paths,  # Use only valid images
-        use_parallel=settings.use_parallel_extraction,
+    extractor = TemplateExtractor(template_id)
+    extraction_result = extractor.extract_pdf(
+        absolute_pdf,
+        valid_image_paths,
         max_workers=settings.max_extraction_workers,
+        filename=Path(absolute_pdf).name,
     )
-
-    validation_result = ai_extractor.validate_extraction(extraction_result)
 
     json_generator = get_json_generator()
     if settings.minimal_output:
@@ -305,7 +306,7 @@ async def extract_exam_document(exam_id: int, document_id: int, db: Session = De
         json_data = json_generator.generate_with_validation(
             Path(absolute_pdf).name,
             extraction_result,
-            validation_result,
+            None,
         )
 
     json_filename = f"exam_{exam_id}_doc_{document_id}.json"
@@ -397,66 +398,38 @@ def _write_processing_log(
         logger.warning("Failed to write log action=%s for submission=%s: %s", action, submission_id, log_error)
 
 
-def _save_ocr_results(
-    image_paths: List[str],
-    context_id: str,
-    source_filename: str,
-    db: Optional[Session] = None,
-    submission_id: Optional[int] = None,
-) -> Optional[dict]:
-    """Persist OCR debug artifacts to storage/OCRResults for troubleshooting."""
-    settings = get_settings()
-    if not settings.save_ocr_results or not image_paths:
-        return None
+def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
+    """Background task to convert pages, extract answers, and persist JSON locally.
 
-    try:
-        writer = get_ocr_results_writer()
-        result = writer.save_from_images(
-            image_paths=image_paths,
-            context_id=context_id,
-            source_filename=source_filename,
-        )
-        logger.info(
-            "OCRResults saved | context=%s | summary=%s",
-            context_id,
-            result.get("relative_summary_path"),
-        )
-        if db is not None and submission_id is not None:
-            _write_processing_log(
-                db,
-                submission_id,
-                action="ocr_results_saved",
-                status="success",
-                message=f"OCRResults saved to {result.get('relative_summary_path')}",
-                extra_data=result,
-            )
-        return result
-    except Exception as ocr_error:
-        logger.warning("Failed to generate OCRResults for %s: %s", context_id, ocr_error)
-        if db is not None and submission_id is not None:
-            _write_processing_log(
-                db,
-                submission_id,
-                action="ocr_results_error",
-                status="warning",
-                message=f"OCRResults generation failed: {ocr_error}",
-                extra_data={"context_id": context_id},
-            )
-        return None
-
-
-def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optional[str] = None):
-    """Background task to convert pages, extract answers, and persist JSON locally."""
+    template_id is REQUIRED. The trust-the-template policy: every page in the
+    PDF uses this layout; we don't auto-detect or clusterize anything.
+    """
     db = SessionLocal()
     image_paths: List[str] = []
     job_started = time.perf_counter()
+    _sub_pre = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    if not _sub_pre:
+        logger.error(f"Submission {submission_id} not found")
+        db.close()
+        return
+    _filename_for_log = str(getattr(_sub_pre, "filename") or Path(pdf_path).name)
+    run_log = attach_run_log(submission_id, _filename_for_log, template_id)
+    run_log_path = run_log.path
     try:
-        sub = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
-        if not sub:
-            logger.error(f"Submission {submission_id} not found")
-            return
+        sub = _sub_pre
+        settings = get_settings()
+        logger.info(
+            "CONFIG model=%s fallback=%s preproc=%s(%s) workers=%s template=%s",
+            settings.gemini_model,
+            settings.gemini_fallback_models,
+            settings.enable_image_preprocessing,
+            settings.preprocessing_mode,
+            settings.max_extraction_workers,
+            template_id,
+        )
 
         setattr(sub, 'status', 'processing')
+        setattr(sub, 'template_id', template_id)
         db.commit()
 
         _write_processing_log(
@@ -465,23 +438,16 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optio
             action="extract_start",
             status="success",
             message="Starting PDF extraction",
-            extra_data={"pdf_path": pdf_path},
-        )
-
-        _write_processing_log(
-            db,
-            submission_id,
-            action="extract_stage",
-            status="info",
-            message="Converting PDF pages to images",
-            extra_data={"stage": "pdf_to_images"},
+            extra_data={"pdf_path": pdf_path, "run_log": str(run_log_path), "template_id": template_id},
         )
 
         logger.info(f"Converting PDF to images: {pdf_path}")
         conversion_started = time.perf_counter()
         pdf_converter = get_pdf_converter()
-        image_paths = pdf_converter.convert_from_file(pdf_path)
+        with step_timer("pdf_to_images", logger):
+            image_paths = pdf_converter.convert_from_file(pdf_path)
         conversion_seconds = time.perf_counter() - conversion_started
+        logger.info("pdf_to_images: produced %d page images in %.2fs", len(image_paths), conversion_seconds)
 
         setattr(sub, 'pages_count', len(image_paths))
         db.commit()
@@ -499,52 +465,37 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optio
             },
         )
 
-        source_filename = str(getattr(sub, "filename") or Path(pdf_path).name)
-        _save_ocr_results(
-            image_paths=image_paths,
-            context_id=f"submission_{submission_id}",
-            source_filename=source_filename,
-            db=db,
-            submission_id=submission_id,
-        )
-
-        logger.info(f"Extracting answers using AI from {len(image_paths)} pages (template={template_id})")
-        ai_extractor = get_ai_extractor(mcq_template_id=template_id)
-        settings = get_settings()
-
         _write_processing_log(
             db,
             submission_id,
             action="extract_stage",
             status="info",
-            message="AI extraction started",
+            message="Template extraction started",
             extra_data={
-                "stage": "ai_extraction",
-                "parallel": bool(settings.use_parallel_extraction),
+                "stage": "template_extraction",
                 "workers": int(settings.max_extraction_workers),
                 "pages": len(image_paths),
                 "template_id": template_id,
             },
         )
 
+        extractor = TemplateExtractor(template_id)
         extraction_started = time.perf_counter()
-        extraction_result = ai_extractor.extract_from_multiple_images(
+        extraction_result = extractor.extract_pdf(
+            pdf_path,
             image_paths,
-            extraction_prompt=None,
             submission_id=submission_id,
             db=db,
-            use_parallel=settings.use_parallel_extraction,
             max_workers=settings.max_extraction_workers,
             filename=str(getattr(sub, "filename", "")),
         )
         extraction_seconds = time.perf_counter() - extraction_started
 
-        validation_result = ai_extractor.validate_extraction(extraction_result)
         json_gen = get_json_generator()
         json_data = json_gen.generate_with_validation(
             str(getattr(sub, 'filename')),
             extraction_result,
-            validation_result
+            None,
         )
         storage = get_local_storage()
         json_filename = f"{Path(str(getattr(sub, 'filename'))).stem}.json"
@@ -661,40 +612,40 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: Optio
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup image {image_path}: {cleanup_error}")
         db.close()
+        try:
+            detach_run_log(run_log)
+        except Exception as detach_error:
+            logger.warning(f"Failed to detach run log: {detach_error}")
 
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    template_id: Optional[str] = None,
+    template_id: str = Query(
+        ...,
+        description="Required: exam layout template id (from GET /templates). "
+                    "All pages in the PDF must use this layout.",
+    ),
     db: Session = Depends(get_db)
 ):
-    """
-    Upload a PDF exam answer sheet for processing
+    """Upload a PDF exam answer sheet for processing.
 
-    Args:
-        file: PDF file upload
-        template_id: Exam layout template ID (from GET /templates). All pages
-                     in the PDF must use this layout.
-        db: Database session
-
-    Returns:
-        Upload confirmation with submission ID
+    template_id is REQUIRED. The user picks the layout at upload time; every
+    page is extracted with that template.
     """
     if not file or not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    # Validate template_id if provided
-    if template_id:
-        from backend.services.template_service import get_template_registry
-        registry = get_template_registry()
-        if registry.get(template_id) is None:
-            available = registry.list_ids()
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown template_id '{template_id}'. Available: {available}"
-            )
+    # Validate template_id against the registry
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+    if registry.get(template_id) is None:
+        available = registry.list_ids()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown template_id '{template_id}'. Available: {available}"
+        )
 
     try:
         storage = get_local_storage()
@@ -705,6 +656,7 @@ async def upload_pdf(
         submission = ExamSubmission(
             filename=file.filename,
             original_pdf_key=upload_result['relative_path'],
+            template_id=template_id,
             status="pending"
         )
         db.add(submission)
@@ -1039,59 +991,52 @@ async def delete_submission(submission_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/extract/json")
-async def extract_json(file: UploadFile = File(...)):
+async def extract_json(
+    file: UploadFile = File(...),
+    template_id: str = Query(..., description="Required: exam layout template id."),
+):
     """Synchronous PDF → JSON extraction endpoint for third-party use.
 
     Accepts a PDF upload and returns structured JSON immediately without
-    creating DB records or using background tasks.
+    creating DB records or using background tasks. template_id is REQUIRED.
     """
-    # Validate file
     if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    from backend.services.template_service import get_template_registry
+    if get_template_registry().get(template_id) is None:
+        raise HTTPException(status_code=400, detail=f"Unknown template_id '{template_id}'")
+
     try:
-        # Convert PDF to images
         pdf_converter = get_pdf_converter()
-        # Save to a temporary path under local storage uploads for consistency
         storage = get_local_storage()
         saved = storage.save_pdf(file.file, file.filename)
-        image_paths = pdf_converter.convert_from_file(saved["absolute_path"]) 
+        image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
 
-        _save_ocr_results(
-            image_paths=image_paths,
-            context_id=f"sync_extract_{Path(file.filename).stem}",
-            source_filename=file.filename,
-        )
-
-        # Run extraction with parallel processing
-        ai_extractor = get_ai_extractor()
         settings = get_settings()
-        extraction_result = ai_extractor.extract_from_multiple_images(
+        extractor = TemplateExtractor(template_id)
+        extraction_result = extractor.extract_pdf(
+            saved["absolute_path"],
             image_paths,
-            extraction_prompt=None,
-            submission_id=None,
-            db=None,
-            use_parallel=settings.use_parallel_extraction,
-            max_workers=settings.max_extraction_workers
+            max_workers=settings.max_extraction_workers,
+            filename=file.filename,
         )
-        validation_result = ai_extractor.validate_extraction(extraction_result)
 
-        # Generate structured JSON
         json_generator = get_json_generator()
         json_data = json_generator.generate_with_validation(
             file.filename,
             extraction_result,
-            validation_result,
+            None,
         )
 
-        # Cleanup images
         for img in image_paths:
             try:
                 Path(img).unlink(missing_ok=True)
             except Exception:
                 pass
 
-        # Return parsed JSON
         return JSONResponse(content=_json.loads(json_data))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Synchronous extraction failed: {e}")
         raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")
@@ -1266,41 +1211,40 @@ async def mark_submission(
 @router.post("/extract/json/mark")
 async def extract_and_mark(
     file: UploadFile = File(...),
+    template_id: str = Query(..., description="Required: exam layout template id."),
     mark_request: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     """
     Synchronous: extract PDF + auto-mark against an answer key.
-    
-    Accepts an optional `mark_request` form field (JSON string) with:
+
+    template_id is REQUIRED. mark_request is an optional form field (JSON string) with:
       - answer_key_id: int (use a stored answer key)
       - answer_key: dict (inline MCQ answer key, e.g. {"1": "D", "2": "B"})
       - drawing_key: dict (inline drawing key, e.g. {"31": "circle"})
-    
+
     If no mark_request is provided, tries to auto-match stored answer keys
     by paper_type. If no match found, returns unmarked results.
     """
     if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    from backend.services.template_service import get_template_registry
+    if get_template_registry().get(template_id) is None:
+        raise HTTPException(status_code=400, detail=f"Unknown template_id '{template_id}'")
+
     try:
-        # Extract
         pdf_converter = get_pdf_converter()
         storage = get_local_storage()
         saved = storage.save_pdf(file.file, file.filename)
         image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
 
-        _save_ocr_results(
-            image_paths=image_paths,
-            context_id=f"sync_extract_mark_{Path(file.filename).stem}",
-            source_filename=file.filename,
-        )
-
-        ai_extractor = get_ai_extractor()
         settings = get_settings()
-        extraction_result = ai_extractor.extract_from_multiple_images(
+        extractor = TemplateExtractor(template_id)
+        extraction_result = extractor.extract_pdf(
+            saved["absolute_path"],
             image_paths,
-            use_parallel=settings.use_parallel_extraction,
             max_workers=settings.max_extraction_workers,
+            filename=file.filename,
         )
 
         candidates = extraction_result.get("candidates", [])

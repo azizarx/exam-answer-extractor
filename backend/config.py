@@ -38,33 +38,34 @@ class Settings(BaseSettings):
     # PDF Processing
     poppler_path: Optional[str] = None  # Optional: Path to Poppler binaries
     
-    # AI Extraction Performance
-    use_parallel_extraction: bool = True  # Enable multi-threading for faster extraction
-    max_extraction_workers: int = 2  # Number of parallel workers for page processing
-
-    # NEW: Use optimized pipeline (CV preprocessing + token optimization)
-    use_optimized_pipeline: bool = True  # Set to False to use legacy pipeline
+    # Per-page parallelism inside one submission. Pure I/O parallelism (each
+    # worker holds the GIL while waiting on Gemini), but each worker also
+    # carries a PIL image, so don't crank this up too high — 10 workers per
+    # backend × 5 parallel backends OOM'd a 27GB host in the May 2026 bench.
+    # 6 is the sweet spot for one backend: roughly halves wall-clock vs 3,
+    # peak working set ~150MB.
+    max_extraction_workers: int = 6
 
     # Output format
     minimal_output: bool = False  # Keep full candidate metadata in generated JSON by default
-
-    # Prompt caching (to reduce repeated format analysis)
-    cache_page_prompts: bool = True
-    page_hash_size: int = 16
 
     # Image preprocessing (improves contrast/clarity before extraction)
     enable_image_preprocessing: bool = True
     preprocessing_mode: str = "balanced"  # balanced | aggressive
 
-    # OCR debug artifact output
-    save_ocr_results: bool = True
-    ocr_results_folder_name: str = "OCRResults"
-    ocr_language: str = "eng"
-    tesseract_cmd: Optional[str] = None
-
-    # Mathpix OCR (for numeric grids and diagram detection)
+    # Mathpix /v3/pdf — required when a chosen template flags any question as
+    # type=diagram. We submit the PDF once, poll, then regex CDN URLs out of
+    # the returned .mmd and assign them by question label.
     mathpix_app_id: str = ""
     mathpix_app_key: str = ""
+    mathpix_poll_interval_seconds: float = 3.0
+    mathpix_max_wait_seconds: float = 600.0
+
+    # NOTE: Gemini calls intentionally do NOT pass max_output_tokens. With
+    # gemini-2.5-pro, reasoning tokens are billed from the same budget; a
+    # 1024 cap (the old default) caused finish_reason=MAX_TOKENS on every
+    # call and starved the visible JSON. The model's default cap (~64k) is
+    # what we want.
 
     # DigitalOcean Spaces
     spaces_endpoint: Optional[str] = None

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-Exam answer sheet extraction system: upload PDF exam sheets, extract MCQ and free-response answers using AI vision (Google Gemini) and OCR (Tesseract), store results in a database. FastAPI backend + React frontend.
+Exam answer sheet extraction system: upload a PDF of bubble-sheet exams, pick the layout template, get structured JSON back. Trust-the-template architecture: the user chooses the layout at upload time, every page in the PDF uses that template. Per-page extraction runs in three parallel tracks (LLM full-page + CV MCQ overlay + optional Mathpix diagram-URL overlay), then merges. FastAPI backend + React frontend.
+
+> The top-level `README.md` is stale (refers to OpenAI GPT-4 Vision, PostgreSQL, and Celery). Treat this file as authoritative.
 
 ## Commands
 
@@ -12,77 +14,109 @@ Exam answer sheet extraction system: upload PDF exam sheets, extract MCQ and fre
 ```bash
 python main.py                    # Start FastAPI server on :8000 (auto-reloads in debug)
 pip install -r requirements.txt   # Install Python dependencies
-python -c "from backend.db.database import init_db; init_db()"  # Create DB tables
+python -c "from backend.db.database import init_db; init_db()"  # Create DB tables + apply column migrations
 ```
 
 ### Frontend
 ```bash
-cd frontend && npm install        # Install JS dependencies
+cd frontend && npm install
 cd frontend && npm run dev        # Vite dev server on :3000
 cd frontend && npm run build      # Production build
-cd frontend && npm run lint       # ESLint
+cd frontend && npm run lint
 ```
 
-### Full Stack
+### Tests
 ```bash
-./start-fullstack.ps1             # PowerShell: starts backend + frontend together
+.venv/bin/python -m pytest tests/test_template_extractor.py -v   # mocked Gemini + Mathpix; covers merge logic + diagram URL matching
+.venv/bin/python tests/test_mcq_pipeline.py                       # CV bubble extractor against synthetic filled bubbles
 ```
 
-No test suite exists yet. API can be tested interactively at http://localhost:8000/docs.
+API is interactively testable at `http://localhost:8000/docs`.
 
 ## Architecture
 
-### Extraction Pipeline (the core logic)
+### Single extraction path
 
-Two pipeline paths controlled by `Settings.use_optimized_pipeline` (default: True):
-
-1. **Optimized pipeline** (`extraction_pipeline.py` → `optimized_extractor.py`):
-   - `RefactoredPipeline` orchestrates multi-stage extraction
-   - `PageAnalyzer` does CV-based layout detection (header, answer grid, drawing regions)
-   - `LayoutClusterer` groups pages by layout similarity → one LLM call per unique layout
-   - `FormatDetector` calls Gemini once per layout to detect exam format
-   - `AnswerClassifier` attempts CV-only answer extraction before falling back to LLM
-   - `OptimizedAIExtractor` wraps this as a drop-in replacement for the legacy extractor
-
-2. **Legacy pipeline** (`ai_extractor.py`): `AIExtractor` sends every page to Gemini Vision directly
-
-### Request Flow
 ```
-Upload PDF → local_storage.py saves file
-           → pdf_to_images.py converts pages to images
-           → image_preprocessor.py enhances contrast/clarity
-           → extraction_pipeline runs (CV analysis → selective LLM calls)
-           → json_generator.py formats structured output
-           → Results saved to DB + optional Spaces upload
+process_pdf_extraction(submission_id, pdf_path, template_id):
+  1. PDF → page images                          (backend/services/pdf_to_images.py)
+  2. Compute gates from the template:
+       run_cv_mcq = template.has_mcq
+       diagram_qs = [questions flagged type=diagram in template.sections]
+       run_mathpix = bool(diagram_qs) and mathpix_creds
+  3. If run_mathpix: mathpix_client.submit_pdf(pdf_path) → pdf_id      [fire-and-forget]
+  4. For each page (ThreadPoolExecutor, max_workers=3):
+       Inside each page worker, ThreadPoolExecutor(max_workers=2) runs:
+         (a) LLM    : one Gemini call, gemini-2.5-pro, NO max_output_tokens
+                      → {"header":{...}, "answers":{q→value}}
+         (b) CV MCQ : (only if run_cv_mcq) mcq_extractor.extract_page(image, template)
+                      → {q→letter}
+       Merge: LLM answers first; CV MCQ answers overwrite for any q it produced.
+  5. If pdf_id: mathpix_client.poll_pdf(pdf_id) → fetch_mmd → regex CDN URLs out
+     of the markdown. For each diagram question, the first URL after that
+     question's `\section*{Question N}` label becomes its answer. Spurious URLs
+     after non-diagram labels are dropped.
+  6. Persist candidates as CandidateResult rows; save JSON to storage/results/.
 ```
 
-### Key Services (all in `backend/services/`)
-- `gemini_client.py` — model selection with ordered fallback list
-- `page_analyzer.py` — CV-based page layout detection (`PageLayout`, `BoundingBox`, `DetectedRegion`)
-- `ocr_engine.py` — Tesseract OCR wrapper (alternative to AI extraction)
-- `ocr_results_writer.py` — saves OCR debug artifacts to `storage/OCRResults/`
-- `space_client.py` — optional DigitalOcean Spaces (S3) upload/download
-- `local_storage.py` — filesystem storage for uploads and results under `./storage/`
-- `NewMcqSolution.py` — optional UZ-specific MCQ grid reader using template matching
+Three things matter to remember:
 
-### Database
-- SQLite by default (`exam_db.sqlite`), supports PostgreSQL via `DATABASE_URL`
-- SQLAlchemy ORM with models in `backend/db/models.py`
-- Key models: `Exam` → `ExamDocument` → `ExamSubmission` → `CandidateResult` → `AnswerKey` → `GeneratedJSON`
-- `CandidateResult.extra_fields` (JSON column) holds dynamic header fields beyond the fixed four
+1. **No `max_output_tokens` on Gemini calls.** `gemini-2.5-pro` spends reasoning tokens from the same budget; the previous default cap of 1024 caused `finish_reason=MAX_TOKENS` on every call and starved the visible JSON. Letting the model use its default (~64k) is the deliberate fix. See `template_extractor.py::_llm_extract_full`.
+
+2. **Anchor priming.** Before per-page CV MCQ runs, `TemplateExtractor._prime_anchor_from_first_page()` crops the template's anchor region from page 1 of THIS upload and stashes it in `TemplateRegistry._anchor_images` (process-wide cache). Without this, the registry falls back to the on-disk `backend/templates/<id>_anchor.png` which is from a canonical reference scan, not the current scan — that mismatch drops MCQ coverage from ~99% to ~70%.
+
+3. **Rate-limit retry.** `run_logger.llm_call` retries `ResourceExhausted` (HTTP 429) with backoff `5s, 15s, 30s, 60s`. Gemini's free-tier RPM limit is low and parallel page workers can race past it. Without retry, every call after the first batch dies.
+
+### Templates (`backend/templates/`)
+- One JSON per layout/variant. Schema in `backend/templates/schema.json`.
+- Pixel coords at reference DPI 300; `ExamTemplate.at_dpi()` scales to actual scan DPI.
+- `*_anchor.png` files are template-matching anchors (overwritten in-memory by anchor priming on each new submission).
+- Diagram questions are encoded via `sections[*].question_overrides[q].type == "diagram"` (e.g. `seamo_x_2026_a` flags Q4/Q6/Q9; `seamo_x_2026_b` flags Q5).
+
+### Mathpix /v3/pdf flow
+- `mathpix_client.submit_pdf` (multipart POST with `options_json={"conversion_formats":{"md":True}, ...}`). `.mmd` is always generated by default (do NOT list it in conversion_formats — Mathpix rejects that).
+- `mathpix_client.poll_pdf` polls `GET /v3/pdf/{pdf_id}` every 3s until `status in {completed, error}` or `max_wait=600s`.
+- `mathpix_client.fetch_mmd` GETs `/v3/pdf/{pdf_id}.mmd` and returns the markdown body. Figure URLs are inline as `![](https://cdn.mathpix.com/cropped/<uuid>-<page>.jpg?...)`. Confirmed against a real diagram-bearing page.
+
+### Domain model (`backend/db/models.py`)
+- `ExamSubmission` is the legacy single-PDF flow. New nullable `template_id` column records the chosen template. Frontend (`UploadPage`, `TrackingPage`) uses this flow exclusively.
+- `Exam`/`ExamDocument`/`GeneratedJSON` is a multi-document flow (per-country). The `/exams/{id}/extract/{document_id}` endpoint also uses TemplateExtractor and requires `template_id`. No frontend UI for this flow yet.
+- `CandidateResult` is the per-candidate row. `extra_fields` JSON column holds dynamic header fields beyond the four fixed columns.
+- Lightweight migrations (column adds only, no schema rewrites) live in `backend/db/database.py::_apply_lightweight_migrations`, called from `init_db()`.
+
+### Per-run logging
+- `backend/services/run_logger.py::attach_run_log` attaches a `FileHandler` to the parent `backend` logger only. Python's child→parent propagation delivers every backend.* log line to the file exactly once. (Earlier versions attached to every named child and got each line written twice.)
+- Output: `storage/pipeline_runs/sub<id>_<ts>_<filename>.log`. Includes `LLM[stage] CALL` / `LLM[stage] OK` with prompt size, latency, finish_reason, token usage, response preview; `MCQ[page/template] anchor score=...` lines; `MATHPIX submit pdf_id=... overlay urls_found=X urls_applied=Y` lines; per-page `PAGE[N] DONE answers=A mcq_overrides=B t=Xs`.
 
 ### Frontend
-- React 18 + Vite + Tailwind CSS
-- Pages: `UploadPage` (drag-and-drop PDF upload), `TrackingPage` (polling status), `ApiDocsPage`
-- Shared components in `components/common/` (Button, Card, Badge, Alert, etc.)
-- API client in `services/api.js` using Axios, base URL defaults to `http://localhost:8000`
+- React 18 + Vite + Tailwind. Entrypoint `frontend/src/App.jsx`.
+- `UploadPage` blocks submit without a template (`UploadPage.jsx:33-36`). The API now also enforces it (returns 422 if missing).
+- API client `frontend/src/services/api.js` uses Axios; base URL is `VITE_API_BASE_URL` or `http://localhost:8000`.
 
 ## Configuration
 
-All config via environment variables (`.env` file), managed by `backend/config.py` using pydantic-settings `BaseSettings`. Key settings:
-- `GEMINI_API_KEY` — required for AI extraction
-- `GEMINI_MODEL` / `GEMINI_FALLBACK_MODELS` — model selection with auto-fallback
-- `DATABASE_URL` — defaults to SQLite if empty/unset
-- `USE_OPTIMIZED_PIPELINE` — toggle between optimized and legacy extraction
-- `ENABLE_IMAGE_PREPROCESSING` / `PREPROCESSING_MODE` — image enhancement before extraction
-- `USE_UZ_MCQ_SOLVER` — enable template-based MCQ grid reading for UZ exam sheets
+All config via env vars (`.env`), managed by `backend/config.py`. Notable settings:
+
+- `GEMINI_API_KEY` — required
+- `GEMINI_MODEL` (default `gemini-2.5-pro`) / `GEMINI_FALLBACK_MODELS`
+- `DATABASE_URL` — empty → SQLite at `./exam_db.sqlite`
+- `ENABLE_IMAGE_PREPROCESSING` / `PREPROCESSING_MODE` (`balanced` | `aggressive`)
+- `MAX_EXTRACTION_WORKERS` (default 3; the OOM ceiling on a 40GB host with 5 backends in parallel was 10. Stay at 3.)
+- `MATHPIX_APP_ID` / `MATHPIX_APP_KEY` — required if any chosen template flags any question as type=diagram
+- `MATHPIX_POLL_INTERVAL_SECONDS` (default 3.0) / `MATHPIX_MAX_WAIT_SECONDS` (default 600.0)
+- `SPACES_*` / `ARCHIVE_IMAGES_TO_SPACES` — optional DO Spaces archival
+
+> Gemini calls intentionally do NOT pass `max_output_tokens`. See `template_extractor.py::_llm_extract_full` and the comment in `config.py`.
+
+## Layout policy
+
+The user picks the template at upload time. **Every page in the PDF must use that layout** — there is no auto-detection, no clustering, no fallback to a "generic" extractor. If the user picks the wrong template:
+- The MCQ CV overlay will produce `coverage < threshold` and emit a `warning` on each candidate (but the answers are still returned).
+- The Gemini LLM will still extract whatever header + answers it can read.
+- The Mathpix overlay may assign URLs to wrong question numbers.
+
+That's an acceptable failure mode — the user can re-upload with the right template. The pipeline does not try to be clever about wrong-template detection.
+
+## Deleted in the May 2026 simplification (do not resurrect)
+
+`optimized_extractor.py`, `extraction_pipeline.py`, `ai_extractor.py`, `page_analyzer.py`, `ocr_engine.py`, `ocr_results_writer.py`, `section_extractor.py`, `worker.py`, `NewMcqSolution.py`, `page1_grid.json`, `train_from_examples.py`, `create_template.py`, `examples.py`, `tests/test_all_formats.py`, `tests/test_real_exams.py`. The clustering / format-detection / Tesseract-OCR / Celery / auto-detect paths are gone. Don't bring them back unless the user explicitly asks for it.

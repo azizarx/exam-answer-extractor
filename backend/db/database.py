@@ -1,7 +1,7 @@
 """
 Database connection and session management
 """
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from backend.config import get_settings
@@ -59,10 +59,38 @@ def get_db() -> Session:
 
 
 def init_db():
-    """Initialize database tables"""
+    """Initialize database tables and apply lightweight column migrations."""
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
+    _apply_lightweight_migrations()
     logger.info("Database tables created successfully")
+
+
+def _apply_lightweight_migrations() -> None:
+    """Add columns that exist on the model but not yet on the live table.
+
+    Base.metadata.create_all() only creates missing TABLES, never adds new
+    COLUMNS to an existing table. We patch that here with a tiny inspector-
+    driven loop so the schema can evolve without alembic for one-off adds.
+
+    Add new (table, column_name, column_ddl) tuples to MIGRATIONS below.
+    column_ddl must be valid for SQLite AND PostgreSQL (the two backends we
+    support).
+    """
+    MIGRATIONS = [
+        ("exam_submissions", "template_id", "VARCHAR(100)"),
+    ]
+    insp = inspect(engine)
+    for table, column, ddl in MIGRATIONS:
+        if table not in insp.get_table_names():
+            continue
+        existing = {c["name"] for c in insp.get_columns(table)}
+        if column in existing:
+            continue
+        stmt = f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"
+        logger.info("Applying migration: %s", stmt)
+        with engine.begin() as conn:
+            conn.execute(text(stmt))
 
 
 def drop_db():

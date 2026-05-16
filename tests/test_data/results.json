@@ -1,7 +1,7 @@
 {
   "summary": {
-    "passed": 3,
-    "failed": 0,
+    "passed": 2,
+    "failed": 1,
     "total": 3
   },
   "tests": [
@@ -117,97 +117,97 @@
     {
       "template_id": "seamo_2025_a",
       "description": "SEAMO 2025 Paper A \u2014 20 MCQ \u00d7 5 options, 1 column",
-      "passed": true,
-      "correct": 20,
+      "passed": false,
+      "correct": 2,
       "total": 20,
       "filled_image": "tests/test_data/seamo_2025_a_filled.png",
       "diagnostics": {
-        "status": "ok",
+        "status": "rejected",
         "template_id": "seamo_2025_a",
         "anchor_score": 1.0,
         "dx": 0,
         "dy": 0,
-        "coverage": 1.0,
-        "reason": null
+        "coverage": 0.45,
+        "reason": "low_mcq_confidence"
       },
       "answers": [
         {
           "question": 1,
           "expected": "A",
-          "got": "A",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 2,
           "expected": "B",
-          "got": "B",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 3,
           "expected": "C",
-          "got": "C",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 4,
           "expected": "D",
-          "got": "D",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 5,
           "expected": "E",
-          "got": "E",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 6,
           "expected": "A",
-          "got": "A",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 7,
           "expected": "B",
-          "got": "B",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 8,
           "expected": "C",
-          "got": "C",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 9,
           "expected": "D",
-          "got": "D",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 10,
           "expected": "E",
-          "got": "E",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 11,
           "expected": "A",
-          "got": "A",
-          "pass": true
+          "got": "BL",
+          "pass": false
         },
         {
           "question": 12,
           "expected": "B",
-          "got": "B",
-          "pass": true
+          "got": "D",
+          "pass": false
         },
         {
           "question": 13,
           "expected": "C",
-          "got": "C",
-          "pass": true
+          "got": "D",
+          "pass": false
         },
         {
           "question": 14,
@@ -218,26 +218,26 @@
         {
           "question": 15,
           "expected": "E",
-          "got": "E",
-          "pass": true
+          "got": "D",
+          "pass": false
         },
         {
           "question": 16,
           "expected": "A",
-          "got": "A",
-          "pass": true
+          "got": "D",
+          "pass": false
         },
         {
           "question": 17,
           "expected": "B",
-          "got": "B",
-          "pass": true
+          "got": "D",
+          "pass": false
         },
         {
           "question": 18,
           "expected": "C",
-          "got": "C",
-          "pass": true
+          "got": "D",
+          "pass": false
         },
         {
           "question": 19,
@@ -248,8 +248,8 @@
         {
           "question": 20,
           "expected": "E",
-          "got": "E",
-          "pass": true
+          "got": "D",
+          "pass": false
         }
       ]
     },

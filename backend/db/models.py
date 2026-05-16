@@ -15,6 +15,7 @@ class ExamSubmission(Base):
     filename = Column(String(255), nullable=False, index=True)
     original_pdf_key = Column(String(500), nullable=False)  # local storage path
     result_json_key = Column(String(500), nullable=True)  # local storage path for results
+    template_id = Column(String(100), nullable=True, index=True)  # exam layout chosen at upload
     status = Column(String(50), default="pending", index=True)  # pending, processing, completed, failed
     created_at = Column(DateTime, default=datetime.utcnow)
     processed_at = Column(DateTime, nullable=True)
