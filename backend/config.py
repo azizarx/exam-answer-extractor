@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     mathpix_poll_interval_seconds: float = 3.0
     mathpix_max_wait_seconds: float = 600.0
 
+    # Process-wide token bucket for Gemini calls (sliding 60s window). The
+    # default 4 is conservative — sized for the free-tier gemini-2.5-pro
+    # limit of 5 RPM. Paid Tier 1 handles 60+ comfortably; bump this in .env
+    # if you're on Tier 1 or higher.
+    gemini_max_rpm: float = 4.0
+
     # NOTE: Gemini calls intentionally do NOT pass max_output_tokens. With
     # gemini-2.5-pro, reasoning tokens are billed from the same budget; a
     # 1024 cap (the old default) caused finish_reason=MAX_TOKENS on every

@@ -181,24 +181,33 @@ def log_llm_error(stage: str, t0: float, exc: BaseException, logger: logging.Log
 _RATE_LIMIT_BACKOFF_SECONDS = (5.0, 15.0, 30.0, 60.0, 60.0, 60.0, 60.0, 60.0)
 
 
-# Process-wide token bucket for Gemini calls. The free-tier gemini-2.5-pro
-# allows 5 RPM; we pace at 4 RPM (one call every 15s) to leave headroom.
-# Override via env var GEMINI_MAX_RPM if you have a paid tier.
-import os as _os
-_GEMINI_MAX_RPM = float(_os.environ.get("GEMINI_MAX_RPM", "4"))
+# Process-wide token bucket for Gemini calls (sliding 60s window). Cap comes
+# from Settings.gemini_max_rpm (read lazily so .env / env var changes apply
+# without restarting the importer). Earlier versions read os.environ directly
+# at import time, which silently ignored `.env` values because pydantic-
+# settings doesn't export `.env` back into os.environ.
 _GEMINI_WINDOW_SECONDS = 60.0
 _gemini_lock = threading.Lock()
 _gemini_calls: Deque[float] = deque()
+
+
+def _gemini_rpm_cap() -> float:
+    """Read the current RPM cap. Imported lazily to break a circular import:
+    backend.config → backend.db.* → … → backend.services.run_logger.
+    """
+    from backend.config import get_settings
+    return float(get_settings().gemini_max_rpm)
 
 
 def _acquire_gemini_token(stage: str, logger: logging.Logger) -> None:
     """Block until we're allowed to make another Gemini call under the RPM cap.
 
     Sliding-window: keep a deque of recent call timestamps; if we've made
-    `_GEMINI_MAX_RPM` calls in the last `_GEMINI_WINDOW_SECONDS` seconds,
+    `gemini_max_rpm` calls in the last `_GEMINI_WINDOW_SECONDS` seconds,
     sleep until the oldest one falls out of the window. Then record this call.
     """
-    if _GEMINI_MAX_RPM <= 0:
+    cap = _gemini_rpm_cap()
+    if cap <= 0:
         return
     while True:
         with _gemini_lock:
@@ -206,7 +215,7 @@ def _acquire_gemini_token(stage: str, logger: logging.Logger) -> None:
             # Drop calls outside the window
             while _gemini_calls and now - _gemini_calls[0] >= _GEMINI_WINDOW_SECONDS:
                 _gemini_calls.popleft()
-            if len(_gemini_calls) < _GEMINI_MAX_RPM:
+            if len(_gemini_calls) < cap:
                 _gemini_calls.append(now)
                 return
             # Need to wait for the oldest call to age out
@@ -214,7 +223,7 @@ def _acquire_gemini_token(stage: str, logger: logging.Logger) -> None:
         if wait > 0:
             logger.info(
                 "LLM[%s] RATE_PACED waiting %.1fs (window has %d calls, cap %s)",
-                stage, wait, len(_gemini_calls), _GEMINI_MAX_RPM,
+                stage, wait, len(_gemini_calls), cap,
             )
             time.sleep(min(wait, 5.0))  # cap individual sleeps so logs stay live
 
