@@ -1,11 +1,15 @@
-from dataclasses import asdict
+import json
 
+import pytest
+
+from backend.services.fr_equivalence_judge import (
+    build_judge_prompt,
+    parse_judge_response,
+)
 from backend.services.marking_service import (
     AnswerKeyManifest,
-    CandidateMarkingResult,
     ManifestQuestion,
     MarkingService,
-    QuestionOutcome,
     apply_fr_equivalence_judge,
 )
 
@@ -115,3 +119,44 @@ def test_uncertain_and_judge_error_become_needs_review():
     assert by_q[21].judge_source == "llm_fallback_error"
     assert by_q[22].status == "needs_review"
     assert by_q[22].judge_source == "llm_fallback_error"
+
+
+def test_build_judge_prompt_includes_unbiased_rules_and_items():
+    items = [
+        {
+            "question_number": 22,
+            "type": "time",
+            "accepted_answers": ["5:00 PM"],
+            "response": "5:00vaqt",
+        }
+    ]
+    prompt = build_judge_prompt(items)
+    assert "not_equivalent" in prompt
+    assert "uncertain" in prompt
+    assert "conflicting units" in prompt.lower() or "units must not conflict" in prompt.lower()
+    assert "5:00vaqt" in prompt
+    assert "5:00 PM" in prompt
+    assert "benefit of the doubt" not in prompt.lower() or "Do NOT give benefit of the doubt" in prompt
+
+
+def test_parse_judge_response_extracts_items():
+    text = json.dumps(
+        {
+            "items": [
+                {
+                    "question_number": 22,
+                    "verdict": "equivalent",
+                    "reason": "same time",
+                }
+            ]
+        }
+    )
+    parsed = parse_judge_response(text)
+    assert parsed == [
+        {"question_number": 22, "verdict": "equivalent", "reason": "same time"}
+    ]
+
+
+def test_parse_judge_response_rejects_garbage():
+    with pytest.raises(ValueError):
+        parse_judge_response("not json")
