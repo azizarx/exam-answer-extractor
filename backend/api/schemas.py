@@ -1,12 +1,95 @@
 """
 Pydantic schemas for API request/response validation
 """
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Dict, List, Literal, Optional, Union
 from datetime import datetime
 
 
 # ── New flat format schemas ──────────────────────────────────────────
+
+JsonScalar = Union[str, int, float, bool, None]
+MarkingStatus = Literal["unavailable", "processing", "completed", "failed"]
+OutcomeStatus = Literal["correct", "incorrect", "blank", "invalid", "needs_review"]
+
+
+class QuestionOutcomeSchema(BaseModel):
+    question_number: int
+    status: OutcomeStatus
+    response: JsonScalar = None
+    awarded_marks: float
+    max_marks: float
+    normalizer: str
+    judge_source: Optional[str] = None
+    judge_verdict: Optional[str] = None
+    judge_reason: Optional[str] = None
+
+
+class CandidateWeightedMarkingSchema(BaseModel):
+    candidate_result_id: int
+    candidate_number: str = ""
+    awarded_marks: float
+    max_marks: float
+    percentage: float
+    outcomes: List[QuestionOutcomeSchema] = Field(default_factory=list)
+
+
+class AnswerKeyProvenanceSchema(BaseModel):
+    answer_key_id: Optional[int] = None
+    template_id: Optional[str] = None
+    version: Optional[int] = None
+    source_filename: Optional[str] = None
+    source_sha256: Optional[str] = None
+    total_marks: Optional[int] = None
+
+
+class MarkingRunMetadataSchema(BaseModel):
+    id: int
+    status: MarkingStatus
+    answer_key_id: Optional[int] = None
+    provenance: Optional[AnswerKeyProvenanceSchema] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    updated_at: datetime
+
+
+class MarkingRunDetailSchema(MarkingRunMetadataSchema):
+    candidates: List[CandidateWeightedMarkingSchema] = Field(default_factory=list)
+
+
+class SubmissionMarkingDetailSchema(BaseModel):
+    submission_id: int
+    latest_run: Optional[MarkingRunDetailSchema] = None
+    history: List[MarkingRunMetadataSchema] = Field(default_factory=list)
+
+
+class ManualRemarkRequest(BaseModel):
+    answer_key_id: Optional[int] = None
+
+
+class ManualRemarkResponse(BaseModel):
+    status: Literal["success"] = "success"
+    submission_id: int
+    total_candidates_marked: int
+    run: MarkingRunDetailSchema
+
+
+class AnswerKeyMetadataSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    template_id: Optional[str] = None
+    version: int
+    source_filename: Optional[str] = None
+    source_sha256: Optional[str] = None
+    total_questions: Optional[int] = None
+    total_marks: Optional[int] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
 class CandidateResultSchema(BaseModel):
     """Schema for a single candidate's extracted result.
@@ -16,6 +99,7 @@ class CandidateResultSchema(BaseModel):
     fields discovered during dynamic format analysis are stored in
     ``extra_fields``.
     """
+    id: Optional[int] = Field(None, description="Stable persisted candidate result ID")
     candidate_name: str = Field("", description="Full name of the candidate")
     candidate_number: str = Field("", description="Candidate ID / number")
     country: str = Field("", description="Country")
@@ -32,52 +116,7 @@ class CandidateResultSchema(BaseModel):
         None,
         description='Free-response / drawing answers as {"31": "student text..."}'
     )
-
-
-class MarkedCandidateResultSchema(CandidateResultSchema):
-    """Schema for a marked candidate result (after comparing to answer key)"""
-    marked_answers: Dict[str, str] = Field(
-        default_factory=dict,
-        description='Marked MCQ: P=correct, BL=blank, IN=invalid, else student wrong answer letter'
-    )
-    marked_drawing: Dict[str, str] = Field(
-        default_factory=dict,
-        description='Marked drawing: P=correct, BL=blank, IM=incorrect'
-    )
-    score: Optional[Dict] = Field(
-        None,
-        description='Score object: {"correct": 25, "total": 30, "percentage": 83.3}'
-    )
-
-
-class AnswerKeySchema(BaseModel):
-    """Schema for creating / updating an answer key"""
-    name: str = Field(..., description="Name of the answer key, e.g. 'UZ1 Paper A'")
-    paper_type: Optional[str] = Field(None, description="Paper type filter")
-    answers: Dict[str, str] = Field(
-        ..., description='Correct MCQ answers: {"1": "D", "2": "B", ...}'
-    )
-    drawing_key: Optional[Dict[str, str]] = Field(
-        None, description='Correct drawing keywords: {"31": "circle"}'
-    )
-
-
-class AnswerKeyResponse(AnswerKeySchema):
-    """Schema for answer key response"""
-    id: int
-    total_questions: Optional[int] = None
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-class MarkRequest(BaseModel):
-    """Schema for marking request"""
-    answer_key_id: Optional[int] = Field(None, description="ID of an existing answer key")
-    answer_key: Optional[Dict[str, str]] = Field(None, description="Inline answer key")
-    drawing_key: Optional[Dict[str, str]] = Field(None, description="Inline drawing key")
+    marking: Optional[CandidateWeightedMarkingSchema] = None
 
 
 class ExtractionResultSchema(BaseModel):
@@ -135,9 +174,39 @@ class SubmissionDetailResponse(BaseModel):
     created_at: datetime
     processed_at: Optional[datetime]
     candidates: List[CandidateResultSchema] = []
+    latest_marking: Optional[MarkingRunMetadataSchema] = None
     
     class Config:
         from_attributes = True
+
+
+class MarkedExportSubmissionSchema(BaseModel):
+    id: int
+    filename: str
+    template_id: Optional[str] = None
+    status: str
+    pages_count: int
+    created_at: datetime
+    processed_at: Optional[datetime] = None
+
+
+class MarkedCandidateExportSchema(BaseModel):
+    id: int
+    page_number: Optional[int] = None
+    candidate_name: str = ""
+    candidate_number: str = ""
+    country: str = ""
+    paper_type: str = ""
+    extra_fields: Optional[Dict[str, str]] = None
+    answers: Dict[str, str] = Field(default_factory=dict)
+    drawing_questions: Optional[Dict[str, str]] = None
+    marking: CandidateWeightedMarkingSchema
+
+
+class MarkedExportSchema(BaseModel):
+    submission: MarkedExportSubmissionSchema
+    marking: MarkingRunMetadataSchema
+    candidates: List[MarkedCandidateExportSchema] = Field(default_factory=list)
 
 
 class ErrorResponse(BaseModel):
