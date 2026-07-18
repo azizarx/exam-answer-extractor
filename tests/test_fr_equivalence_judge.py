@@ -157,6 +157,17 @@ def test_parse_judge_response_extracts_items():
     ]
 
 
+def test_parse_judge_response_handles_prose_wrapped_json():
+    parsed = parse_judge_response(
+        'Here is the evaluation: {"items":[{"question_number":22,'
+        '"verdict":"equivalent","reason":"same time"}]} Thanks!'
+    )
+
+    assert parsed == [
+        {"question_number": 22, "verdict": "equivalent", "reason": "same time"}
+    ]
+
+
 def test_parse_judge_response_rejects_garbage():
     with pytest.raises(ValueError):
         parse_judge_response("not json")

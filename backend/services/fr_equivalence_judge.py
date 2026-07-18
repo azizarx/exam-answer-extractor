@@ -55,6 +55,10 @@ def parse_judge_response(text: str) -> list[dict[str, Any]]:
     fence = _FENCE_RE.search(raw)
     if fence:
         raw = fence.group(1).strip()
+    if not raw.startswith("{"):
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            raw = match.group(0)
     data = json.loads(raw)
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list):
