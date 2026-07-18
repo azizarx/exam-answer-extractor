@@ -384,6 +384,120 @@ class MarkingService:
         )
 
 
+FR_TYPES = frozenset({"numeric", "time"})
+FALLBACK_STATUSES = frozenset({"incorrect", "invalid"})
+
+
+def apply_fr_equivalence_judge(
+    result: CandidateMarkingResult,
+    manifest: AnswerKeyManifest,
+    judge: Any,
+) -> CandidateMarkingResult:
+    """Merge LLM FR equivalence verdicts; never mutates input answers."""
+    type_by_q = {q.number: q for q in manifest.questions}
+    marks_by_q = {q.number: q.marks for q in manifest.questions}
+
+    items: list[dict[str, Any]] = []
+    for outcome in result.outcomes:
+        question = type_by_q.get(outcome.question_number)
+        if question is None:
+            continue
+        if question.type not in FR_TYPES:
+            continue
+        if outcome.status not in FALLBACK_STATUSES:
+            continue
+        items.append(
+            {
+                "question_number": outcome.question_number,
+                "type": question.type,
+                "accepted_answers": list(question.accepted_answers),
+                "response": outcome.response,
+            }
+        )
+
+    if not items:
+        return result
+
+    try:
+        verdicts = judge.judge(items)
+    except Exception as exc:
+        reason = f"judge failed: {type(exc).__name__}: {exc}"
+        new_outcomes = []
+        for outcome in result.outcomes:
+            if any(i["question_number"] == outcome.question_number for i in items):
+                new_outcomes.append(
+                    QuestionOutcome(
+                        question_number=outcome.question_number,
+                        status="needs_review",
+                        response=outcome.response,
+                        awarded_marks=0,
+                        max_marks=outcome.max_marks,
+                        normalizer=outcome.normalizer,
+                        judge_source="llm_fallback_error",
+                        judge_verdict="uncertain",
+                        judge_reason=reason,
+                    )
+                )
+            else:
+                new_outcomes.append(outcome)
+        awarded = sum(o.awarded_marks for o in new_outcomes)
+        return CandidateMarkingResult(
+            outcomes=tuple(new_outcomes),
+            awarded_marks=awarded,
+            max_marks=result.max_marks,
+            percentage=awarded * 100.0 / result.max_marks,
+        )
+
+    by_verdict = {
+        int(v["question_number"]): v
+        for v in (verdicts or [])
+        if isinstance(v, dict) and "question_number" in v
+    }
+
+    new_outcomes = []
+    for outcome in result.outcomes:
+        if not any(i["question_number"] == outcome.question_number for i in items):
+            new_outcomes.append(outcome)
+            continue
+        raw = by_verdict.get(outcome.question_number)
+        if raw is None:
+            verdict, reason = "uncertain", "missing verdict from judge response"
+        else:
+            verdict = str(raw.get("verdict") or "uncertain").strip().lower()
+            reason = str(raw.get("reason") or "").strip() or None
+            if verdict not in {"equivalent", "not_equivalent", "uncertain"}:
+                verdict, reason = "uncertain", f"invalid verdict: {verdict}"
+
+        if verdict == "equivalent":
+            status, awarded, source = "correct", marks_by_q[outcome.question_number], "llm"
+        elif verdict == "not_equivalent":
+            status, awarded, source = "incorrect", 0, "llm"
+        else:
+            status, awarded, source = "needs_review", 0, "llm"
+
+        new_outcomes.append(
+            QuestionOutcome(
+                question_number=outcome.question_number,
+                status=status,
+                response=outcome.response,
+                awarded_marks=awarded,
+                max_marks=outcome.max_marks,
+                normalizer=outcome.normalizer,
+                judge_source=source,
+                judge_verdict=verdict,
+                judge_reason=reason,
+            )
+        )
+
+    awarded_total = sum(o.awarded_marks for o in new_outcomes)
+    return CandidateMarkingResult(
+        outcomes=tuple(new_outcomes),
+        awarded_marks=awarded_total,
+        max_marks=result.max_marks,
+        percentage=awarded_total * 100.0 / result.max_marks,
+    )
+
+
 def synchronize_answer_keys(
     db: Session, registry: ManifestRegistry
 ) -> list["AnswerKey"]:
