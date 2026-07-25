@@ -125,21 +125,113 @@ def test_completed_run_persists_weighted_results_and_provenance(engine):
         assert persisted.status == "completed"
         assert persisted.started_at is not None and persisted.completed_at is not None
         assert persisted.key_provenance == {
-            "answer_key_id": key.id,
-            "template_id": "seamo_2025_a",
-            "version": 1,
-            "source_filename": "seamo_2025_a.pdf",
-            "source_sha256": "a" * 64,
-            "total_marks": 3,
-            "question_spec": key.question_spec,
+            "keys": [
+                {
+                    "answer_key_id": key.id,
+                    "template_id": "seamo_2025_a",
+                    "version": 1,
+                    "source_filename": "seamo_2025_a.pdf",
+                    "source_sha256": "a" * 64,
+                    "total_marks": 3,
+                    "question_spec": key.question_spec,
+                    "candidate_count": 1,
+                }
+            ],
+            "missing_templates": [],
         }
         assert marking.candidate_result_id == candidate_id
+        assert marking.answer_key_id == key.id
         assert (marking.awarded_marks, marking.max_marks, marking.percentage) == (
             3,
             3,
             100.0,
         )
         assert marking.outcomes[0]["status"] == "correct"
+
+
+def test_mixed_templates_mark_with_per_candidate_keys(engine):
+    with Session(engine) as db:
+        submission = ExamSubmission(
+            filename="mixed.pdf",
+            original_pdf_key="mixed.pdf",
+            template_id=None,
+            status="processing",
+        )
+        db.add(submission)
+        db.flush()
+        cand_a = CandidateResult(
+            submission_id=submission.id,
+            candidate_number="A1",
+            template_id="seamo_2025_a",
+            answers={"1": "C"},
+        )
+        cand_b = CandidateResult(
+            submission_id=submission.id,
+            candidate_number="B1",
+            template_id="seamo_2025_b",
+            answers={"1": "D"},
+        )
+        cand_x = CandidateResult(
+            submission_id=submission.id,
+            candidate_number="X1",
+            template_id="seamo_x_2026_a",
+            answers={"1": "C"},
+        )
+        key_a = _key("seamo_2025_a", answer="C")
+        key_b = _key("seamo_2025_b", paper_type="B", answer="D")
+        db.add_all([cand_a, cand_b, cand_x, key_a, key_b])
+        db.commit()
+
+        run = mark_submission_answers(db, submission.id)
+        db.expire_all()
+        markings = (
+            db.query(CandidateMarking)
+            .filter(CandidateMarking.marking_run_id == run.id)
+            .all()
+        )
+
+        assert run.status == "completed"
+        assert "seamo_x_2026_a" in (run.error_message or "")
+        assert len(markings) == 2
+        by_cand = {m.candidate_result_id: m for m in markings}
+        assert by_cand[cand_a.id].answer_key_id == key_a.id
+        assert by_cand[cand_a.id].awarded_marks == 3
+        assert by_cand[cand_b.id].answer_key_id == key_b.id
+        assert by_cand[cand_b.id].awarded_marks == 3
+        assert cand_x.id not in by_cand
+
+
+def test_format_b_layout_marks_with_classic_answer_key(engine):
+    """Format-B layout ids share the classic template's answer key."""
+    with Session(engine) as db:
+        submission = ExamSubmission(
+            filename="format-b.pdf",
+            original_pdf_key="format-b.pdf",
+            template_id=None,
+            status="processing",
+        )
+        db.add(submission)
+        db.flush()
+        cand = CandidateResult(
+            submission_id=submission.id,
+            candidate_number="FB1",
+            template_id="seamo_2025_a_fb",
+            answers={"1": "C"},
+        )
+        key = _key("seamo_2025_a", answer="C")
+        db.add_all([cand, key])
+        db.commit()
+
+        run = mark_submission_answers(db, submission.id)
+        db.expire_all()
+        marking = db.scalar(
+            select(CandidateMarking).where(CandidateMarking.marking_run_id == run.id)
+        )
+
+        assert run.status == "completed"
+        assert marking is not None
+        assert marking.answer_key_id == key.id
+        assert marking.awarded_marks == 3
 
 
 def test_workflow_uses_fr_judge_and_persists_judged_outcome(engine):
@@ -196,7 +288,7 @@ def test_no_exact_active_key_creates_unavailable_run_without_marks(engine):
 
         assert run.status == "unavailable"
         assert run.answer_key_id is None
-        assert run.error_message == "No active answer key for template seamo_2025_a"
+        assert "seamo_2025_a" in (run.error_message or "")
         assert run.candidate_markings == []
 
 

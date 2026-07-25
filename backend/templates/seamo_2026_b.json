@@ -1,0 +1,17 @@
+{
+  "id": "seamo_2026_b",
+  "name": "SEAMO 2026 Paper B - Middle Primary",
+  "brand": "seamo",
+  "year": 2026,
+  "paper": "B",
+  "variant_of": "seamo_2025_b",
+  "detection": {
+    "filename_pattern": "SEAMO(?!\\s*X).*2026",
+    "text_markers": [
+      "SEAMO",
+      "2026",
+      "Paper B",
+      "MIDDLE PRIMARY"
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import FileUpload from '../components/FileUpload';
@@ -7,33 +7,20 @@ import examAPI from '../services/api';
 
 /**
  * UploadPage
- * Main page for uploading exam PDFs
+ * Upload a PDF; layout is detected per page from the footer.
  */
 const UploadPage = () => {
   const navigate = useNavigate();
-  const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
-  const [templates, setTemplates] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
 
-  useEffect(() => {
-    examAPI.getTemplates().then(setTemplates).catch(() => {});
-  }, []);
-
-  const handleFileSelect = (file) => {
-    setSelectedFile(file);
+  const handleFileSelect = () => {
     setError('');
   };
 
   const handleUpload = async (file) => {
     if (!file) return;
-
-    if (!selectedTemplate) {
-      setError('Please select an exam layout before uploading.');
-      return;
-    }
 
     setUploading(true);
     setError('');
@@ -42,9 +29,8 @@ const UploadPage = () => {
     try {
       const response = await examAPI.uploadPDF(file, (progress) => {
         setUploadProgress(progress);
-      }, selectedTemplate);
+      });
 
-      // Navigate to tracking page with submission ID
       navigate(`/track/${response.submission_id}`);
     } catch (err) {
       console.error('Upload failed:', err);
@@ -70,20 +56,19 @@ const UploadPage = () => {
   return (
     <div className="min-h-screen py-12 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
               <Sparkles className="w-7 h-7 text-white" />
             </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Exam Answer Extractor
+              Seamo AI Marker
             </h1>
           </div>
           <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-6">
-            Upload your PDF exam answer sheet and let AI extract all answers automatically
+            Extract answers from scanned sheets, then mark them against the official key
           </p>
-          
+
           <div className="flex items-center justify-center gap-6 mt-6 text-sm text-slate-500">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -100,63 +85,17 @@ const UploadPage = () => {
           </div>
         </div>
 
-        {/* Error Alert */}
         {error && (
           <div className="mb-6">
             <Alert type="error">{error}</Alert>
           </div>
         )}
 
-        {/* Template Selector — image cards */}
-        {templates.length > 0 && (
-          <div className="mb-8">
-            <label className="block text-sm font-medium text-slate-700 mb-3">
-              Select the exam layout that matches your PDF
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {templates.map((t) => {
-                const isSelected = selectedTemplate === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => { setSelectedTemplate(t.id); setError(''); }}
-                    className={`group relative rounded-lg border-2 overflow-hidden transition-all ${
-                      isSelected
-                        ? 'border-blue-500 ring-2 ring-blue-200 shadow-lg scale-[1.02]'
-                        : 'border-slate-200 hover:border-slate-400 hover:shadow-md'
-                    }`}
-                  >
-                    {t.preview_url && (
-                      <img
-                        src={`http://localhost:8000${t.preview_url}`}
-                        alt={t.name}
-                        className="w-full h-40 object-contain object-top bg-white"
-                        loading="lazy"
-                      />
-                    )}
-                    <div className={`px-2 py-2 text-center ${isSelected ? 'bg-blue-50' : 'bg-slate-50'}`}>
-                      <div className="text-xs font-semibold text-slate-800 truncate">{t.name}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">
-                        {t.total_questions}Q
-                        {t.has_mcq ? ' · MCQ' : ''}
-                        {t.has_free_response ? ' · Free' : ''}
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <div className="absolute top-1 right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white/70 px-5 py-4 text-sm text-slate-600 shadow-sm">
+          Layout is detected automatically per page from the footer
+          (series, year, and paper letter). Mixed PDFs are supported.
+        </div>
 
-        {/* File Upload */}
         <FileUpload
           onFileSelect={handleFileSelect}
           onUpload={handleUpload}
@@ -164,7 +103,6 @@ const UploadPage = () => {
           uploadProgress={uploadProgress}
         />
 
-        {/* Features */}
         <div className="mt-16 grid md:grid-cols-3 gap-6">
           <div className="text-center p-6">
             <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">

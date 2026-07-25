@@ -1,0 +1,25 @@
+{
+  "page_id": "paper_c/page_001",
+  "template_id": "seamo_2025_c_fb",
+  "source": {
+    "pdf": "backend/examples/seamo-2025-format-b.pdf",
+    "page_index": 0,
+    "notes": "Replace with a real page_index from the format-B PDF; this is a schema example only."
+  },
+  "header": {
+    "candidate_name": "EXAMPLE STUDENT",
+    "candidate_number": "CAN0000000000",
+    "country": "EXAMPLE",
+    "school": null,
+    "level": null,
+    "date": null
+  },
+  "answers": {
+    "1": "A",
+    "2": "B",
+    "3": "BL",
+    "21": "12",
+    "22": "BL"
+  },
+  "notes": "Copy to page_001.json and fill real labels. Do not commit secrets."
+}

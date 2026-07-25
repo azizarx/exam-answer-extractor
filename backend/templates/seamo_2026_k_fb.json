@@ -1,0 +1,140 @@
+{
+  "id": "seamo_2026_k_fb",
+  "name": "SEAMO 2026 \u2014 Paper K (Kindergarten) (format B)",
+  "brand": "seamo",
+  "year": 2026,
+  "paper": "K",
+  "reference_dpi": 300,
+  "page_size": {
+    "width": 2481,
+    "height": 3508
+  },
+  "anchor": {
+    "x": 97,
+    "y": 940,
+    "w": 1550,
+    "h": 80,
+    "min_match_score": 0.45
+  },
+  "detection": {
+    "filename_pattern": "SEAMO(?!\\s*X).*2026",
+    "text_markers": [
+      "SEAMO",
+      "2026",
+      "Paper K",
+      "KINDERGARTEN"
+    ]
+  },
+  "header": {
+    "region": {
+      "x": 97,
+      "y": 200,
+      "w": 2287,
+      "h": 700
+    },
+    "fields": [
+      {
+        "key": "candidate_name",
+        "label": "Candidate Name",
+        "type": "text_line"
+      },
+      {
+        "key": "candidate_number",
+        "label": "Candidate No.",
+        "type": "grid_boxes",
+        "prefix": "CAN",
+        "max_length": 12
+      },
+      {
+        "key": "school",
+        "label": "School",
+        "type": "text_line"
+      },
+      {
+        "key": "country",
+        "label": "Country",
+        "type": "text_line"
+      },
+      {
+        "key": "level",
+        "label": "Level",
+        "type": "text_line"
+      },
+      {
+        "key": "date",
+        "label": "Date",
+        "type": "text_line"
+      }
+    ]
+  },
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 15
+      },
+      "region": {
+        "x": 97,
+        "y": 1100,
+        "w": 1600,
+        "h": 1750
+      },
+      "grid": {
+        "rows": 15,
+        "cols": 2,
+        "questions_per_col": [
+          10,
+          5
+        ],
+        "options": [
+          "A",
+          "B",
+          "C"
+        ],
+        "row_positions": [
+          1247,
+          1409,
+          1573,
+          1736,
+          1899,
+          2062,
+          2225,
+          2387,
+          2550,
+          2713,
+          1247,
+          1409,
+          1573,
+          1736,
+          1899
+        ],
+        "col_positions": [
+          [
+            339,
+            520,
+            702
+          ],
+          [
+            1114,
+            1295,
+            1477
+          ]
+        ],
+        "cell_width": 93,
+        "cell_height": 0,
+        "bubble_height": 29,
+        "row_pitch": 163.0
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 35,
+        "min_ratio": 1.12,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.1
+      }
+    }
+  ],
+  "answer_key_template_id": "seamo_2026_k"
+}

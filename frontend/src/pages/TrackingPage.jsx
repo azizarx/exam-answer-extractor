@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import StatusTracker from '../components/StatusTracker';
 import ResultsDisplay from '../components/ResultsDisplay';
 import { Button, LoadingSpinner, Alert } from '../components/common';
@@ -16,26 +16,116 @@ const TrackingPage = () => {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [marking, setMarking] = useState({ loading: false, error: '' });
+  const loadRequestRef = useRef(0);
+  const requestedResultsSubmissionRef = useRef(null);
+  const markingInFlightRef = useRef(false);
+  const markingRequestIdRef = useRef(0);
+  const currentSubmissionIdRef = useRef(submissionId);
+  currentSubmissionIdRef.current = submissionId;
 
-  const handleStatusComplete = useCallback(async (statusData) => {
-    if (statusData.status === 'completed' && !results) {
-      setLoading(true);
-      try {
-        const data = await examAPI.getSubmission(submissionId);
-        // Merge processed_at from status if not present
-        if (!data.processed_at && statusData.processed_at) {
-          data.processed_at = statusData.processed_at;
-        }
-        setResults(data);
-        setError('');
-      } catch (err) {
-        console.error('Failed to load results:', err);
-        setError(err?.response?.data?.detail || 'Failed to load results');
-      } finally {
+  const loadResults = useCallback(async (expectedSubmissionId, statusData = null) => {
+    if (expectedSubmissionId !== currentSubmissionIdRef.current) return null;
+    const requestId = ++loadRequestRef.current;
+    setLoading(true);
+    try {
+      const data = await examAPI.getSubmission(expectedSubmissionId);
+      if (
+        requestId !== loadRequestRef.current ||
+        expectedSubmissionId !== currentSubmissionIdRef.current
+      ) return null;
+      if (!data.processed_at && statusData?.processed_at) {
+        data.processed_at = statusData.processed_at;
+      }
+      setResults(data);
+      setError('');
+      return data;
+    } catch (err) {
+      if (
+        requestId !== loadRequestRef.current ||
+        expectedSubmissionId !== currentSubmissionIdRef.current
+      ) return null;
+      console.error('Failed to load results:', err);
+      setError(err?.response?.data?.detail || 'Failed to load results');
+      return null;
+    } finally {
+      if (
+        requestId === loadRequestRef.current &&
+        expectedSubmissionId === currentSubmissionIdRef.current
+      ) {
         setLoading(false);
       }
     }
-  }, [submissionId, results]);
+  }, []);
+
+  useEffect(() => {
+    requestedResultsSubmissionRef.current = null;
+    markingInFlightRef.current = false;
+    markingRequestIdRef.current += 1;
+    loadRequestRef.current += 1;
+    setResults(null);
+    setLoading(false);
+    setError('');
+    setMarking({ loading: false, error: '' });
+  }, [submissionId]);
+
+  const handleStatusComplete = useCallback(async (statusData) => {
+    if (
+      submissionId === currentSubmissionIdRef.current &&
+      statusData.status === 'completed' &&
+      requestedResultsSubmissionRef.current !== submissionId
+    ) {
+      requestedResultsSubmissionRef.current = submissionId;
+      const data = await loadResults(submissionId, statusData);
+      if (!data && requestedResultsSubmissionRef.current === submissionId) {
+        requestedResultsSubmissionRef.current = null;
+      }
+    }
+  }, [loadResults, submissionId]);
+
+  const handleMark = useCallback(async () => {
+    if (markingInFlightRef.current) return;
+    markingInFlightRef.current = true;
+    const requestId = ++markingRequestIdRef.current;
+    const expectedSubmissionId = submissionId;
+    setMarking({ loading: true, error: '' });
+    try {
+      await examAPI.markSubmission(expectedSubmissionId);
+      if (
+        requestId !== markingRequestIdRef.current ||
+        expectedSubmissionId !== currentSubmissionIdRef.current
+      ) return;
+      const refreshed = await loadResults(expectedSubmissionId);
+      if (
+        requestId !== markingRequestIdRef.current ||
+        expectedSubmissionId !== currentSubmissionIdRef.current
+      ) return;
+      if (!refreshed) {
+        throw new Error('Marking finished, but the refreshed results could not be loaded.');
+      }
+      setMarking({ loading: false, error: '' });
+    } catch (err) {
+      if (
+        requestId !== markingRequestIdRef.current ||
+        expectedSubmissionId !== currentSubmissionIdRef.current
+      ) return;
+      console.error('Failed to mark submission:', err);
+      const detail = err?.response?.data?.detail;
+      setMarking({
+        loading: false,
+        error: typeof detail === 'string'
+          ? detail
+          : err?.message || 'Marking could not be completed.',
+      });
+    } finally {
+      if (
+        requestId === markingRequestIdRef.current &&
+        expectedSubmissionId === currentSubmissionIdRef.current
+      ) {
+        markingInFlightRef.current = false;
+      }
+    }
+  }, [loadResults, submissionId]);
 
   const handleBackToUpload = () => {
     navigate('/');
@@ -81,7 +171,12 @@ const TrackingPage = () => {
 
         {/* Results */}
         {results && !loading && (
-          <ResultsDisplay results={results} />
+          <ResultsDisplay
+            results={results}
+            onMark={handleMark}
+            markingRequest={marking}
+            onRefresh={() => loadResults(submissionId)}
+          />
         )}
       </div>
     </div>

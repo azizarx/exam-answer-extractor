@@ -2,7 +2,7 @@
 Pydantic schemas for API request/response validation
 """
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from datetime import datetime
 
 
@@ -76,6 +76,19 @@ class ManualRemarkResponse(BaseModel):
     run: MarkingRunDetailSchema
 
 
+class ConfirmReviewRequest(BaseModel):
+    """Human confirmation of extraction answers flagged needs_review."""
+    answers: Dict[str, str] = Field(default_factory=dict)
+    clear_all_review: bool = False
+
+
+class ConfirmReviewResponse(BaseModel):
+    status: Literal["success"] = "success"
+    candidate_result_id: int
+    needs_review_questions: List[str] = Field(default_factory=list)
+    answers: Dict[str, str] = Field(default_factory=dict)
+
+
 class AnswerKeyMetadataSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -104,6 +117,12 @@ class CandidateResultSchema(BaseModel):
     candidate_number: str = Field("", description="Candidate ID / number")
     country: str = Field("", description="Country")
     paper_type: str = Field("", description="Paper type or level")
+    template_id: Optional[str] = Field(
+        None, description="Detected or forced layout template for this page"
+    )
+    detection: Optional[Dict[str, Any]] = Field(
+        None, description="Layout detection metadata (method, raw_text, warning)"
+    )
     extra_fields: Optional[Dict[str, str]] = Field(
         None,
         description="Additional header fields detected during dynamic format analysis"

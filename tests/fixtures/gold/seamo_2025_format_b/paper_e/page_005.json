@@ -1,0 +1,73 @@
+{
+  "page_id": "paper_e/page_005",
+  "template_id": "seamo_2025_e_fb",
+  "source": {
+    "pdf": "backend/examples/seamo-2025-format-b-split/seamo-2025-format-b-paper-e.pdf",
+    "page_index": 0,
+    "full_pdf_page_1based": 164
+  },
+  "header": {},
+  "answers": {
+    "1": "E",
+    "2": "C",
+    "3": "C",
+    "4": "B",
+    "5": "B",
+    "6": "B",
+    "7": "B",
+    "8": "B",
+    "9": "B",
+    "10": "B",
+    "11": "B",
+    "12": "B",
+    "13": "B",
+    "14": "IN",
+    "15": "B",
+    "16": "B",
+    "17": "A",
+    "18": "B",
+    "19": "D",
+    "20": "IN",
+    "21": "21",
+    "22": "a² + 2b + c",
+    "23": "BL",
+    "24": "24",
+    "25": "BL"
+  },
+  "notes": "clean CV baseline after page-0 priming: anchor≈1.0, dx=dy=0, no warning. metrics: mean=233.7 std=56.0 lap=98.8 skew_est=0.000 raw_anchor=1.0000 raw_dx=0 raw_dy=0 warn=None | AUTO-EXTRACT DRAFT — correct answers/header by hand; do not trust blindly.",
+  "extraction_draft": {
+    "mcq_warning": null,
+    "needs_review_questions": [],
+    "extraction_flags": [
+      "llm_header_failed"
+    ],
+    "deskew_degrees": null,
+    "answer_trust": {
+      "1": "trusted",
+      "2": "trusted",
+      "3": "trusted",
+      "4": "trusted",
+      "5": "trusted",
+      "6": "trusted",
+      "7": "trusted",
+      "8": "trusted",
+      "9": "trusted",
+      "10": "trusted",
+      "11": "trusted",
+      "12": "trusted",
+      "13": "trusted",
+      "14": "trusted",
+      "15": "trusted",
+      "16": "trusted",
+      "17": "trusted",
+      "18": "trusted",
+      "19": "trusted",
+      "20": "trusted",
+      "21": "trusted",
+      "22": "trusted",
+      "23": "trusted",
+      "24": "trusted",
+      "25": "trusted"
+    }
+  }
+}

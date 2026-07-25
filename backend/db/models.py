@@ -1,7 +1,21 @@
 """
 Database models for exam answers
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Float
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from backend.db.database import Base
@@ -24,6 +38,7 @@ class ExamSubmission(Base):
     
     # Relationships
     candidate_results = relationship("CandidateResult", back_populates="submission", cascade="all, delete-orphan")
+    marking_runs = relationship("MarkingRun", back_populates="submission", cascade="all, delete-orphan")
     
     # Keep legacy relationships for backward compatibility during migration
     mcq_answers = relationship("MultipleChoiceAnswer", back_populates="submission", cascade="all, delete-orphan")
@@ -50,6 +65,8 @@ class CandidateResult(Base):
     candidate_number = Column(String(100), nullable=True, index=True)
     country = Column(String(100), nullable=True)
     paper_type = Column(String(50), nullable=True)
+    template_id = Column(String(100), nullable=True, index=True)  # per-page layout (auto or forced)
+    detection = Column(JSON, nullable=True)  # {method, raw_text, warning?}
     extra_fields = Column(JSON, nullable=True)  # dynamic header fields beyond the four above
     answers = Column(JSON, nullable=True)  # {"1": "D", "2": "B", "3": "BL", ...}
     drawing_questions = Column(JSON, nullable=True)  # {"31": "student text..."}
@@ -62,6 +79,9 @@ class CandidateResult(Base):
     
     # Relationship
     submission = relationship("ExamSubmission", back_populates="candidate_results")
+    candidate_markings = relationship(
+        "CandidateMarking", back_populates="candidate_result", cascade="all, delete-orphan"
+    )
     
     def __repr__(self):
         return f"<CandidateResult(id={self.id}, candidate='{self.candidate_number}', page={self.page_number})>"
@@ -125,6 +145,17 @@ class GeneratedJSON(Base):
 class AnswerKey(Base):
     """Model for answer keys used for auto-marking"""
     __tablename__ = "answer_keys"
+    __table_args__ = (
+        UniqueConstraint("template_id", "version", name="uq_answer_keys_template_version"),
+        Index("ix_answer_keys_template_active", "template_id", "is_active"),
+        Index(
+            "uq_answer_keys_one_active_template",
+            "template_id",
+            unique=True,
+            sqlite_where=text("is_active = 1"),
+            postgresql_where=text("is_active IS TRUE"),
+        ),
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)  # e.g. "UZ1 Paper A"
@@ -132,11 +163,103 @@ class AnswerKey(Base):
     answers = Column(JSON, nullable=False)  # {"1": "D", "2": "B", "3": "A", ...}
     drawing_key = Column(JSON, nullable=True)  # {"31": "circle", "32": "triangle"}
     total_questions = Column(Integer, nullable=True)
+    template_id = Column(String(100), nullable=True, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    source_filename = Column(String(255), nullable=True)
+    source_sha256 = Column(String(64), nullable=True)
+    total_marks = Column(Integer, nullable=True)
+    question_spec = Column(JSON, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    marking_runs = relationship("MarkingRun", back_populates="answer_key")
+
     def __repr__(self):
         return f"<AnswerKey(id={self.id}, name='{self.name}', paper_type='{self.paper_type}')>"
+
+
+class MarkingRun(Base):
+    """Auditable application of one answer-key version to a submission."""
+
+    __tablename__ = "marking_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('unavailable', 'processing', 'completed', 'failed')",
+            name="ck_marking_runs_status",
+        ),
+        Index("ix_marking_runs_submission_created", "submission_id", "created_at"),
+        Index(
+            "uq_marking_runs_one_processing_submission",
+            "submission_id",
+            unique=True,
+            sqlite_where=text("status = 'processing'"),
+            postgresql_where=text("status = 'processing'"),
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(
+        Integer,
+        ForeignKey("exam_submissions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    answer_key_id = Column(
+        Integer, ForeignKey("answer_keys.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status = Column(String(20), nullable=False, default="unavailable", index=True)
+    key_provenance = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    submission = relationship("ExamSubmission", back_populates="marking_runs")
+    answer_key = relationship("AnswerKey", back_populates="marking_runs")
+    candidate_markings = relationship(
+        "CandidateMarking", back_populates="marking_run", cascade="all, delete-orphan"
+    )
+
+
+class CandidateMarking(Base):
+    """Immutable weighted marking output for one extracted candidate."""
+
+    __tablename__ = "candidate_markings"
+    __table_args__ = (
+        UniqueConstraint(
+            "marking_run_id",
+            "candidate_result_id",
+            name="uq_candidate_markings_run_candidate",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    marking_run_id = Column(
+        Integer,
+        ForeignKey("marking_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    candidate_result_id = Column(
+        Integer,
+        ForeignKey("candidate_results.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    awarded_marks = Column(Float, nullable=False)
+    max_marks = Column(Float, nullable=False)
+    percentage = Column(Float, nullable=False)
+    outcomes = Column(JSON, nullable=False)
+    answer_key_id = Column(
+        Integer, ForeignKey("answer_keys.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    marking_run = relationship("MarkingRun", back_populates="candidate_markings")
+    candidate_result = relationship("CandidateResult", back_populates="candidate_markings")
+    answer_key = relationship("AnswerKey")
 
 
 class MultipleChoiceAnswer(Base):

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -9,6 +9,7 @@ import {
   HelpCircle,
   X,
 } from 'lucide-react';
+import examAPI from '../../services/api';
 
 const OUTCOME_STYLES = {
   correct: {
@@ -56,12 +57,31 @@ const sortQuestions = ([a], [b]) => {
   return String(a).localeCompare(String(b));
 };
 
-const CandidateDetailModal = ({ selection, onClose, onExport }) => {
+const CandidateDetailModal = ({
+  selection,
+  onClose,
+  onExport,
+  submissionId,
+  onReviewConfirmed,
+}) => {
   const dialogRef = useRef(null);
   const closeButtonRef = useRef(null);
   const { candidate, index } = selection;
   const marking = candidate.marking;
   const outcomes = Array.isArray(marking?.outcomes) ? marking.outcomes : [];
+  const reviewQs = useMemo(
+    () => (candidate.extra_fields?.needs_review_questions || []).map(String),
+    [candidate.extra_fields],
+  );
+  const [drafts, setDrafts] = useState(() => {
+    const init = {};
+    for (const q of reviewQs) {
+      init[q] = candidate.answers?.[q] ?? '';
+    }
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -90,6 +110,22 @@ const CandidateDetailModal = ({ selection, onClose, onExport }) => {
       previouslyFocused?.focus?.();
     };
   }, [onClose]);
+
+  const handleConfirmReview = async () => {
+    if (!submissionId || !candidate.id) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await examAPI.confirmCandidateReview(submissionId, candidate.id, {
+        answers: drafts,
+      });
+      onReviewConfirmed?.();
+    } catch (err) {
+      setSaveError(err?.response?.data?.detail || err?.message || 'Confirm failed');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div
@@ -127,6 +163,9 @@ const CandidateDetailModal = ({ selection, onClose, onExport }) => {
                 </span>
               )}
               {candidate.paper_type && <span>Paper {candidate.paper_type}</span>}
+              {candidate.extra_fields?.mcq_warning && (
+                <span className="text-amber-700">MCQ: {candidate.extra_fields.mcq_warning}</span>
+              )}
             </div>
           </div>
           <div className="flex flex-none items-center gap-1">
@@ -151,6 +190,40 @@ const CandidateDetailModal = ({ selection, onClose, onExport }) => {
         </header>
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+          {reviewQs.length > 0 && submissionId && (
+            <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <h4 className="font-semibold text-amber-950">
+                Extraction review queue ({reviewQs.length})
+              </h4>
+              <p className="mt-1 text-sm text-amber-900">
+                Confirm or correct these answers, then re-mark the submission.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {reviewQs.map((q) => (
+                  <label key={q} className="flex items-center gap-2 text-sm">
+                    <span className="w-10 font-semibold text-slate-700">Q{q}</span>
+                    <input
+                      className="flex-1 rounded border border-amber-300 bg-white px-2 py-1 font-mono"
+                      value={drafts[q] ?? ''}
+                      onChange={(e) =>
+                        setDrafts((prev) => ({ ...prev, [q]: e.target.value }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              {saveError ? <p className="mt-2 text-sm text-red-700">{saveError}</p> : null}
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleConfirmReview}
+                className="mt-3 rounded-lg bg-amber-800 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-900 disabled:opacity-60"
+              >
+                {saving ? 'Saving…' : 'Confirm reviewed answers'}
+              </button>
+            </div>
+          )}
+
           {marking ? (
             <>
               <div className="mb-6 grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:max-w-md">
@@ -244,7 +317,14 @@ const CandidateDetailModal = ({ selection, onClose, onExport }) => {
               <h4 className="mb-3 font-semibold text-slate-800">Extracted responses</h4>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 md:grid-cols-8">
                 {Object.entries(candidate.answers).sort(sortQuestions).map(([question, answer]) => (
-                  <div key={question} className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-center">
+                  <div
+                    key={question}
+                    className={`rounded-lg border p-2 text-center ${
+                      reviewQs.includes(String(question))
+                        ? 'border-amber-300 bg-amber-50'
+                        : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
                     <p className="text-[11px] font-medium text-slate-500">Q{question}</p>
                     <p className="break-words text-sm font-bold text-slate-900">{displayValue(answer)}</p>
                   </div>

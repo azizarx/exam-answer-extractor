@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Sparkles, Code } from 'lucide-react';
 
@@ -15,7 +14,7 @@ const Navbar = () => {
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              ExamExtractor
+              Seamo AI Marker
             </span>
           </Link>
 

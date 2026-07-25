@@ -41,7 +41,7 @@ def _candidate_models(preferred_model: Optional[str] = None) -> List[str]:
 def _resolve_available_model(candidates: List[str]) -> str:
     settings = get_settings()
     if not candidates:
-        return "gemini-2.0-flash"
+        return "gemini-2.5-flash"
 
     if not settings.gemini_auto_fallback or len(candidates) == 1:
         return candidates[0]

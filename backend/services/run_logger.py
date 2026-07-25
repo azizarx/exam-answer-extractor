@@ -268,12 +268,19 @@ def llm_call(
             err_name = type(exc).__name__
             msg = str(exc)
             is_429 = (err_name == "ResourceExhausted") or msg.startswith("429") or "RESOURCE_EXHAUSTED" in msg
-            if is_429 and attempt < len(_RATE_LIMIT_BACKOFF_SECONDS):
+            is_deadline = (
+                err_name in ("DeadlineExceeded", "ServiceUnavailable", "GatewayTimeout")
+                or "DeadlineExceeded" in msg
+                or "504" in msg
+                or "503" in msg
+            )
+            if (is_429 or is_deadline) and attempt < len(_RATE_LIMIT_BACKOFF_SECONDS):
                 delay = _RATE_LIMIT_BACKOFF_SECONDS[attempt]
                 attempt += 1
+                kind = "429 rate-limited" if is_429 else "deadline/unavailable"
                 logger.warning(
-                    "LLM[%s] 429 rate-limited; sleeping %.0fs (attempt %d/%d)",
-                    stage, delay, attempt, len(_RATE_LIMIT_BACKOFF_SECONDS),
+                    "LLM[%s] %s; sleeping %.0fs (attempt %d/%d)",
+                    stage, kind, delay, attempt, len(_RATE_LIMIT_BACKOFF_SECONDS),
                 )
                 time.sleep(delay)
                 continue

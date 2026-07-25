@@ -1,0 +1,42 @@
+{
+  "document_information": {
+    "filename": "seamo_x_2026_a_page1.pdf",
+    "extraction_timestamp": "2026-05-16T04:14:03.857417",
+    "total_candidates": 1,
+    "pages_processed": 1,
+    "pages_with_data": 1,
+    "processing_time": 9.07
+  },
+  "candidates": [
+    {
+      "answers": {
+        "1": "",
+        "2": "",
+        "3": "",
+        "4": "https://cdn.mathpix.com/cropped/3520947f-776b-4069-b9a0-094c11ff5bd0-1.jpg?height=293&width=296&top_left_y=1563&top_left_x=77",
+        "5": "",
+        "6": "https://cdn.mathpix.com/cropped/3520947f-776b-4069-b9a0-094c11ff5bd0-1.jpg?height=266&width=263&top_left_y=2086&top_left_x=73",
+        "7": "",
+        "8": "",
+        "9": "https://cdn.mathpix.com/cropped/3520947f-776b-4069-b9a0-094c11ff5bd0-1.jpg?height=289&width=300&top_left_y=1403&top_left_x=731",
+        "10": "",
+        "11": "",
+        "12": "",
+        "13": "",
+        "14": "",
+        "15": "",
+        "16": "",
+        "17": "",
+        "18": "",
+        "19": "",
+        "20": ""
+      },
+      "drawing_questions": null,
+      "candidate_name": null,
+      "candidate_number": "CAN",
+      "country": null,
+      "paper_type": null,
+      "extra_fields": {}
+    }
+  ]
+}

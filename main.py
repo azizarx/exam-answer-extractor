@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from contextlib import asynccontextmanager
 
-from backend.api import routes
+from backend.api import marking_routes, routes
 from backend.db.database import init_db
 from backend.config import get_settings
 
@@ -58,6 +58,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(routes.router, tags=["Exam Processing"])
+app.include_router(marking_routes.router, tags=["Marking"])
 
 
 @app.get("/")

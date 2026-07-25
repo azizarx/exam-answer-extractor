@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Any
@@ -13,6 +15,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.config import get_settings
 from backend.db.models import (
     AnswerKey,
     CandidateMarking,
@@ -24,9 +27,12 @@ from backend.services.marking_service import (
     AnswerKeyManifest,
     ManifestQuestion,
     MarkingService,
+    apply_extraction_trust,
     apply_fr_equivalence_judge,
 )
 from backend.services.fr_equivalence_judge import GeminiFrEquivalenceJudge
+
+logger = logging.getLogger(__name__)
 
 
 class NoCandidatesError(ValueError):
@@ -145,7 +151,6 @@ def mark_submission_answers(
     if active is not None:
         raise MarkingInProgressError(active.id)
 
-    template_id = submission.template_id
     now = datetime.utcnow()
     run = MarkingRun(
         submission_id=submission_id,
@@ -181,47 +186,158 @@ def mark_submission_answers(
                 f"Submission {submission_id} has no candidate results"
             )
 
-        key_query = db.query(AnswerKey).filter(AnswerKey.template_id == template_id)
-        if answer_key_id is None:
-            key_query = key_query.filter(AnswerKey.is_active.is_(True))
-        else:
-            key_query = key_query.filter(AnswerKey.id == answer_key_id)
-        key = key_query.one_or_none()
-        if key is None:
+        # Group by per-candidate template (auto mode). Fall back to submission
+        # template_id for legacy rows that only have the submission-level id.
+        groups: dict[str | None, list[CandidateResult]] = {}
+        for candidate in candidates:
+            tid = candidate.template_id or submission.template_id
+            groups.setdefault(tid, []).append(candidate)
+
+        # Optional forced key: only applies to the matching template group.
+        override_key: AnswerKey | None = None
+        if answer_key_id is not None:
+            override_key = db.get(AnswerKey, answer_key_id)
+            if override_key is None:
+                run.status = "unavailable"
+                run.error_message = f"Answer key {answer_key_id} not found"
+                run.completed_at = datetime.utcnow()
+                db.commit()
+                db.refresh(run)
+                return run
+
+        keys_by_template: dict[str, AnswerKey] = {}
+        missing_templates: list[str] = []
+        from backend.services.template_service import get_template_registry
+
+        registry = get_template_registry()
+
+        def _key_tid_for_layout(layout_tid: str) -> str:
+            tmpl = registry.get(layout_tid)
+            if tmpl is not None:
+                return tmpl.key_template_id
+            return layout_tid
+
+        for tid in groups:
+            if tid is None:
+                missing_templates.append("(undetected)")
+                continue
+            key_tid = _key_tid_for_layout(tid)
+            if override_key is not None and override_key.template_id == key_tid:
+                keys_by_template[tid] = override_key
+                continue
+            key = (
+                db.query(AnswerKey)
+                .filter(
+                    AnswerKey.template_id == key_tid,
+                    AnswerKey.is_active.is_(True),
+                )
+                .one_or_none()
+            )
+            if key is None:
+                missing_templates.append(tid)
+            else:
+                keys_by_template[tid] = key
+
+        if not keys_by_template:
             run.status = "unavailable"
             run.error_message = (
-                f"No active answer key for template {template_id}"
+                "No active answer key for templates: "
+                + ", ".join(missing_templates or list(groups.keys()))
             )
             run.completed_at = datetime.utcnow()
             db.commit()
             db.refresh(run)
             return run
 
-        run.answer_key_id = key.id
-        run.key_provenance = _key_provenance(key)
+        # Run-level key fields: first key for backward compat; full list in provenance.
+        first_key = next(iter(keys_by_template.values()))
+        run.answer_key_id = first_key.id
+        run.key_provenance = {
+            "keys": [
+                {**_key_provenance(key), "candidate_count": len(groups.get(tid) or [])}
+                for tid, key in keys_by_template.items()
+            ],
+            "missing_templates": missing_templates,
+        }
         db.commit()
 
-        manifest = manifest_from_key(key)
-        marker = MarkingService(manifest)
         judge = fr_judge if fr_judge is not None else _LazyGeminiJudge()
+        fr_workers = max(1, int(getattr(get_settings(), "max_fr_judge_workers", 6) or 6))
+
+        def _mark_one(
+            candidate_id: int,
+            answers: dict,
+            marker: MarkingService,
+            manifest: AnswerKeyManifest,
+            answer_key_id: int,
+            needs_review_questions: list,
+        ):
+            # Pass plain dicts only — ORM CandidateResult is not thread-safe
+            # and lazy-loading from worker threads raises ObjectDeletedError.
+            result = marker.mark(answers or {})
+            result = apply_fr_equivalence_judge(result, manifest, judge)
+            result = apply_extraction_trust(result, needs_review_questions)
+            return candidate_id, answer_key_id, result
+
         with db.begin_nested():
-            for candidate in candidates:
-                result = marker.mark(candidate.answers or {})
-                result = apply_fr_equivalence_judge(result, manifest, judge)
-                db.add(
-                    CandidateMarking(
-                        marking_run_id=run_id,
-                        candidate_result_id=candidate.id,
-                        awarded_marks=result.awarded_marks,
-                        max_marks=result.max_marks,
-                        percentage=result.percentage,
-                        outcomes=[asdict(outcome) for outcome in result.outcomes],
+            for tid, group in groups.items():
+                key = keys_by_template.get(tid) if tid else None
+                if key is None:
+                    continue
+                manifest = manifest_from_key(key)
+                marker = MarkingService(manifest)
+                key_id = key.id
+                # Snapshot ORM fields on the main thread before any worker runs.
+                jobs = []
+                for c in group:
+                    extra = c.extra_fields or {}
+                    review_qs = list(extra.get("needs_review_questions") or [])
+                    jobs.append(
+                        (c.id, dict(c.answers or {}), marker, manifest, key_id, review_qs)
                     )
+                workers = min(fr_workers, max(1, len(jobs)))
+                if workers == 1 or len(jobs) <= 1:
+                    marked = [
+                        _mark_one(cid, answers, marker, manifest, kid, review)
+                        for cid, answers, marker, manifest, kid, review in jobs
+                    ]
+                else:
+                    marked = []
+                    with ThreadPoolExecutor(max_workers=workers) as pool:
+                        futs = [
+                            pool.submit(
+                                _mark_one, cid, answers, marker, manifest, kid, review
+                            )
+                            for cid, answers, marker, manifest, kid, review in jobs
+                        ]
+                        for fut in as_completed(futs):
+                            marked.append(fut.result())
+                logger.info(
+                    "MARK template=%s candidates=%d fr_workers=%d",
+                    tid, len(group), workers,
                 )
+                for candidate_id, answer_key_id, result in marked:
+                    db.add(
+                        CandidateMarking(
+                            marking_run_id=run_id,
+                            candidate_result_id=candidate_id,
+                            awarded_marks=result.awarded_marks,
+                            max_marks=result.max_marks,
+                            percentage=result.percentage,
+                            outcomes=[asdict(outcome) for outcome in result.outcomes],
+                            answer_key_id=answer_key_id,
+                        )
+                    )
             run = db.get(MarkingRun, run_id)
             run.status = "completed"
             run.completed_at = datetime.utcnow()
-            run.error_message = None
+            if missing_templates:
+                run.error_message = (
+                    "Marked with available keys; no key for: "
+                    + ", ".join(missing_templates)
+                )
+            else:
+                run.error_message = None
             db.flush()
         db.commit()
     except Exception as exc:

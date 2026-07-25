@@ -9,5 +9,77 @@
   "detection": {
     "filename_pattern": "SEAMO.*2025",
     "text_markers": ["SEAMO", "2025", "Paper B", "MIDDLE PRIMARY"]
-  }
+  },
+
+  "anchor": {
+    "x": 125,
+    "y": 1001,
+    "w": 695,
+    "h": 74,
+    "min_match_score": 0.45
+  },
+
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 20
+      },
+      "region": {
+        "x": 91,
+        "y": 1050,
+        "w": 800,
+        "h": 1800
+      },
+      "grid": {
+        "rows": 20,
+        "cols": 1,
+        "questions_per_col": [20],
+        "options": ["A", "B", "C", "D", "E"],
+        "row_positions": [],
+        "col_positions": [
+          [276, 391, 507, 618, 731]
+        ],
+        "cell_width": 27,
+        "cell_height": 36,
+        "bubble_height": 25,
+        "row_pitch": 84.578947,
+        "first_row_offset": 79
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 10,
+        "min_ratio": 1.05,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.1
+      }
+    },
+    {
+      "type": "numeric_grid",
+      "questions": {
+        "start": 21,
+        "end": 25
+      },
+      "region": {
+        "x": 791,
+        "y": 975,
+        "w": 900,
+        "h": 1200
+      },
+      "grid": {
+        "rows": 5,
+        "cols": 1,
+        "questions_per_col": [5],
+        "cells_per_question": 8,
+        "row_positions": [1200, 1417, 1634, 1851, 2068],
+        "col_positions": [867, 964, 1061, 1158, 1255, 1352, 1449, 1546],
+        "cell_width": 96,
+        "cell_height": 97,
+        "row_pitch": 217.0
+      },
+      "extraction_strategy": "ocr"
+    }
+  ]
 }

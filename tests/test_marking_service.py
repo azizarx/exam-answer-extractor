@@ -106,10 +106,11 @@ def test_marking_classifies_wrong_blank_invalid_and_does_not_mutate_answers():
     assert outcomes[1].response == " d "
     assert outcomes[2].status == "blank"
     assert outcomes[3].status == "blank"
-    assert outcomes[21].status == "invalid"
+    # Soft FR normalize accepts "5.0" as integer 5 when that is the key.
+    assert outcomes[21].status == "correct"
     assert outcomes[22].status == "correct"
     assert outcomes[23].status == "invalid"
-    assert (result.awarded_marks, result.percentage) == (6, 6.0)
+    assert (result.awarded_marks, result.percentage) == (12, 12.0)
 
 
 @pytest.mark.parametrize(
@@ -118,7 +119,8 @@ def test_marking_classifies_wrong_blank_invalid_and_does_not_mutate_answers():
         ("005", "valid", "5"),
         ("+005", "valid", "5"),
         ("-0", "valid", "0"),
-        ("5.0", "invalid", None),
+        ("5.0", "valid", "5"),
+        ("12 cm", "valid", "12"),
         ("1e2", "invalid", None),
         ("  ", "blank", None),
         ("9" * 5000, "invalid", None),

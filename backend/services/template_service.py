@@ -174,6 +174,13 @@ class ExamTemplate:
     header_fields: List[HeaderField]
     sections: List[AnswerSection]
     variant_of: Optional[str] = None
+    # Canonical template id used for answer-key lookup. Format-B layouts point
+    # at the classic id (e.g. seamo_2025_a_fb → seamo_2025_a). Defaults to id.
+    answer_key_template_id: Optional[str] = None
+
+    @property
+    def key_template_id(self) -> str:
+        return self.answer_key_template_id or self.id
 
     def scale_factor(self, actual_dpi: int) -> float:
         """Compute scale factor from reference DPI to actual DPI."""
@@ -203,6 +210,7 @@ class ExamTemplate:
             header_fields=self.header_fields,
             sections=[s.scaled(f) for s in self.sections],
             variant_of=self.variant_of,
+            answer_key_template_id=self.answer_key_template_id,
         )
 
     @property
@@ -336,6 +344,7 @@ def _parse_template(data: dict) -> ExamTemplate:
         header_fields=[_parse_header_field(f) for f in header.get("fields", [])],
         sections=[_parse_section(s) for s in data.get("sections", [])],
         variant_of=data.get("variant_of"),
+        answer_key_template_id=data.get("answer_key_template_id"),
     )
 
 

@@ -1,0 +1,87 @@
+{
+  "document_information": {
+    "filename": "UZ1_Paper_E.pdf",
+    "extraction_timestamp": "2026-07-18T18:24:05.796641",
+    "total_candidates": 2,
+    "pages_processed": 2,
+    "pages_with_data": 2,
+    "processing_time": 12.97
+  },
+  "candidates": [
+    {
+      "answers": {
+        "1": "C",
+        "2": "BL",
+        "3": "BL",
+        "4": "B",
+        "5": "C",
+        "6": "B",
+        "7": "C",
+        "8": "C",
+        "9": "BL",
+        "10": "C",
+        "11": "B",
+        "12": "D",
+        "13": "C",
+        "14": "E",
+        "15": "C",
+        "16": "D",
+        "17": "B",
+        "18": "B",
+        "19": "D",
+        "20": "BL",
+        "21": "17",
+        "22": "1",
+        "23": "2025",
+        "24": "24",
+        "25": "1"
+      },
+      "drawing_questions": null,
+      "candidate_name": "Shoxrux Umirzoqov",
+      "candidate_number": "CAN8682124550",
+      "country": "Uzbekistan",
+      "paper_type": null,
+      "extra_fields": {
+        "level": "E"
+      }
+    },
+    {
+      "answers": {
+        "1": "B",
+        "2": "BL",
+        "3": "C",
+        "4": "BL",
+        "5": "B",
+        "6": "BL",
+        "7": "BL",
+        "8": "E",
+        "9": "B",
+        "10": "BL",
+        "11": "BL",
+        "12": "B",
+        "13": "B",
+        "14": "BL",
+        "15": "BL",
+        "16": "BL",
+        "17": "BL",
+        "18": "BL",
+        "19": "BL",
+        "20": "BL",
+        "21": "15",
+        "22": "2025",
+        "23": "2025",
+        "24": "360",
+        "25": "21"
+      },
+      "drawing_questions": null,
+      "candidate_name": "Zarnigor Hamraqulova",
+      "candidate_number": "CAN5468124583",
+      "country": "Uzbekistan",
+      "paper_type": null,
+      "extra_fields": {
+        "level": "E",
+        "mcq_warning": "low_coverage"
+      }
+    }
+  ]
+}

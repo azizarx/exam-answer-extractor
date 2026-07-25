@@ -39,11 +39,16 @@ logger = logging.getLogger(__name__)
 # Result types
 # ---------------------------------------------------------------------------
 
+# Absolute vertical offset beyond which the anchor lock is treated as a false
+# match even if the correlation score looks acceptable (Paper E failure mode).
+HUGE_DY_THRESHOLD = 80
+
+
 @dataclass
 class RowResult:
     """Extraction result for a single question row."""
     question: int
-    answer: str  # option label or "BL" for blank/unresolved
+    answer: str  # option label, "BL", or "IN"
     best_score: int = 0
     second_score: int = 0
     ratio: float = 0.0
@@ -185,7 +190,7 @@ def _classify_row(
     scoring: ScoringParams,
 ) -> Tuple[str, int, int, float]:
     """
-    Classify a row's scores into an answer or "BL".
+    Classify a row's scores into an answer, "BL", or "IN" (multi-fill).
 
     Returns:
         (answer, best_score, second_score, ratio)
@@ -194,6 +199,14 @@ def _classify_row(
     best_label, best_score = ranked[0]
     second_score = ranked[1][1] if len(ranked) > 1 else 0
     ratio = float(best_score) / float(max(1, second_score))
+
+    # Two clear fills with no dominant winner → invalid multi-mark.
+    if (
+        best_score >= scoring.min_ink_pixels
+        and second_score >= scoring.min_ink_pixels
+        and ratio < scoring.min_ratio
+    ):
+        return ("IN", best_score, second_score, ratio)
 
     if best_score < scoring.min_ink_pixels or ratio < scoring.min_ratio:
         return ("BL", best_score, second_score, ratio)
@@ -385,7 +398,12 @@ def _match_anchor(
         gray_anchor = cv2.cvtColor(anchor_img, cv2.COLOR_BGR2GRAY)
 
     try:
-        res = cv2.matchTemplate(gray_page, gray_anchor, cv2.TM_CCOEFF_NORMED)
+        # Search only the upper portion of the page so a thin rule cannot
+        # false-lock onto the examiner box at the bottom.
+        search_h = max(gray_anchor.shape[0] + 8, int(gray_page.shape[0] * 0.55))
+        search_h = min(search_h, gray_page.shape[0])
+        search_region = gray_page[0:search_h, :]
+        res = cv2.matchTemplate(search_region, gray_anchor, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, max_loc = cv2.minMaxLoc(res)
     except cv2.error as exc:
         logger.warning("Anchor match failed: %s", exc)
@@ -402,6 +420,8 @@ def extract_page(
     template: ExamTemplate,
     page_number: int = 1,
     registry: Optional[TemplateRegistry] = None,
+    *,
+    deskew: bool = True,
 ) -> PageResult:
     """
     Extract MCQ answers from a single page image using the given template.
@@ -411,10 +431,17 @@ def extract_page(
         template: The ExamTemplate to use.
         page_number: 1-based page number for reporting.
         registry: Optional registry for anchor image lookup.
+        deskew: When True, lightly deskew before anchor matching.
 
     Returns:
         PageResult with answers and diagnostics.
     """
+    from backend.services.page_deskew import deskew_if_enabled
+
+    image, applied = deskew_if_enabled(image, enabled=deskew)
+    if applied:
+        logger.info("MCQ[%d/%s] deskew_applied=%.2fdeg", page_number, template.id, applied)
+
     # Step 1: Anchor matching
     anchor_score, dx, dy, _ = _match_anchor(image, template, registry)
     logger.info(
@@ -424,18 +451,27 @@ def extract_page(
 
     low_anchor_warning: Optional[str] = None
     if anchor_score < template.anchor.min_match_score:
-        # Advisory only — the user picked this template; we still attempt
-        # extraction with whatever offset matchTemplate produced. Bad anchor
-        # likely means a wrong template choice (user error per policy).
-        logger.info("MCQ[%d/%s] ADVISORY anchor_match_low score=%.3f",
-                    page_number, template.id, anchor_score)
+        # Low-confidence match is usually a false lock (e.g. examiner bar).
+        # Prefer unshifted template coords over a large wrong (dx, dy).
+        logger.info(
+            "MCQ[%d/%s] ADVISORY anchor_match_low score=%.3f; using dx=0,dy=0 "
+            "(ignored offset=(%d,%d))",
+            page_number, template.id, anchor_score, dx, dy,
+        )
         low_anchor_warning = "anchor_match_low"
+        dx, dy = 0, 0
+    elif abs(dy) > HUGE_DY_THRESHOLD:
+        logger.info(
+            "MCQ[%d/%s] ADVISORY huge_dy |dy|=%d>%d score=%.3f; using dx=0,dy=0 "
+            "(ignored offset=(%d,%d))",
+            page_number, template.id, abs(dy), HUGE_DY_THRESHOLD, anchor_score, dx, dy,
+        )
+        low_anchor_warning = "huge_dy"
+        dx, dy = 0, 0
 
     # Step 2: Binarize
     mcq_sections = [s for s in template.sections if s.type == "mcq_grid"]
     if not mcq_sections:
-        # No MCQ on this template — return ok with empty sections. The caller
-        # will simply have nothing to overlay on the LLM result.
         logger.info("MCQ[%d/%s] no mcq sections; nothing to do", page_number, template.id)
         return PageResult(
             page_number=page_number,

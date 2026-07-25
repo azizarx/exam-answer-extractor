@@ -7,8 +7,10 @@ End-to-end test for the template-driven MCQ extraction pipeline.
 """
 
 import json
+import os
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -79,12 +81,20 @@ def fill_bubbles(
         labels = grid.options
         questions_per_col = grid.questions_per_col or [grid.rows]
         question_number = section.question_start
+        if grid.row_positions:
+            all_row_ys = list(grid.row_positions)
+        else:
+            base_y = section.region.y + grid.first_row_offset
+            all_row_ys = [
+                int(base_y + row_index * grid.row_pitch)
+                for row_index in range(grid.rows)
+            ]
 
         for vc in range(grid.cols or 1):
             # Row y-positions for this visual column
             start_row = sum(questions_per_col[:vc])
             count = questions_per_col[vc] if vc < len(questions_per_col) else 0
-            row_ys = grid.row_positions[start_row : start_row + count]
+            row_ys = all_row_ys[start_row : start_row + count]
 
             # Option x-positions for this visual column
             col_xs = grid.col_positions[vc] if vc < len(grid.col_positions) else grid.col_positions[0]
@@ -111,13 +121,72 @@ def fill_bubbles(
     return img
 
 
+def test_fill_bubbles_uses_pitch_derived_rows_when_positions_are_empty():
+    template = TemplateRegistry().get_or_raise("seamo_2025_a")
+    section = next(section for section in template.sections if section.type == "mcq_grid")
+    grid = section.grid
+    image = np.full(
+        (template.page_size[1], template.page_size[0], 3),
+        255,
+        dtype=np.uint8,
+    )
+
+    filled = fill_bubbles(image, template, {question: "A" for question in range(1, 21)})
+
+    x_center = grid.col_positions[0][0]
+    expected_row_ys = [
+        int(section.region.y + grid.first_row_offset + index * grid.row_pitch)
+        for index in range(20)
+    ]
+    assert all(
+        np.array_equal(
+            filled[row_y + grid.cell_height + grid.bubble_height // 2, x_center],
+            np.array([60, 60, 60], dtype=np.uint8),
+        )
+        for row_y in expected_row_ys
+    )
+
+
+def test_main_leaves_tracked_artifacts_unchanged():
+    artifact_paths = [
+        TEST_DATA_DIR / "results.json",
+        *(TEST_DATA_DIR / f"{tc['template_id']}_filled.png" for tc in TEST_CASES),
+        *(TEMPLATES_DIR / f"{tc['template_id']}_anchor.png" for tc in TEST_CASES),
+    ]
+    snapshots = {
+        path: (path.read_bytes(), path.stat())
+        for path in artifact_paths
+    }
+
+    try:
+        assert main() == 0
+        assert all(
+            path.read_bytes() == content
+            and path.stat().st_mtime_ns == stat.st_mtime_ns
+            for path, (content, stat) in snapshots.items()
+        )
+    finally:
+        for path, (content, stat) in snapshots.items():
+            if path.read_bytes() != content:
+                path.write_bytes(content)
+            os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+
+
 # -----------------------------------------------------------------------
 # Main test runner
 # -----------------------------------------------------------------------
 
-def main():
+def main(output_dir=None):
+    if output_dir is not None:
+        return _run(Path(output_dir))
+
+    with TemporaryDirectory(prefix="mcq_pipeline_") as temporary_dir:
+        return _run(Path(temporary_dir))
+
+
+def _run(output_dir: Path):
     registry = TemplateRegistry()
-    TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     total_pass = 0
     total_fail = 0
@@ -129,12 +198,9 @@ def main():
         ref_img = cv2.imread(str(tc["ref_image"]))
         assert ref_img is not None, f"Cannot read {tc['ref_image']}"
 
-        # Save anchor from reference image
-        registry.save_anchor_image(tid, ref_img)
-
         # Generate filled image
         filled = fill_bubbles(ref_img, template, tc["answers"])
-        filled_path = TEST_DATA_DIR / f"{tid}_filled.png"
+        filled_path = output_dir / f"{tid}_filled.png"
         cv2.imwrite(str(filled_path), filled)
 
         # Run extraction
@@ -179,7 +245,7 @@ def main():
             total_pass += 1
 
     # Save results JSON
-    results_path = TEST_DATA_DIR / "results.json"
+    results_path = output_dir / "results.json"
     results_json = {
         "summary": {
             "passed": total_pass,

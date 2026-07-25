@@ -1,8 +1,9 @@
 """
 FastAPI routes for exam answer sheet processing
 """
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.responses import JSONResponse, FileResponse
+from dataclasses import asdict
 import json as _json
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -14,7 +15,7 @@ import time
 from backend.db.database import get_db, SessionLocal
 from backend.db.models import (
     ExamSubmission,
-    ProcessingLog, CandidateResult, AnswerKey,
+    ProcessingLog, CandidateResult, AnswerKey, MarkingRun,
     Exam, ExamDocument, GeneratedJSON,
 )
 from backend.api.schemas import (
@@ -22,10 +23,6 @@ from backend.api.schemas import (
     ProcessingStatusResponse,
     SubmissionDetailResponse,
     CandidateResultSchema,
-    MarkedCandidateResultSchema,
-    AnswerKeySchema,
-    AnswerKeyResponse,
-    MarkRequest,
     ErrorResponse,
     ExamCreateSchema,
     ExamResponse,
@@ -35,11 +32,18 @@ from backend.api.schemas import (
 )
 from backend.services.local_storage import get_local_storage
 from backend.services.pdf_to_images import get_pdf_converter
-from backend.services.template_extractor import TemplateExtractor
+from backend.services.template_extractor import TemplateExtractor, extract_pdf_auto
 from backend.services.json_generator import get_json_generator
 from backend.services.space_client import get_spaces_client
 from backend.services.image_preprocessor import ImagePreprocessor
 from backend.services.run_logger import attach_run_log, detach_run_log, step_timer
+from backend.services.marking_workflow import (
+    MarkingInProgressError,
+    manifest_from_key,
+    mark_submission_answers,
+    record_failed_marking_attempt,
+)
+from backend.services.marking_service import MarkingService
 from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -398,11 +402,16 @@ def _write_processing_log(
         logger.warning("Failed to write log action=%s for submission=%s: %s", action, submission_id, log_error)
 
 
-def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
+def process_pdf_extraction(
+    submission_id: int,
+    pdf_path: str,
+    template_id: Optional[str] = None,
+):
     """Background task to convert pages, extract answers, and persist JSON locally.
 
-    template_id is REQUIRED. The trust-the-template policy: every page in the
-    PDF uses this layout; we don't auto-detect or clusterize anything.
+    When ``template_id`` is omitted, each page is classified from the footer
+    (OCR) and extracted with that layout. When provided, every page uses the
+    forced template (debug / override).
     """
     db = SessionLocal()
     image_paths: List[str] = []
@@ -419,17 +428,18 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
         sub = _sub_pre
         settings = get_settings()
         logger.info(
-            "CONFIG model=%s fallback=%s preproc=%s(%s) workers=%s template=%s",
+            "CONFIG model=%s fallback=%s preproc=%s(%s) workers=%s template=%s mode=%s",
             settings.gemini_model,
             settings.gemini_fallback_models,
             settings.enable_image_preprocessing,
             settings.preprocessing_mode,
             settings.max_extraction_workers,
             template_id,
+            "forced" if template_id else "auto",
         )
 
         setattr(sub, 'status', 'processing')
-        setattr(sub, 'template_id', template_id)
+        setattr(sub, 'template_id', template_id)  # None in auto mode
         db.commit()
 
         _write_processing_log(
@@ -438,7 +448,12 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
             action="extract_start",
             status="success",
             message="Starting PDF extraction",
-            extra_data={"pdf_path": pdf_path, "run_log": str(run_log_path), "template_id": template_id},
+            extra_data={
+                "pdf_path": pdf_path,
+                "run_log": str(run_log_path),
+                "template_id": template_id,
+                "mode": "forced" if template_id else "auto",
+            },
         )
 
         logger.info(f"Converting PDF to images: {pdf_path}")
@@ -470,25 +485,37 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
             submission_id,
             action="extract_stage",
             status="info",
-            message="Template extraction started",
+            message=(
+                "Template extraction started (forced)"
+                if template_id
+                else "Template extraction started (auto footer OCR)"
+            ),
             extra_data={
                 "stage": "template_extraction",
                 "workers": int(settings.max_extraction_workers),
                 "pages": len(image_paths),
                 "template_id": template_id,
+                "mode": "forced" if template_id else "auto",
             },
         )
 
-        extractor = TemplateExtractor(template_id)
         extraction_started = time.perf_counter()
-        extraction_result = extractor.extract_pdf(
-            pdf_path,
-            image_paths,
-            submission_id=submission_id,
-            db=db,
-            max_workers=settings.max_extraction_workers,
-            filename=str(getattr(sub, "filename", "")),
-        )
+        if template_id:
+            extractor = TemplateExtractor(template_id)
+            extraction_result = extractor.extract_pdf(
+                pdf_path,
+                image_paths,
+                submission_id=submission_id,
+                db=db,
+                max_workers=settings.max_extraction_workers,
+                filename=str(getattr(sub, "filename", "")),
+            )
+        else:
+            extraction_result = extract_pdf_auto(
+                pdf_path,
+                image_paths,
+                max_workers=settings.max_extraction_workers,
+            )
         extraction_seconds = time.perf_counter() - extraction_started
 
         json_gen = get_json_generator()
@@ -514,7 +541,10 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
         # Save per-candidate results to DB (supports dynamic header fields)
         KNOWN_COLUMNS = {"candidate_name", "candidate_number", "country", "paper_type"}
         # Keys to exclude from extra_fields (internal/technical fields)
-        EXCLUDED_KEYS = {"page_number", "answers", "drawing_questions", "extra_fields", "confidence", "is_blank"}
+        EXCLUDED_KEYS = {
+            "page_number", "answers", "drawing_questions", "extra_fields",
+            "confidence", "is_blank", "template_id", "detection", "diagram_qs",
+        }
         # Common AI aliases that should map to known columns
         FIELD_ALIASES = {
             "candidate_no": "candidate_number",
@@ -541,6 +571,9 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
                 if k not in KNOWN_COLUMNS and k not in EXCLUDED_KEYS:
                     # Convert to string for schema compatibility
                     extra[k] = str(v) if v is not None else ''
+            detection = normalized.get("detection")
+            if detection is not None and not isinstance(detection, dict):
+                detection = None
             db.add(CandidateResult(
                 submission_id=submission_id,
                 page_number=normalized.get('page_number'),
@@ -548,6 +581,8 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
                 candidate_number=normalized.get('candidate_number', ''),
                 country=normalized.get('country', ''),
                 paper_type=normalized.get('paper_type', ''),
+                template_id=normalized.get('template_id'),
+                detection=detection,
                 extra_fields=extra if extra else None,
                 answers=normalized.get('answers', {}),
                 drawing_questions=normalized.get('drawing_questions', {}),
@@ -565,6 +600,67 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
         pages_with_data = _safe_int(extraction_result.get('pages_with_data'), 0)
         total_duration = time.perf_counter() - job_started
 
+        # Secure raw extraction in its own transaction before marking. The
+        # marking workflow owns separate transactions and cannot roll these
+        # candidate rows back.
+        db.commit()
+
+        prior_marking_run_id = None
+        marking_boundary_known = False
+        try:
+            prior_marking_run = (
+                db.query(MarkingRun)
+                .filter(MarkingRun.submission_id == submission_id)
+                .order_by(MarkingRun.id.desc())
+                .first()
+            )
+            prior_marking_run_id = (
+                prior_marking_run.id if prior_marking_run else None
+            )
+            marking_boundary_known = True
+            marking_run = mark_submission_answers(db, submission_id)
+        except MarkingInProgressError as marking_conflict:
+            db.rollback()
+            marking_run = (
+                db.get(MarkingRun, marking_conflict.run_id)
+                if marking_conflict.run_id is not None
+                else None
+            )
+            logger.info(
+                "Automatic marking already active run_id=%s submission=%s",
+                marking_conflict.run_id,
+                submission_id,
+            )
+        except Exception as marking_error:
+            db.rollback()
+            logger.exception(
+                "Automatic marking invocation failed for submission=%s",
+                submission_id,
+            )
+            try:
+                marking_run = record_failed_marking_attempt(
+                    db,
+                    submission_id,
+                    marking_error,
+                    after_run_id=prior_marking_run_id,
+                    force_new=not marking_boundary_known,
+                )
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "Could not persist failed marking run for submission=%s",
+                    submission_id,
+                )
+                marking_run = None
+        logger.info(
+            "Automatic marking terminal status=%s run_id=%s submission=%s",
+            marking_run.status if marking_run else "failed-unpersisted",
+            marking_run.id if marking_run else None,
+            submission_id,
+        )
+
+        # Unavailable and failed marking are terminal marking outcomes, not
+        # extraction failures.
         setattr(sub, 'status', 'completed')
         setattr(sub, 'processed_at', datetime.utcnow())
         db.commit()
@@ -622,30 +718,32 @@ def process_pdf_extraction(submission_id: int, pdf_path: str, template_id: str):
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    template_id: str = Query(
-        ...,
-        description="Required: exam layout template id (from GET /templates). "
-                    "All pages in the PDF must use this layout.",
+    template_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional forced layout id. When omitted, each page is classified "
+            "from the footer (OCR) across all templates."
+        ),
     ),
     db: Session = Depends(get_db)
 ):
     """Upload a PDF exam answer sheet for processing.
 
-    template_id is REQUIRED. The user picks the layout at upload time; every
-    page is extracted with that template.
+    Default is auto layout detection per page. Pass ``template_id`` to force
+    a single layout for every page.
     """
     if not file or not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
-    # Validate template_id against the registry
-    from backend.services.template_service import get_template_registry
-    registry = get_template_registry()
-    if registry.get(template_id) is None:
-        available = registry.list_ids()
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown template_id '{template_id}'. Available: {available}"
-        )
+    if template_id:
+        from backend.services.template_service import get_template_registry
+        registry = get_template_registry()
+        if registry.get(template_id) is None:
+            available = registry.list_ids()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown template_id '{template_id}'. Available: {available}"
+            )
 
     try:
         storage = get_local_storage()
@@ -669,7 +767,10 @@ async def upload_pdf(
             action="upload",
             status="success",
             message=f"Stored {file.filename} at {upload_result['relative_path']}",
-            extra_data={"template_id": template_id},
+            extra_data={
+                "template_id": template_id,
+                "mode": "forced" if template_id else "auto",
+            },
         )
         db.add(log_entry)
         db.commit()
@@ -801,6 +902,12 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
     candidate_rows = db.query(CandidateResult).filter(
         CandidateResult.submission_id == submission_id
     ).order_by(CandidateResult.page_number).all()
+    from backend.api.marking_routes import (
+        candidate_marking_schema,
+        load_latest_marking,
+        marking_metadata,
+    )
+    latest_run, marking_by_candidate = load_latest_marking(db, submission_id)
     
     candidates = []
     for cr in candidate_rows:
@@ -824,13 +931,20 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
         cand_number = str(getattr(cr, 'candidate_number') or '') or raw_extra.get('candidate_no', '') or raw_extra.get('candidate_id', '') or raw_extra.get('student_number', '')
 
         candidates.append(CandidateResultSchema(
+            id=int(getattr(cr, 'id')),
             candidate_name=cand_name,
             candidate_number=cand_number,
             country=str(getattr(cr, 'country') or ''),
             paper_type=str(getattr(cr, 'paper_type') or ''),
+            template_id=getattr(cr, 'template_id', None),
+            detection=getattr(cr, 'detection', None) if isinstance(getattr(cr, 'detection', None), dict) else None,
             extra_fields=clean_extra if clean_extra else None,
             answers=clean_answers,
             drawing_questions=drawing_payload,
+            marking=candidate_marking_schema(
+                marking_by_candidate.get(int(getattr(cr, 'id'))),
+                cand_number,
+            ),
         ))
     
     return SubmissionDetailResponse(
@@ -840,6 +954,7 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
         created_at=getattr(submission, 'created_at'),
         processed_at=getattr(submission, 'processed_at'),
         candidates=candidates,
+        latest_marking=marking_metadata(latest_run),
     )
 
 
@@ -1042,189 +1157,22 @@ async def extract_json(
         raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")
 
 
-# ── Answer Key CRUD ──────────────────────────────────────────────────
-
-@router.post("/answer-keys", response_model=AnswerKeyResponse)
-async def create_answer_key(body: AnswerKeySchema, db: Session = Depends(get_db)):
-    """Create a new answer key for auto-marking."""
-    ak = AnswerKey(
-        name=body.name,
-        paper_type=body.paper_type,
-        answers=body.answers,
-        drawing_key=body.drawing_key,
-        total_questions=len(body.answers) + (len(body.drawing_key) if body.drawing_key else 0),
-    )
-    db.add(ak)
-    db.commit()
-    db.refresh(ak)
-    return AnswerKeyResponse(
-        id=int(getattr(ak, 'id')),
-        name=str(getattr(ak, 'name')),
-        paper_type=getattr(ak, 'paper_type'),
-        answers=getattr(ak, 'answers'),
-        drawing_key=getattr(ak, 'drawing_key'),
-        total_questions=getattr(ak, 'total_questions'),
-        created_at=getattr(ak, 'created_at'),
-        updated_at=getattr(ak, 'updated_at'),
-    )
-
-
-@router.get("/answer-keys", response_model=List[AnswerKeyResponse])
-async def list_answer_keys(db: Session = Depends(get_db)):
-    """List all answer keys."""
-    keys = db.query(AnswerKey).order_by(AnswerKey.created_at.desc()).all()
-    return [
-        AnswerKeyResponse(
-            id=int(getattr(ak, 'id')),
-            name=str(getattr(ak, 'name')),
-            paper_type=getattr(ak, 'paper_type'),
-            answers=getattr(ak, 'answers'),
-            drawing_key=getattr(ak, 'drawing_key'),
-            total_questions=getattr(ak, 'total_questions'),
-            created_at=getattr(ak, 'created_at'),
-            updated_at=getattr(ak, 'updated_at'),
-        )
-        for ak in keys
-    ]
-
-
-@router.get("/answer-keys/{key_id}", response_model=AnswerKeyResponse)
-async def get_answer_key(key_id: int, db: Session = Depends(get_db)):
-    """Get a single answer key."""
-    ak = db.query(AnswerKey).filter(AnswerKey.id == key_id).first()
-    if not ak:
-        raise HTTPException(status_code=404, detail="Answer key not found")
-    return AnswerKeyResponse(
-        id=int(getattr(ak, 'id')),
-        name=str(getattr(ak, 'name')),
-        paper_type=getattr(ak, 'paper_type'),
-        answers=getattr(ak, 'answers'),
-        drawing_key=getattr(ak, 'drawing_key'),
-        total_questions=getattr(ak, 'total_questions'),
-        created_at=getattr(ak, 'created_at'),
-        updated_at=getattr(ak, 'updated_at'),
-    )
-
-
-@router.delete("/answer-keys/{key_id}")
-async def delete_answer_key(key_id: int, db: Session = Depends(get_db)):
-    """Delete an answer key."""
-    ak = db.query(AnswerKey).filter(AnswerKey.id == key_id).first()
-    if not ak:
-        raise HTTPException(status_code=404, detail="Answer key not found")
-    db.delete(ak)
-    db.commit()
-    return {"status": "success", "message": f"Answer key {key_id} deleted"}
-
-
-# ── Auto-marking endpoints ───────────────────────────────────────────
-
-@router.post("/submission/{submission_id}/mark")
-async def mark_submission(
-    submission_id: int,
-    body: MarkRequest,
-    db: Session = Depends(get_db)
-):
-    """
-    Auto-mark all candidates in a submission against an answer key.
-    
-    Provide EITHER answer_key_id (to use a stored key) OR inline answer_key dict.
-    """
-    submission = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
-    if str(getattr(submission, 'status')) != "completed":
-        raise HTTPException(status_code=400, detail="Submission not yet completed")
-
-    # Resolve answer key
-    if body.answer_key_id:
-        ak = db.query(AnswerKey).filter(AnswerKey.id == body.answer_key_id).first()
-        if not ak:
-            raise HTTPException(status_code=404, detail="Answer key not found")
-        mcq_key = getattr(ak, 'answers') or {}
-        draw_key = getattr(ak, 'drawing_key')
-    elif body.answer_key:
-        mcq_key = body.answer_key
-        draw_key = body.drawing_key
-    else:
-        raise HTTPException(status_code=400, detail="Provide answer_key_id or answer_key")
-
-    # Load candidate results
-    candidate_rows = db.query(CandidateResult).filter(
-        CandidateResult.submission_id == submission_id
-    ).all()
-    
-    if not candidate_rows:
-        raise HTTPException(status_code=404, detail="No candidate results found for this submission")
-
-    # Build dicts for marking
-    candidates_data = []
-    for cr in candidate_rows:
-        candidates_data.append({
-            "db_id": getattr(cr, 'id'),
-            "candidate_name": getattr(cr, 'candidate_name') or '',
-            "candidate_number": getattr(cr, 'candidate_number') or '',
-            "country": getattr(cr, 'country') or '',
-            "paper_type": getattr(cr, 'paper_type') or '',
-            "extra_fields": getattr(cr, 'extra_fields') or {},
-            "answers": getattr(cr, 'answers') or {},
-            "drawing_questions": getattr(cr, 'drawing_questions') or {},
-        })
-
-    # Run marking
-    json_gen = get_json_generator()
-    marked = json_gen.mark_answers(
-        [c for c in candidates_data],
-        mcq_key,
-        draw_key,
-    )
-
-    # Persist marking results back to DB
-    results = []
-    for i, m in enumerate(marked):
-        cr = candidate_rows[i]
-        setattr(cr, 'marked_answers', m.get('marked_answers'))
-        setattr(cr, 'marked_drawing', m.get('marked_drawing'))
-        score = m.get('score', {})
-        setattr(cr, 'score_correct', score.get('correct'))
-        setattr(cr, 'score_total', score.get('total'))
-        setattr(cr, 'score_percentage', score.get('percentage'))
-
-        results.append({
-            "candidate_name": m.get('candidate_name', ''),
-            "candidate_number": m.get('candidate_number', ''),
-            "marked_answers": m.get('marked_answers', {}),
-            "marked_drawing": m.get('marked_drawing', {}),
-            "score": score,
-        })
-
-    db.commit()
-    
-    return {
-        "status": "success",
-        "submission_id": submission_id,
-        "total_candidates_marked": len(results),
-        "results": results,
-    }
-
-
 @router.post("/extract/json/mark")
 async def extract_and_mark(
     file: UploadFile = File(...),
     template_id: str = Query(..., description="Required: exam layout template id."),
-    mark_request: Optional[str] = None,
+    mark_request: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     """
     Synchronous: extract PDF + auto-mark against an answer key.
 
-    template_id is REQUIRED. mark_request is an optional form field (JSON string) with:
-      - answer_key_id: int (use a stored answer key)
-      - answer_key: dict (inline MCQ answer key, e.g. {"1": "D", "2": "B"})
-      - drawing_key: dict (inline drawing key, e.g. {"31": "circle"})
+    template_id is REQUIRED. mark_request may select a stored immutable
+    answer-key version by ID. Inline answer keys are intentionally rejected.
 
-    If no mark_request is provided, tries to auto-match stored answer keys
-    by paper_type. If no match found, returns unmarked results.
+    If no mark_request is provided, uses only the active answer key whose
+    template_id exactly matches template_id. If unavailable, returns unmarked
+    results.
     """
     if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
@@ -1248,66 +1196,60 @@ async def extract_and_mark(
         )
 
         candidates = extraction_result.get("candidates", [])
-        json_gen = get_json_generator()
-
-        # Parse inline mark request if provided
-        inline_answer_key = None
-        inline_drawing_key = None
+        selected_key_id = None
         if mark_request:
-            import json as _j
             try:
-                mr = _j.loads(mark_request)
-            except _j.JSONDecodeError:
+                parsed_request = _json.loads(mark_request)
+            except _json.JSONDecodeError:
                 raise HTTPException(status_code=400, detail="Invalid mark_request JSON")
-            
-            # If answer_key_id provided, load from DB
-            if mr.get("answer_key_id"):
-                ak = db.query(AnswerKey).filter(AnswerKey.id == mr["answer_key_id"]).first()
-                if not ak:
-                    raise HTTPException(status_code=404, detail=f"Answer key {mr['answer_key_id']} not found")
-                inline_answer_key = getattr(ak, 'answers') or {}
-                inline_drawing_key = getattr(ak, 'drawing_key')
-            else:
-                inline_answer_key = mr.get("answer_key")
-                inline_drawing_key = mr.get("drawing_key")
+            if (
+                not isinstance(parsed_request, dict)
+                or set(parsed_request) != {"answer_key_id"}
+                or not isinstance(parsed_request["answer_key_id"], int)
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="mark_request only accepts an integer answer_key_id",
+                )
+            selected_key_id = parsed_request["answer_key_id"]
 
-        marked_candidates = []
-
-        if inline_answer_key:
-            # Apply inline answer key to ALL candidates
-            marked_candidates = json_gen.mark_answers(
-                candidates, inline_answer_key, inline_drawing_key
-            )
+        key_query = db.query(AnswerKey).filter(
+            AnswerKey.template_id == template_id,
+        )
+        if selected_key_id is None:
+            key_query = key_query.filter(AnswerKey.is_active.is_(True))
         else:
-            # Auto-match by paper_type from stored answer keys
-            all_keys = db.query(AnswerKey).all()
-            keys_by_type = {}
-            for ak in all_keys:
-                pt = str(getattr(ak, 'paper_type') or '').strip().upper()
-                if pt:
-                    keys_by_type[pt] = ak
+            key_query = key_query.filter(AnswerKey.id == selected_key_id)
+        matched_ak = key_query.one_or_none()
+        if selected_key_id is not None and matched_ak is None:
+            existing_key = db.get(AnswerKey, selected_key_id)
+            if existing_key is None:
+                raise HTTPException(status_code=404, detail="Answer key not found")
+            raise HTTPException(
+                status_code=409,
+                detail="Answer key template does not match requested template",
+            )
 
+        if matched_ak is None:
+            marked_candidates = candidates
+        else:
+            marker = MarkingService(manifest_from_key(matched_ak))
+            marked_candidates = []
             for candidate in candidates:
-                pt_raw = str(candidate.get('paper_type', '')).strip().upper()
-                # Fuzzy match: check if any stored key's paper_type is contained in the candidate's paper_type
-                matched_ak = None
-                if pt_raw in keys_by_type:
-                    matched_ak = keys_by_type[pt_raw]
-                else:
-                    for stored_pt, ak in keys_by_type.items():
-                        if stored_pt in pt_raw or pt_raw in stored_pt:
-                            matched_ak = ak
-                            break
-
-                if matched_ak:
-                    marked_list = json_gen.mark_answers(
-                        [candidate],
-                        getattr(matched_ak, 'answers') or {},
-                        getattr(matched_ak, 'drawing_key'),
-                    )
-                    marked_candidates.append(marked_list[0])
-                else:
-                    marked_candidates.append(candidate)
+                result = marker.mark(candidate.get("answers") or {})
+                marked_candidates.append(
+                    {
+                        **candidate,
+                        "marking": {
+                            "awarded_marks": result.awarded_marks,
+                            "max_marks": result.max_marks,
+                            "percentage": result.percentage,
+                            "outcomes": [
+                                asdict(outcome) for outcome in result.outcomes
+                            ],
+                        },
+                    }
+                )
 
         # Cleanup images
         for img in image_paths:

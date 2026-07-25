@@ -47,8 +47,8 @@ process_pdf_extraction(submission_id, pdf_path, template_id):
   3. If run_mathpix: mathpix_client.submit_pdf(pdf_path) → pdf_id      [fire-and-forget]
   4. For each page (ThreadPoolExecutor, max_workers=3):
        Inside each page worker, ThreadPoolExecutor(max_workers=2) runs:
-         (a) LLM    : one Gemini call, gemini-2.5-pro, NO max_output_tokens
-                      → {"header":{...}, "answers":{q→value}}
+         (a) LLM    : one Gemini call (default gemini-2.5-flash), NO max_output_tokens
+                       → {"header":{...}, "answers":{q→value}}
          (b) CV MCQ : (only if run_cv_mcq) mcq_extractor.extract_page(image, template)
                       → {q→letter}
        Merge: LLM answers first; CV MCQ answers overwrite for any q it produced.
@@ -61,7 +61,7 @@ process_pdf_extraction(submission_id, pdf_path, template_id):
 
 Three things matter to remember:
 
-1. **No `max_output_tokens` on Gemini calls.** `gemini-2.5-pro` spends reasoning tokens from the same budget; the previous default cap of 1024 caused `finish_reason=MAX_TOKENS` on every call and starved the visible JSON. Letting the model use its default (~64k) is the deliberate fix. See `template_extractor.py::_llm_extract_full`.
+1. **No `max_output_tokens` on Gemini calls.** Gemini 2.5 models spend reasoning tokens from the same budget; the previous default cap of 1024 caused `finish_reason=MAX_TOKENS` on every call and starved the visible JSON. Letting the model use its default (~64k) is the deliberate fix. See `template_extractor.py::_llm_extract_full`.
 
 2. **Anchor priming.** Before per-page CV MCQ runs, `TemplateExtractor._prime_anchor_from_first_page()` crops the template's anchor region from page 1 of THIS upload and stashes it in `TemplateRegistry._anchor_images` (process-wide cache). Without this, the registry falls back to the on-disk `backend/templates/<id>_anchor.png` which is from a canonical reference scan, not the current scan — that mismatch drops MCQ coverage from ~99% to ~70%.
 
@@ -98,7 +98,7 @@ Three things matter to remember:
 All config via env vars (`.env`), managed by `backend/config.py`. Notable settings:
 
 - `GEMINI_API_KEY` — required
-- `GEMINI_MODEL` (default `gemini-2.5-pro`) / `GEMINI_FALLBACK_MODELS`
+- `GEMINI_MODEL` (default `gemini-2.5-flash`) / `GEMINI_FALLBACK_MODELS` (default `gemini-flash-latest`)
 - `DATABASE_URL` — empty → SQLite at `./exam_db.sqlite`
 - `ENABLE_IMAGE_PREPROCESSING` / `PREPROCESSING_MODE` (`balanced` | `aggressive`)
 - `MAX_EXTRACTION_WORKERS` (default 3; the OOM ceiling on a 40GB host with 5 backends in parallel was 10. Stay at 3.)
@@ -110,13 +110,18 @@ All config via env vars (`.env`), managed by `backend/config.py`. Notable settin
 
 ## Layout policy
 
-The user picks the template at upload time. **Every page in the PDF must use that layout** — there is no auto-detection, no clustering, no fallback to a "generic" extractor. If the user picks the wrong template:
-- The MCQ CV overlay will produce `coverage < threshold` and emit a `warning` on each candidate (but the answers are still returned).
-- The Gemini LLM will still extract whatever header + answers it can read.
-- The Mathpix overlay may assign URLs to wrong question numbers.
+Default upload mode **auto-detects layout per page** from the printed footer
+(e.g. `SEAMO X 2026 Paper B`) via Tesseract OCR on a bottom band, then extracts
+and marks each page with the matching template / answer key. Mixed PDFs are
+supported; output may contain multiple `template_id`s.
 
-That's an acceptable failure mode — the user can re-upload with the right template. The pipeline does not try to be clever about wrong-template detection.
+Optional `?template_id=` on upload still forces a single layout for every page
+(debug / override). If footer OCR fails for a page, that page is stored with
+empty answers and a detection warning rather than guessing the wrong key.
+
+Do not resurrect the deleted full-page OCR / clustering / auto-detect stack —
+footer-band OCR is intentionally narrow and only used for layout ID.
 
 ## Deleted in the May 2026 simplification (do not resurrect)
 
-`optimized_extractor.py`, `extraction_pipeline.py`, `ai_extractor.py`, `page_analyzer.py`, `ocr_engine.py`, `ocr_results_writer.py`, `section_extractor.py`, `worker.py`, `NewMcqSolution.py`, `page1_grid.json`, `train_from_examples.py`, `create_template.py`, `examples.py`, `tests/test_all_formats.py`, `tests/test_real_exams.py`. The clustering / format-detection / Tesseract-OCR / Celery / auto-detect paths are gone. Don't bring them back unless the user explicitly asks for it.
+`optimized_extractor.py`, `extraction_pipeline.py`, `ai_extractor.py`, `page_analyzer.py`, `ocr_engine.py`, `ocr_results_writer.py`, `section_extractor.py`, `worker.py`, `NewMcqSolution.py`, `page1_grid.json`, `train_from_examples.py`, `create_template.py`, `examples.py`, `tests/test_all_formats.py`, `tests/test_real_exams.py`. The clustering / format-detection / full-page Tesseract-OCR / Celery paths are gone. Footer-band OCR for per-page layout ID (`page_layout_classifier.py`) is the intentional, narrow replacement — do not revive the deleted full-page OCR stack.

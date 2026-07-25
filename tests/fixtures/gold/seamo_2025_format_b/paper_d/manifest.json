@@ -1,0 +1,48 @@
+{
+  "paper": "D",
+  "template_id": "seamo_2025_d_fb",
+  "source_pdf": "backend/examples/seamo-2025-format-b-split/seamo-2025-format-b-paper-d.pdf",
+  "dpi": 200,
+  "pages": [
+    {
+      "page_id": "paper_d/page_001",
+      "png": "page_001.png",
+      "json": "page_001.json",
+      "page_index": 13,
+      "source_page": 121,
+      "role": "clean"
+    },
+    {
+      "page_id": "paper_d/page_002",
+      "png": "page_002.png",
+      "json": "page_002.json",
+      "page_index": 14,
+      "source_page": 122,
+      "role": "bad_washed"
+    },
+    {
+      "page_id": "paper_d/page_003",
+      "png": "page_003.png",
+      "json": "page_003.json",
+      "page_index": 11,
+      "source_page": 119,
+      "role": "bad_skew_soft"
+    },
+    {
+      "page_id": "paper_d/page_004",
+      "png": "page_004.png",
+      "json": "page_004.json",
+      "page_index": 19,
+      "source_page": 127,
+      "role": "timeout_band_skew"
+    },
+    {
+      "page_id": "paper_d/page_005",
+      "png": "page_005.png",
+      "json": "page_005.json",
+      "page_index": 28,
+      "source_page": 136,
+      "role": "timeout_band_soft"
+    }
+  ]
+}

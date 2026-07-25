@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
 import { Card, Badge, LoadingSpinner } from '../common';
 import examAPI from '../../services/api';
@@ -184,6 +184,7 @@ const StatusTracker = ({ submissionId, onComplete }) => {
   const latestLog = orderedLogs.length ? orderedLogs[orderedLogs.length - 1] : null;
   const displayLogs = useMemo(() => [...orderedLogs].reverse(), [orderedLogs]);
   const progressInfo = useMemo(() => computeProgress(status, orderedLogs), [status, orderedLogs]);
+  const statusValue = status?.status;
 
   useEffect(() => {
     setProgressPercent(0);
@@ -195,20 +196,20 @@ const StatusTracker = ({ submissionId, onComplete }) => {
   }, [submissionId]);
 
   useEffect(() => {
-    if (!status) return;
+    if (!statusValue) return;
 
-    if (status.status === 'completed') {
+    if (statusValue === 'completed') {
       setProgressPercent(100);
       return;
     }
 
-    if (status.status === 'processing' || status.status === 'failed') {
+    if (statusValue === 'processing' || statusValue === 'failed') {
       setProgressPercent((previous) => Math.max(previous, progressInfo.percent));
       return;
     }
 
     setProgressPercent(progressInfo.percent);
-  }, [status?.status, progressInfo.percent]);
+  }, [statusValue, progressInfo.percent]);
 
   useEffect(() => {
     if (!submissionId) return;

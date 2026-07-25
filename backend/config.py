@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     # Google Gemini
     gemini_api_key: str = ""
     # Primary model to use for extraction.
-    gemini_model: str = "gemini-2.5-pro"
+    gemini_model: str = "gemini-2.5-flash"
     # Ordered fallback list used when the primary model is unavailable.
-    gemini_fallback_models: str = "gemini-2.0-flash,gemini-2.0-flash-lite"
+    gemini_fallback_models: str = "gemini-flash-latest"
     gemini_auto_fallback: bool = True
     
     # Database
@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     # peak working set ~150MB.
     max_extraction_workers: int = 6
 
+    # Parallel PDF page renders (each worker opens its own PyMuPDF handle).
+    max_pdf_render_workers: int = 4
+
+    # Parallel layout classification (footer OCR; Gemini fallback only on misses).
+    max_classify_workers: int = 8
+
+    # Parallel FR-equivalence Gemini judge calls during marking.
+    max_fr_judge_workers: int = 6
+
     # Output format
     minimal_output: bool = False  # Keep full candidate metadata in generated JSON by default
 
@@ -62,13 +71,18 @@ class Settings(BaseSettings):
     mathpix_max_wait_seconds: float = 600.0
 
     # Process-wide token bucket for Gemini calls (sliding 60s window). The
-    # default 4 is conservative — sized for the free-tier gemini-2.5-pro
-    # limit of 5 RPM. Paid Tier 1 handles 60+ comfortably; bump this in .env
-    # if you're on Tier 1 or higher.
+    # default 4 is conservative for free-tier Flash/Pro caps. Paid Tier 1
+    # handles 60+ comfortably; bump this in .env if you're on Tier 1+.
     gemini_max_rpm: float = 4.0
 
+    # CV-owns-MCQ pipeline: deskew before anchor match; LLM MCQ only as
+    # last resort when CV coverage/anchor quality is poor.
+    enable_page_deskew: bool = True
+    mcq_llm_last_resort: bool = False
+    llm_deadline_retries: int = 2
+
     # NOTE: Gemini calls intentionally do NOT pass max_output_tokens. With
-    # gemini-2.5-pro, reasoning tokens are billed from the same budget; a
+    # Gemini 2.5 models, reasoning tokens are billed from the same budget; a
     # 1024 cap (the old default) caused finish_reason=MAX_TOKENS on every
     # call and starved the visible JSON. The model's default cap (~64k) is
     # what we want.

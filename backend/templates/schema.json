@@ -31,6 +31,11 @@
       "type": "string",
       "description": "If this layout is identical to another except for header text (paper letter, level name), reference the base template ID here. Only 'name', 'paper', and 'header.static_text' differ; all coordinates are inherited. Avoids duplicating geometry for SEAMO X 2026 C/D/E/F which share the same grid."
     },
+    "answer_key_template_id": {
+      "type": "string",
+      "description": "Canonical template id used to look up the answer key. Format-B layouts (suffix _fb) point at the classic id so both sheet formats share one key. Defaults to this template's own id.",
+      "pattern": "^[a-z0-9_]+$"
+    },
     "reference_dpi": {
       "type": "integer",
       "description": "DPI at which all pixel coordinates were measured. Typically 300.",

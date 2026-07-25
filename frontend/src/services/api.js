@@ -13,6 +13,26 @@ const apiClient = axios.create({
   timeout: 60000, // 60 seconds default
 });
 
+const decodeFilename = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const filenameFromDisposition = (disposition, fallback) => {
+  if (!disposition) return fallback;
+
+  const encodedMatch = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (encodedMatch?.[1]) {
+    return decodeFilename(encodedMatch[1].trim().replace(/^["']|["']$/g, ''));
+  }
+
+  const plainMatch = disposition.match(/filename\s*=\s*"([^"]+)"|filename\s*=\s*([^;]+)/i);
+  return (plainMatch?.[1] || plainMatch?.[2] || fallback).trim();
+};
+
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => response,
@@ -39,11 +59,11 @@ export const examAPI = {
    * @returns {Promise} Upload response with submission_id
    */
   /**
-   * Get available exam layout templates
+   * Get all exam layout templates (including per-paper variants).
    * @returns {Promise} List of template objects
    */
   getTemplates: async () => {
-    const response = await apiClient.get('/templates');
+    const response = await apiClient.get('/templates/all');
     return response.data;
   },
 
@@ -103,6 +123,63 @@ export const examAPI = {
       timeout: 120000, // allow more time for large files
     });
     return response.data;
+  },
+
+  /**
+   * Get the latest marking run, candidate outcomes, and run history.
+   * @param {number} submissionId - ID of the submission
+   * @returns {Promise} Marking detail
+   */
+  getSubmissionMarking: async (submissionId) => {
+    const response = await apiClient.get(`/submission/${submissionId}/marking`);
+    return response.data;
+  },
+
+  /**
+   * Run marking again without rerunning extraction.
+   * @param {number} submissionId - ID of the submission
+   * @param {number|null} answerKeyId - Optional immutable answer-key version
+   * @returns {Promise} Completed or terminal marking run
+   */
+  markSubmission: async (submissionId, answerKeyId = null) => {
+    const body = answerKeyId == null ? {} : { answer_key_id: answerKeyId };
+    const response = await apiClient.post(`/submission/${submissionId}/mark`, body, {
+      timeout: 120000,
+    });
+    return response.data;
+  },
+
+  /**
+   * Confirm extraction answers that were flagged needs_review.
+   * Call markSubmission afterwards to refresh scores.
+   */
+  confirmCandidateReview: async (submissionId, candidateId, payload) => {
+    const response = await apiClient.post(
+      `/submission/${submissionId}/candidates/${candidateId}/confirm-review`,
+      payload,
+      { timeout: 60000 },
+    );
+    return response.data;
+  },
+
+  /**
+   * Download the current marked JSON payload.
+   * @param {number} submissionId - ID of the submission
+   * @param {string} fallbackName - Filename used if the server omits a name
+   * @returns {Promise<{blob: Blob, filename: string}>}
+   */
+  getMarkedJSONDownload: async (submissionId, fallbackName = 'results.marked.json') => {
+    const response = await apiClient.get(`/submission/${submissionId}/marked-json`, {
+      responseType: 'blob',
+      timeout: 120000,
+    });
+    return {
+      blob: response.data,
+      filename: filenameFromDisposition(
+        response.headers['content-disposition'],
+        fallbackName
+      ),
+    };
   },
 
   /**

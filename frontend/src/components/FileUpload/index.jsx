@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Upload, FileText, X, CheckCircle2 } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Upload, FileText, X } from 'lucide-react';
 import { Button, Alert, ProgressBar } from '../common';
 import clsx from 'clsx';
 

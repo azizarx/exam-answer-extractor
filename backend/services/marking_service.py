@@ -113,9 +113,17 @@ def normalize_integer(response: Any) -> NormalizedResponse:
     sentinel = _sentinel(response)
     if sentinel:
         return sentinel
-    value = response.strip()
+    value = response.strip().replace(",", "")
     if not INTEGER_RE.fullmatch(value):
-        return NormalizedResponse("invalid", None)
+        # Accept "12", "12.0", "12 cm", "12cm" — single integer + optional unit.
+        match = re.fullmatch(
+            r"([+-]?\d+)(?:\.0+)?(?:\s*(?:cm|mm|m|kg|g|%|marks?))?",
+            value,
+            re.IGNORECASE,
+        )
+        if match is None:
+            return NormalizedResponse("invalid", None)
+        value = match.group(1)
     unsigned = value.lstrip("+-")
     if len(unsigned) > MAX_INTEGER_DIGITS:
         return NormalizedResponse("invalid", None)
@@ -386,6 +394,46 @@ class MarkingService:
 
 FR_TYPES = frozenset({"numeric", "time"})
 FALLBACK_STATUSES = frozenset({"incorrect", "invalid"})
+
+
+def apply_extraction_trust(
+    result: CandidateMarkingResult,
+    needs_review_questions: Sequence[Any] | None,
+) -> CandidateMarkingResult:
+    """Force ``needs_review`` (0 marks) for questions flagged during extraction.
+
+    Auto-mark must not award or deny marks on untrusted extractions.
+    """
+    if not needs_review_questions:
+        return result
+    review = {int(q) for q in needs_review_questions}
+    new_outcomes = []
+    awarded = 0
+    for outcome in result.outcomes:
+        if outcome.question_number in review and outcome.status != "needs_review":
+            new_outcomes.append(
+                QuestionOutcome(
+                    question_number=outcome.question_number,
+                    status="needs_review",
+                    response=outcome.response,
+                    awarded_marks=0,
+                    max_marks=outcome.max_marks,
+                    normalizer=outcome.normalizer,
+                    judge_source="extraction_trust",
+                    judge_verdict="needs_review",
+                    judge_reason="flagged during extraction",
+                )
+            )
+        else:
+            new_outcomes.append(outcome)
+            awarded += outcome.awarded_marks
+    max_marks = result.max_marks
+    return CandidateMarkingResult(
+        outcomes=tuple(new_outcomes),
+        awarded_marks=awarded,
+        max_marks=max_marks,
+        percentage=awarded * 100.0 / max_marks if max_marks else 0.0,
+    )
 
 
 def apply_fr_equivalence_judge(
