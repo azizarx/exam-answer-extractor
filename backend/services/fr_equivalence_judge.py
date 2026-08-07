@@ -15,6 +15,9 @@ from backend.services.run_logger import llm_call
 logger = logging.getLogger(__name__)
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+_INVALID_JSON_ESCAPE_RE = re.compile(
+    r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})'
+)
 
 
 class FrEquivalenceJudge(Protocol):
@@ -36,10 +39,21 @@ def build_judge_prompt(items: list[dict[str, Any]]) -> str:
         "- Units must not conflict (5m is NOT equivalent to 5km).\n"
         "- If the key has no unit and the response adds a non-conflicting word/gloss "
         "that does not change the quantity, that may be equivalent.\n"
+        "- Mathematical expressions may use algebraically equivalent expanded, "
+        "factored, fractional, decimal, Unicode, or LaTeX forms.\n"
+        "- For type=diagram, compare only the candidate-variable content: labels, "
+        "drawn marks/hands, and shading. Geometry or connections described only by "
+        "the key may be a preprinted scaffold and need not be repeated by the response.\n"
+        "- A concise diagram description is sufficient when it fixes the same answer "
+        "(for example, 'Clock: 7:45' conveys the keyed hand positions). Do not demand "
+        "details already implied by that concise answer.\n"
+        "- In compact 2x2-grid descriptions, TL/TR/BL/BR before '=' mean positions; "
+        "O means a circle, X or 'crossed O' means a crossed circle, and BL after '=' "
+        "means that cell was blank.\n"
         "- Different values are not_equivalent. Do NOT give benefit of the doubt.\n"
         "- If unsure, verdict must be uncertain.\n"
         "- Verdict must be exactly one of: equivalent, not_equivalent, uncertain.\n"
-        "- Always include a short reason.\n"
+        "- Always include a short plain-text reason. Do not use LaTeX backslash commands.\n"
         "\n"
         "Return ONLY valid JSON (no markdown fences) with schema:\n"
         '{"items":[{"question_number":<int>,"verdict":"<str>","reason":"<str>"},...]}\n'
@@ -59,7 +73,17 @@ def parse_judge_response(text: str) -> list[dict[str, Any]]:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             raw = match.group(0)
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Gemini occasionally emits otherwise-valid JSON with unescaped
+        # LaTeX-like text such as ``\sqrt`` or ``\(`` inside a reason. Repair
+        # only backslashes that cannot begin a valid JSON escape; all other
+        # syntax errors remain failures and are conservatively reviewed.
+        repaired = _INVALID_JSON_ESCAPE_RE.sub(r"\\\\", raw)
+        if repaired == raw:
+            raise
+        data = json.loads(repaired)
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list):
         raise ValueError("judge response missing items list")
@@ -97,7 +121,10 @@ class GeminiFrEquivalenceJudge:
             "fr_equivalence_judge",
             self.model,
             [prompt],
-            genai.GenerationConfig(temperature=0.0),
+            genai.GenerationConfig(
+                temperature=0.0,
+                response_mime_type="application/json",
+            ),
             logger,
         )
         text = getattr(response, "text", None) or ""

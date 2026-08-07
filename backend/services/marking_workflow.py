@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timedelta
@@ -49,10 +50,13 @@ class _LazyGeminiJudge:
 
     def __init__(self) -> None:
         self._inner: GeminiFrEquivalenceJudge | None = None
+        self._lock = threading.Lock()
 
     def judge(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if self._inner is None:
-            self._inner = GeminiFrEquivalenceJudge()
+            with self._lock:
+                if self._inner is None:
+                    self._inner = GeminiFrEquivalenceJudge()
         return self._inner.judge(items)
 
 
@@ -217,22 +221,39 @@ def mark_submission_answers(
                 return tmpl.key_template_id
             return layout_tid
 
+        key_template_ids: dict[str, str] = {}
         for tid in groups:
             if tid is None:
                 missing_templates.append("(undetected)")
                 continue
-            key_tid = _key_tid_for_layout(tid)
+            key_template_ids[tid] = _key_tid_for_layout(tid)
+
+        active_key_tids = {
+            key_tid
+            for key_tid in key_template_ids.values()
+            if override_key is None or override_key.template_id != key_tid
+        }
+        active_keys: dict[str, AnswerKey] = {}
+        if active_key_tids:
+            for key in (
+                db.query(AnswerKey)
+                .filter(
+                    AnswerKey.template_id.in_(active_key_tids),
+                    AnswerKey.is_active.is_(True),
+                )
+                .all()
+            ):
+                if key.template_id in active_keys:
+                    raise ValueError(
+                        f"Multiple active answer keys for template {key.template_id}"
+                    )
+                active_keys[key.template_id] = key
+
+        for tid, key_tid in key_template_ids.items():
             if override_key is not None and override_key.template_id == key_tid:
                 keys_by_template[tid] = override_key
                 continue
-            key = (
-                db.query(AnswerKey)
-                .filter(
-                    AnswerKey.template_id == key_tid,
-                    AnswerKey.is_active.is_(True),
-                )
-                .one_or_none()
-            )
+            key = active_keys.get(key_tid)
             if key is None:
                 missing_templates.append(tid)
             else:
@@ -259,6 +280,31 @@ def mark_submission_answers(
             ],
             "missing_templates": missing_templates,
         }
+
+        # Snapshot all ORM-backed inputs before committing provenance. SQLAlchemy
+        # expires ORM rows on commit; accessing candidates or keys afterwards
+        # otherwise causes one refresh SELECT per candidate/key.
+        prepared_groups = []
+        for tid, group in groups.items():
+            key = keys_by_template.get(tid) if tid else None
+            if key is None:
+                continue
+            manifest = manifest_from_key(key)
+            marker = MarkingService(manifest)
+            jobs = []
+            for candidate in group:
+                extra = candidate.extra_fields or {}
+                review_qs = list(extra.get("needs_review_questions") or [])
+                jobs.append(
+                    (
+                        candidate.id,
+                        dict(candidate.answers or {}),
+                        key.id,
+                        review_qs,
+                    )
+                )
+            prepared_groups.append((tid, marker, manifest, jobs))
+
         db.commit()
 
         judge = fr_judge if fr_judge is not None else _LazyGeminiJudge()
@@ -275,46 +321,38 @@ def mark_submission_answers(
             # Pass plain dicts only — ORM CandidateResult is not thread-safe
             # and lazy-loading from worker threads raises ObjectDeletedError.
             result = marker.mark(answers or {})
-            result = apply_fr_equivalence_judge(result, manifest, judge)
             result = apply_extraction_trust(result, needs_review_questions)
+            result = apply_fr_equivalence_judge(result, manifest, judge)
             return candidate_id, answer_key_id, result
 
         with db.begin_nested():
-            for tid, group in groups.items():
-                key = keys_by_template.get(tid) if tid else None
-                if key is None:
-                    continue
-                manifest = manifest_from_key(key)
-                marker = MarkingService(manifest)
-                key_id = key.id
-                # Snapshot ORM fields on the main thread before any worker runs.
-                jobs = []
-                for c in group:
-                    extra = c.extra_fields or {}
-                    review_qs = list(extra.get("needs_review_questions") or [])
-                    jobs.append(
-                        (c.id, dict(c.answers or {}), marker, manifest, key_id, review_qs)
-                    )
+            for tid, marker, manifest, jobs in prepared_groups:
                 workers = min(fr_workers, max(1, len(jobs)))
                 if workers == 1 or len(jobs) <= 1:
                     marked = [
-                        _mark_one(cid, answers, marker, manifest, kid, review)
-                        for cid, answers, marker, manifest, kid, review in jobs
+                        _mark_one(cid, answers, marker, manifest, key_id, review)
+                        for cid, answers, key_id, review in jobs
                     ]
                 else:
                     marked = []
                     with ThreadPoolExecutor(max_workers=workers) as pool:
                         futs = [
                             pool.submit(
-                                _mark_one, cid, answers, marker, manifest, kid, review
+                                _mark_one,
+                                cid,
+                                answers,
+                                marker,
+                                manifest,
+                                key_id,
+                                review,
                             )
-                            for cid, answers, marker, manifest, kid, review in jobs
+                            for cid, answers, key_id, review in jobs
                         ]
                         for fut in as_completed(futs):
                             marked.append(fut.result())
                 logger.info(
                     "MARK template=%s candidates=%d fr_workers=%d",
-                    tid, len(group), workers,
+                    tid, len(jobs), workers,
                 )
                 for candidate_id, answer_key_id, result in marked:
                     db.add(

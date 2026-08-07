@@ -5,14 +5,18 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+import pymupdf
 import pytest
 
 from backend.services.page_layout_classifier import (
     PageLayoutDetection,
+    apply_embedded_family_hint,
     classify_page_image,
+    classify_embedded_page_family,
+    classify_pdf_text_page_families,
+    classify_pdf_text_pages,
     is_format_b,
     parse_footer_text,
-    promote_format_b_detections,
     resolve_layout_fields,
     _parse_and_resolve,
     _parse_gemini_layout_response,
@@ -25,6 +29,16 @@ class _FakeRegistry:
 
     def get(self, template_id):
         return SimpleNamespace(id=template_id) if template_id in self._ids else None
+
+
+def _pdf_with_positioned_text(path, pages):
+    document = pymupdf.open()
+    for entries in pages:
+        page = document.new_page(width=600, height=800)
+        for x, y, value in entries:
+            page.insert_text((x, y), value)
+    document.save(path)
+    document.close()
 
 
 @pytest.mark.parametrize(
@@ -65,6 +79,105 @@ def test_format_b_markers():
     assert not is_format_b("ANSWER SHEET\nSEAMO 2025 Paper B")
 
 
+def test_embedded_pdf_text_classifies_strong_footer_and_top_format_b(tmp_path):
+    pdf_path = tmp_path / "embedded-layouts.pdf"
+    _pdf_with_positioned_text(
+        pdf_path,
+        [
+            [
+                (30, 45, "PEN AND PAPER EXAM"),
+                (30, 760, "SEAMO 2025 Paper B"),
+            ],
+            [
+                # A body marker is outside both permitted format-B bands.
+                (30, 400, "PEN AND PAPER EXAM"),
+                (30, 500, "MARK ONLY ONE OPTION"),
+                (30, 760, "SEAMO X 2026 Paper K"),
+            ],
+            [
+                (30, 700, "BRING A PRINTED COPY FOR PEN AND PAPER EXAM"),
+                (30, 760, "SEAMO 2025 Paper C"),
+            ],
+        ],
+    )
+    registry = _FakeRegistry(
+        {"seamo_2025_b_fb", "seamo_x_2026_k", "seamo_2025_c_fb"}
+    )
+
+    detections = classify_pdf_text_pages(str(pdf_path), registry=registry)
+
+    assert [d.template_id for d in detections] == [
+        "seamo_2025_b_fb",
+        "seamo_x_2026_k",
+        "seamo_2025_c_fb",
+    ]
+    assert detections[0].format_b is True
+    assert detections[1].format_b is False
+    assert detections[2].format_b is True
+    assert all(d.method == "pdf_text" for d in detections)
+    assert detections[0].raw_text == "SEAMO 2025 Paper B"
+
+
+def test_embedded_pdf_text_leaves_weak_or_unknown_pages_for_fallback(tmp_path):
+    pdf_path = tmp_path / "embedded-unresolved.pdf"
+    _pdf_with_positioned_text(
+        pdf_path,
+        [
+            # A complete signature in the page body is not footer evidence.
+            [(30, 400, "SEAMO 2025 Paper B")],
+            # Candidate-like weak text must not be combined into a layout.
+            [(30, 400, "Candidate CAN202512345"), (30, 760, "Paper B")],
+            # Strong footer, but no known template in the registry.
+            [(30, 760, "SEAMO 2042 Paper F")],
+        ],
+    )
+    registry = _FakeRegistry({"seamo_2025_b"})
+
+    detections = classify_pdf_text_pages(str(pdf_path), registry=registry)
+
+    assert detections == [None, None, None]
+
+
+def test_embedded_pdf_family_does_not_require_a_parseable_footer(tmp_path):
+    pdf_path = tmp_path / "embedded-families.pdf"
+    _pdf_with_positioned_text(
+        pdf_path,
+        [
+            [(30, 400, "MARK ONLY ONE OPTION")],
+            [(30, 400, "FILL IN THE BOXES WITH THE RIGHT ANSWER")],
+            [(30, 400, "unrelated candidate writing")],
+        ],
+    )
+
+    assert classify_pdf_text_page_families(str(pdf_path)) == [False, True, None]
+
+
+def test_embedded_family_hint_corrects_only_the_form_family():
+    registry = _FakeRegistry({"seamo_2025_b", "seamo_2025_b_fb"})
+    raster = PageLayoutDetection(
+        template_id="seamo_2025_b_fb",
+        method="footer_ocr",
+        raw_text="SEAMO 2025 Paper B",
+        brand="seamo",
+        year="2025",
+        paper="b",
+        format_b=True,
+    )
+
+    corrected = apply_embedded_family_hint(
+        raster,
+        False,
+        registry=registry,
+    )
+
+    assert corrected.template_id == "seamo_2025_b"
+    assert corrected.format_b is False
+    assert corrected.brand == "seamo"
+    assert corrected.year == "2025"
+    assert corrected.paper == "b"
+    assert corrected.method == "footer_ocr+pdf_text_family"
+
+
 def test_resolve_format_b_template():
     reg = _FakeRegistry({"seamo_2025_b", "seamo_2025_b_fb", "seamo_2026_a_fb"})
     det = _parse_and_resolve(
@@ -102,6 +215,21 @@ def test_resolve_known_template():
     assert det.method == "footer_ocr"
 
 
+def test_resolve_seamo_x_when_footer_logo_has_inserted_ocr_noise():
+    """An explicit X must survive a noisy OCR rendering of the SEAMO logo."""
+    reg = _FakeRegistry({"seamo_2026_b", "seamo_x_2026_b"})
+
+    det = _parse_and_resolve(
+        "ANSWER SHEET\nSEAMOQO X 2026 Paper B",
+        registry=reg,
+    )
+
+    assert det.template_id == "seamo_x_2026_b"
+    assert det.brand == "seamo_x"
+    assert det.year == "2026"
+    assert det.paper == "b"
+
+
 def test_resolve_unknown_template():
     reg = _FakeRegistry({"seamo_2025_a"})
     det = _parse_and_resolve("SEAMO X 2026 Paper B", registry=reg)
@@ -132,48 +260,28 @@ def test_detection_to_dict_drops_nulls():
     assert "format_b" not in data
 
 
-def test_promote_format_b_upgrades_classic_siblings():
-    reg = _FakeRegistry({"seamo_2025_b", "seamo_2025_b_fb", "seamo_2025_c", "seamo_2025_c_fb"})
-    detections = [
-        PageLayoutDetection(
-            template_id="seamo_2025_b_fb",
-            method="footer_ocr",
-            brand="seamo",
-            year="2025",
-            paper="b",
-            format_b=True,
+@pytest.mark.parametrize(
+    "text,band_text,expected",
+    [
+        ("FILL IN THE DIAGRAMS WITH THE RIGHT ANSWER", "", True),
+        ("EACH BOX MAY CONTAIN ONLY ONE CHARACTER", "", False),
+        ("unrelated candidate writing", "", None),
+        # A weak phrase in the answer body is not enough by itself.
+        ("PEN AND PAPER EXAM", "", None),
+        ("PEN AND PAPER EXAM", "PEN AND PAPER EXAM", True),
+        # Conflicting family evidence must fall back instead of guessing.
+        (
+            "FILL IN THE DIAGRAMS WITH THE RIGHT ANSWER. "
+            "UPPERCASE ALPHABETS ONLY",
+            "",
+            None,
         ),
-        PageLayoutDetection(
-            template_id="seamo_2025_c",
-            method="footer_ocr",
-            brand="seamo",
-            year="2025",
-            paper="c",
-            format_b=False,
-        ),
-    ]
-    out = promote_format_b_detections(detections, registry=reg)
-    assert out[0].template_id == "seamo_2025_b_fb"
-    assert out[1].template_id == "seamo_2025_c_fb"
-    assert out[1].warning == "format_b_promoted"
-    assert out[1].format_b is True
-
-
-def test_promote_format_b_noop_when_doc_classic():
-    reg = _FakeRegistry({"seamo_2025_b", "seamo_2025_b_fb"})
-    detections = [
-        PageLayoutDetection(
-            template_id="seamo_2025_b",
-            method="footer_ocr",
-            brand="seamo",
-            year="2025",
-            paper="b",
-            format_b=False,
-        ),
-    ]
-    out = promote_format_b_detections(detections, registry=reg)
-    assert out[0].template_id == "seamo_2025_b"
-    assert out[0].warning is None
+    ],
+)
+def test_embedded_page_family_requires_positive_per_page_evidence(
+    text, band_text, expected,
+):
+    assert classify_embedded_page_family(text, band_text=band_text) is expected
 
 
 def test_gemini_header_fallback_when_ocr_fails(monkeypatch):

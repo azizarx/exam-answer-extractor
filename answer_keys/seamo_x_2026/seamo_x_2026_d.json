@@ -1,0 +1,30 @@
+{
+  "template_id": "seamo_x_2026_d",
+  "version": 4,
+  "source": {
+    "filename": "seamo_x_2026/Paper D key.pdf",
+    "sha256": "a2525af688b423aa9809e887156d34a61147ccc93214440eb8ba7e207b2f80cb"
+  },
+  "reconciliation": {
+    "additional_source": {"filename": "seamo_x_2026/Paper D portal.pdf", "sha256": "15e8d64e23a5f96b5415f221c3e089789d044905ad35c994ff290bf50b995cce"},
+    "decision": "Use Q1=6048 from the newer 2026-01-28 key. Both official PDFs give Q7=(a+b)(b+c)(c-a); the compact PDF line-wraps the final factor. Its expansion is b²c+bc²+c²a-ca²-a²b-ab². Q2 remains official choice E. Across independently written sheets, E is explicitly paired with 2025/2026, so the accepted strings preserve either the selected option label or its extracted mathematical content."
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "numeric", "accepted_answers": ["6048"], "marks": 6, "normalizer": "integer"},
+    {"number": 2, "type": "free_response", "accepted_answers": ["E", "(E)", "circled E", "2025/2026", "(E) 2025/2026", "2025/2026; circled E"], "marks": 6, "normalizer": "text"},
+    {"number": 3, "type": "numeric", "accepted_answers": ["10"], "marks": 6, "normalizer": "integer"},
+    {"number": 4, "type": "numeric", "accepted_answers": ["267"], "marks": 6, "normalizer": "integer"},
+    {"number": 5, "type": "numeric", "accepted_answers": ["65"], "marks": 6, "normalizer": "integer"},
+    {"number": 6, "type": "numeric", "accepted_answers": ["3"], "marks": 6, "normalizer": "integer"},
+    {"number": 7, "type": "free_response", "accepted_answers": ["(a+b)(b+c)(c-a)", "b²c+bc²+c²a-ca²-a²b-ab²"], "marks": 6, "normalizer": "text"},
+    {"number": 8, "type": "free_response", "accepted_answers": ["√10"], "marks": 6, "normalizer": "text"},
+    {"number": 9, "type": "free_response", "accepted_answers": ["7/15"], "marks": 6, "normalizer": "text"},
+    {"number": 10, "type": "numeric", "accepted_answers": ["11"], "marks": 6, "normalizer": "integer"},
+    {"number": 11, "type": "numeric", "accepted_answers": ["7"], "marks": 8, "normalizer": "integer"},
+    {"number": 12, "type": "numeric", "accepted_answers": ["274"], "marks": 8, "normalizer": "integer"},
+    {"number": 13, "type": "free_response", "accepted_answers": ["0.57"], "marks": 8, "normalizer": "text"},
+    {"number": 14, "type": "numeric", "accepted_answers": ["5"], "marks": 8, "normalizer": "integer"},
+    {"number": 15, "type": "free_response", "accepted_answers": ["6√3"], "marks": 8, "normalizer": "text"}
+  ]
+}

@@ -132,7 +132,7 @@
             "w": 600,
             "h": 420
           },
-          "prompt_hint": "Analyze the graph/network diagram. Identify the answer represented by the node or path drawing."
+          "prompt_hint": "The nodes 3, 4, and 6 are preprinted. Read the three handwritten fills and return exactly 'Triangle fills: top=<value>, upper-left=<value>, bottom-middle=<value>'."
         }
       }
     }

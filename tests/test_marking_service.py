@@ -21,6 +21,7 @@ from backend.services.marking_service import (
     ManifestValidationError,
     MarkingService,
     normalize_integer,
+    normalize_text,
     normalize_time_12_24,
     synchronize_answer_keys,
 )
@@ -32,7 +33,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def test_registry_loads_all_manifests_with_weighted_totals():
     registry = ManifestRegistry(
-        ROOT / "answer_keys" / "structured",
+        ROOT / "answer_keys",
         ROOT / "answer_keys",
         TemplateRegistry(ROOT / "backend" / "templates"),
     )
@@ -47,19 +48,48 @@ def test_registry_loads_all_manifests_with_weighted_totals():
         "seamo_2025_e": 100,
         "seamo_2025_f": 100,
         "seamo_2025_k": 50,
+        "seamo_x_2026_a": 100,
+        "seamo_x_2026_b": 100,
+        "seamo_x_2026_c": 100,
+        "seamo_x_2026_d": 100,
+        "seamo_x_2026_e": 100,
+        "seamo_x_2026_f": 100,
+        "seamo_x_2026_k": 50,
     }
 
 
 def _registry() -> ManifestRegistry:
     return ManifestRegistry(
-        ROOT / "answer_keys" / "structured",
+        ROOT / "answer_keys",
         ROOT / "answer_keys",
         TemplateRegistry(ROOT / "backend" / "templates"),
     )
 
 
+@pytest.mark.parametrize(
+    "response",
+    [
+        "E",
+        "(E)",
+        "circled E",
+        "2025/2026",
+        "(E) 2025/2026",
+        "2025/2026; circled E",
+    ],
+)
+def test_seamo_x_d_q2_accepts_choice_e_and_its_extracted_value(response):
+    manifest = _registry().load(
+        ROOT / "answer_keys/seamo_x_2026/seamo_x_2026_d.json"
+    )
+
+    outcome = MarkingService(manifest).mark({"2": response}).outcomes[1]
+
+    assert outcome.status == "correct"
+    assert outcome.judge_source == "deterministic"
+
+
 def test_weighted_marking_has_exact_auditable_output_without_answers():
-    manifest = _registry().load(ROOT / "answer_keys/structured/seamo_2025_a.json")
+    manifest = _registry().load(ROOT / "answer_keys/seamo_2025/seamo_2025_a.json")
     candidate_answers = {
         str(question.number): question.accepted_answers[0]
         for question in manifest.questions
@@ -94,7 +124,7 @@ def test_weighted_marking_has_exact_auditable_output_without_answers():
 
 
 def test_marking_classifies_wrong_blank_invalid_and_does_not_mutate_answers():
-    manifest = _registry().load(ROOT / "answer_keys/structured/seamo_2025_a.json")
+    manifest = _registry().load(ROOT / "answer_keys/seamo_2025/seamo_2025_a.json")
     answers = {"1": " d ", "2": "BL", "3": "", "21": "5.0", "22": "17:00", "23": "IN"}
     original = copy.deepcopy(answers)
 
@@ -121,6 +151,15 @@ def test_marking_classifies_wrong_blank_invalid_and_does_not_mutate_answers():
         ("-0", "valid", "0"),
         ("5.0", "valid", "5"),
         ("12 cm", "valid", "12"),
+        ("10 cm³", "valid", "10"),
+        ("32°", "valid", "32"),
+        ("40 minutes", "valid", "40"),
+        ("4.", "valid", "4"),
+        ("6,0", "valid", "6"),
+        ("1,000", "valid", "1000"),
+        ("0,57", "invalid", None),
+        ("6+0", "invalid", None),
+        ("4 cats", "invalid", None),
         ("1e2", "invalid", None),
         ("  ", "blank", None),
         ("9" * 5000, "invalid", None),
@@ -147,6 +186,12 @@ def test_time_normalization_compares_12_and_24_hour_forms(response, status, valu
     assert (normalized.status, normalized.value) == (status, value)
 
 
+def test_text_normalization_is_unicode_and_whitespace_stable():
+    assert normalize_text("  3√3\n").value == "3√3"
+    assert normalize_text(" Ｅ ").value == "e"
+    assert normalize_text("BL").status == "blank"
+
+
 def _write_mutated_manifest(tmp_path: Path, mutate) -> tuple[Path, Path]:
     source_dir = tmp_path / "answer_keys"
     manifests_dir = source_dir / "structured"
@@ -154,7 +199,7 @@ def _write_mutated_manifest(tmp_path: Path, mutate) -> tuple[Path, Path]:
     source = ROOT / "answer_keys/Paper A key.pdf"
     copied_source = source_dir / source.name
     copied_source.write_bytes(source.read_bytes())
-    raw = json.loads((ROOT / "answer_keys/structured/seamo_2025_a.json").read_text())
+    raw = json.loads((ROOT / "answer_keys/seamo_2025/seamo_2025_a.json").read_text())
     mutate(raw)
     path = manifests_dir / "key.json"
     path.write_text(json.dumps(raw))
@@ -241,8 +286,21 @@ def test_synchronize_answer_keys_is_idempotent_and_preserves_provenance(tmp_path
         db.commit()
 
         rows = db.scalars(select(AnswerKey).order_by(AnswerKey.template_id)).all()
-        assert len(first) == len(second) == len(rows) == 7
-        assert all(row.version == 1 and row.is_active for row in rows)
+        assert len(first) == len(second) == len(rows) == 14
+        versions = {row.template_id: row.version for row in rows}
+        assert versions["seamo_x_2026_a"] == 2
+        assert versions["seamo_x_2026_b"] == 2
+        assert versions["seamo_x_2026_d"] == 4
+        assert all(row.is_active for row in rows)
+        assert all(
+            version == 1
+            for template_id, version in versions.items()
+            if template_id not in {
+                "seamo_x_2026_a",
+                "seamo_x_2026_b",
+                "seamo_x_2026_d",
+            }
+        )
         assert rows[0].source_filename == "Paper A key.pdf"
         assert rows[0].source_sha256 == hashlib.sha256(
             (ROOT / "answer_keys/Paper A key.pdf").read_bytes()
@@ -320,7 +378,7 @@ def test_synchronization_retries_transient_integrity_race(tmp_path, monkeypatch)
         db.commit()
 
         assert calls >= 2
-        assert len(rows) == 7
+        assert len(rows) == 14
         assert db.scalar(select(AnswerKey).where(AnswerKey.is_active.is_(True))) is not None
 
 
@@ -386,7 +444,8 @@ def test_synchronization_retries_real_sqlite_writer_lock(tmp_path):
     assert not blocker.is_alive()
     assert blocker_errors == []
     assert lock_observed.is_set()
-    assert len(rows) == persisted == 7
+    assert len(rows) == 14
+    assert persisted == 7
 
 
 def test_synchronization_does_not_retry_unrelated_operational_error(
@@ -420,7 +479,7 @@ def test_synchronization_preserves_versions_and_only_activates_latest(tmp_path):
     manifests_dir.mkdir(parents=True)
     source = ROOT / "answer_keys/Paper A key.pdf"
     (source_dir / source.name).write_bytes(source.read_bytes())
-    raw = json.loads((ROOT / "answer_keys/structured/seamo_2025_a.json").read_text())
+    raw = json.loads((ROOT / "answer_keys/seamo_2025/seamo_2025_a.json").read_text())
     (manifests_dir / "v1.json").write_text(json.dumps(raw))
     raw["version"] = 2
     (manifests_dir / "v2.json").write_text(json.dumps(raw))

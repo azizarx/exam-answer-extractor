@@ -81,7 +81,7 @@ def _synchronize_bundled_answer_keys(target_engine) -> None:
 
     root = Path(__file__).resolve().parents[2]
     registry = ManifestRegistry(
-        root / "answer_keys" / "structured",
+        root / "answer_keys",
         root / "answer_keys",
         TemplateRegistry(root / "backend" / "templates"),
     )

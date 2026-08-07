@@ -9,6 +9,7 @@ End-to-end test for the template-driven MCQ extraction pipeline.
 import json
 import os
 import sys
+from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -18,7 +19,9 @@ import cv2
 import numpy as np
 
 from backend.services.template_service import ExamTemplate, TemplateRegistry
-from backend.services.mcq_extractor import extract_page
+from backend.services.mcq_extractor import ambiguous_mcq_questions, extract_page
+from backend.services.mcq_label_lattice import align_mcq_section_from_labels
+from backend.services.mcq_lattice_align import LatticeFit, apply_affine_to_grid
 
 TEMPLATES_DIR = Path("backend/templates")
 REF_IMAGES_DIR = TEMPLATES_DIR / "reference_images"
@@ -66,11 +69,25 @@ def fill_bubbles(
     image: np.ndarray,
     template: ExamTemplate,
     answers: dict,
+    *,
+    align_to_printed_labels: bool = False,
 ) -> np.ndarray:
     """Draw dark rectangles on bubble positions for the given answers."""
     img = image.copy()
 
-    for section in template.sections:
+    if align_to_printed_labels:
+        drawing_template = deepcopy(template)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        for index, section in enumerate(drawing_template.sections):
+            if section.type != "mcq_grid":
+                continue
+            aligned, fit = align_mcq_section_from_labels(gray, section)
+            if aligned is not None and fit.ok:
+                drawing_template.sections[index] = aligned
+    else:
+        drawing_template = template
+
+    for section in drawing_template.sections:
         if section.type != "mcq_grid":
             continue
 
@@ -147,6 +164,90 @@ def test_fill_bubbles_uses_pitch_derived_rows_when_positions_are_empty():
     )
 
 
+def test_affine_grid_preserves_mapped_fill_centers_when_y_scale_changes():
+    template = TemplateRegistry().get_or_raise("seamo_2025_a")
+    section = next(section for section in template.sections if section.type == "mcq_grid")
+    grid = section.grid
+    fit = LatticeFit(ok=True, sx=1.0, sy=1.1, ty=-25.0)
+
+    mapped = apply_affine_to_grid(grid, fit)
+
+    old_fill_centers = [
+        y + grid.cell_height + grid.bubble_height / 2.0
+        for y in grid.row_positions
+    ]
+    expected = [fit.sy * y + fit.ty for y in old_fill_centers]
+    actual = [
+        y + mapped.cell_height + mapped.bubble_height / 2.0
+        for y in mapped.row_positions
+    ]
+    assert np.allclose(actual, expected, atol=1.0)
+
+
+def test_classic_grid_regression_on_interleaved_id_scan():
+    """ID3 page 6 is a classic sheet inside a mostly format-B paper run."""
+    import pymupdf
+
+    registry = TemplateRegistry()
+    template = registry.get_or_raise("seamo_2025_b")
+    with pymupdf.open("backend/examples/ID3-224.pdf") as document:
+        pixmap = document[5].get_pixmap(
+            matrix=pymupdf.Matrix(300 / 72, 300 / 72),
+            colorspace=pymupdf.csGRAY,
+            alpha=False,
+        )
+    image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
+        pixmap.height, pixmap.width,
+    )
+
+    result = extract_page(image, template, page_number=6, registry=registry)
+    expected = dict(enumerate("AEAEEDACCABEEDBCBCEE", start=1))
+
+    assert result.answers == {str(key): value for key, value in expected.items()}
+    assert result.warning is None
+
+
+def test_classic_grid_recovers_single_marks_from_uneven_scan_background():
+    """Dark scan bands must not turn faint single marks into multi-marks."""
+    import pymupdf
+
+    registry = TemplateRegistry()
+    template = registry.get_or_raise("seamo_2025_b")
+    expected_by_page = {
+        19: "ACAEEDBDBACABDDDBCEE",
+        21: "AAAEECCACADEBBADECAD",
+    }
+
+    with pymupdf.open("backend/examples/UZ1-35.pdf") as document:
+        for page_number, expected_string in expected_by_page.items():
+            pixmap = document[page_number - 1].get_pixmap(
+                matrix=pymupdf.Matrix(300 / 72, 300 / 72),
+                colorspace=pymupdf.csGRAY,
+                alpha=False,
+            )
+            image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
+                pixmap.height, pixmap.width,
+            )
+
+            result = extract_page(
+                image,
+                template,
+                page_number=page_number,
+                registry=registry,
+            )
+            expected = dict(enumerate(expected_string, start=1))
+
+            assert result.answers == {
+                str(key): value for key, value in expected.items()
+            }
+            assert result.warning is None
+            assert ambiguous_mcq_questions(
+                result,
+                min_ratio=1.05,
+                min_ink_pixels=10,
+            ) == []
+
+
 def test_main_leaves_tracked_artifacts_unchanged():
     artifact_paths = [
         TEST_DATA_DIR / "results.json",
@@ -199,7 +300,15 @@ def _run(output_dir: Path):
         assert ref_img is not None, f"Cannot read {tc['ref_image']}"
 
         # Generate filled image
-        filled = fill_bubbles(ref_img, template, tc["answers"])
+        # Put synthetic ink inside the boxes actually printed in the reference
+        # scan.  Classic sheets have slight non-linear row drift, so drawing at
+        # the old median template pitch can place the last marks between boxes.
+        filled = fill_bubbles(
+            ref_img,
+            template,
+            tc["answers"],
+            align_to_printed_labels=True,
+        )
         filled_path = output_dir / f"{tid}_filled.png"
         cv2.imwrite(str(filled_path), filled)
 

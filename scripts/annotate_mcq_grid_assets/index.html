@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>MCQ grid annotator</title>
+<link rel="stylesheet" href="/app.css"/>
+</head>
+<body>
+<aside id="sidebar">
+  <h1>MCQ grid annotator</h1>
+  <label for="imageSelect">Image</label>
+  <select id="imageSelect"></select>
+  <p class="hint">Or paste a path under the repo:</p>
+  <input type="text" id="pathInput" placeholder="tests/fixtures/gold/.../page_001.png"/>
+  <button id="loadPathBtn" class="full">Load path</button>
+
+  <h2>Mode</h2>
+  <div class="row">
+    <button type="button" id="modeCols" class="active">COLS A–E</button>
+    <button type="button" id="modeRows">ROWS Q1–20</button>
+  </div>
+  <div class="row tight">
+    <button type="button" id="modeMove">MOVE</button>
+    <button type="button" id="modeResize">RESIZE</button>
+  </div>
+  <p class="hint" id="modeHint">Click bubble centers for A, then B, C, D, E on the same row.</p>
+
+  <h2>Geometry</h2>
+  <div class="row">
+    <div><label for="cellW">cell_width</label><input type="number" id="cellW" value="36"/></div>
+    <div><label for="cellH">cell_height</label><input type="number" id="cellH" value="36"/></div>
+  </div>
+  <div class="row tight">
+    <div><label for="bubH">bubble_height</label><input type="number" id="bubH" value="32"/></div>
+    <div><label for="zoom">zoom %</label><input type="number" id="zoom" value="50" min="10" max="200" step="5"/></div>
+  </div>
+
+  <h2>Actions</h2>
+  <div class="row">
+    <button type="button" id="undoBtn">Undo</button>
+    <button type="button" id="clearModeBtn">Clear mode</button>
+  </div>
+  <div class="row tight">
+    <button type="button" id="fitRowsBtn">Fit rows Q1→Q20</button>
+    <button type="button" id="clearAllBtn">Clear all</button>
+  </div>
+  <button type="button" id="saveBtn" class="primary full">Save JSON</button>
+  <p class="hint">Saves to storage/annotations/. Copy grid fields into the template when happy.</p>
+
+  <h2>Status</h2>
+  <div>
+    <span class="pill" id="pillCols">cols 0/5</span>
+    <span class="pill" id="pillRows">rows 0/20</span>
+  </div>
+  <div id="status"></div>
+  <h2>JSON preview</h2>
+  <pre id="coords">{}</pre>
+</aside>
+<div id="main">
+  <div id="toolbar">
+    <span id="imgMeta">No image</span>
+    <span class="spacer"></span>
+    <button type="button" id="zoomOut">−</button>
+    <button type="button" id="zoomIn">+</button>
+  </div>
+  <div id="viewport"><canvas id="cv"></canvas></div>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

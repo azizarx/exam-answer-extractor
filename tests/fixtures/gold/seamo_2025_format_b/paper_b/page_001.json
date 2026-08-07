@@ -33,14 +33,14 @@
     "17": "BL",
     "18": "BL",
     "19": "E",
-    "20": "BL",
+    "20": "C",
     "21": "BL",
     "22": "BL",
     "23": "BL",
     "24": "BL",
     "25": "There are 8 squares in the diagram"
   },
-  "notes": "Worst Paper-B MCQ coverage in sub89 (cov=0.35); mis-anchored offset=(1451,-159) score=0.797 — grid alignment failure case. | AUTO-EXTRACT DRAFT — correct answers/header by hand; do not trust blindly.",
+  "notes": "Worst Paper-B MCQ coverage in sub89 (cov=0.35); mis-anchored offset=(1451,-159) score=0.797 — grid alignment failure case. Q20 corrected from BL to C after visual inspection confirmed a fully filled C box. | AUTO-EXTRACT DRAFT — correct answers/header by hand; do not trust blindly.",
   "extraction_draft": {
     "mcq_warning": null,
     "needs_review_questions": [],

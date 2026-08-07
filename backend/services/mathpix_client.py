@@ -166,7 +166,7 @@ def submit_pdf(
     *,
     app_id: Optional[str] = None,
     app_key: Optional[str] = None,
-    timeout: int = 120,
+    timeout: int = 300,
 ) -> str:
     """POST a PDF to /v3/pdf and return the pdf_id.
 

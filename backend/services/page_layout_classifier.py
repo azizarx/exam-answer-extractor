@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import cv2
@@ -36,6 +36,14 @@ HEADER_FRACTION = 0.10
 # title / date / paper / format-B banner without sending answer bubbles.
 GEMINI_HEADER_FRACTION = 0.30
 
+# Embedded PDF text is useful only as a strict fast path.  The footer clip is
+# deliberately a little taller than the raster OCR footer so text whose PDF
+# bounding box straddles the visual footer boundary is still included.  We do
+# not inspect whole-page text: OCR layers commonly contain candidate numbers
+# that look like years and can otherwise produce a confident wrong layout.
+PDF_TEXT_FOOTER_FRACTION = 0.22
+PDF_TEXT_HEADER_FRACTION = 0.12
+
 # Prefer "SEAMO [X] 20xx Paper L" so "PEN AND PAPER EXAM" cannot steal the letter.
 _SEAMO_PAPER_RE = re.compile(
     r"SEAMO(?:\s*X)?\s*20\d{2}\s*P\s*A\s*P\s*E\s*R\s*([A-FK])",
@@ -48,7 +56,31 @@ _FORMAT_B_RE = re.compile(
     r"BRING\s+(?:A\s+)?PRIN\w*\s+COPY|PEN\s+AND\s+PAPER\s+EXAM|FOR\s+PEN\s+AND\s+PAPER",
     re.IGNORECASE,
 )
+# Unlike raster OCR parsing, embedded-text classification intentionally has no
+# fuzzy substitutions.  Anything short of this complete footer signature is
+# unresolved and must use the existing OCR / Gemini path.
+_PDF_TEXT_FOOTER_RE = re.compile(
+    r"\bSEAMO(?:\s+(X))?\s+(20\d{2})\s+PAPER\s+([A-FK])\b",
+    re.IGNORECASE,
+)
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
+
+# Embedded text can positively distinguish the two physical answer-sheet
+# families from their mutually exclusive printed instructions.  Absence is
+# deliberately tri-state (unknown), never evidence inherited from another
+# page in the PDF.
+_PDF_TEXT_FORMAT_B_MARKERS = (
+    "BRING A PRINTED COPY",
+    "DIAGRAMS ARE ONLY PROVIDED",
+    "FILL IN THE DIAGRAMS WITH THE RIGHT ANSWER",
+    "FILL IN THE BOXES WITH THE RIGHT ANSWER",
+)
+_PDF_TEXT_CLASSIC_MARKERS = (
+    "UPPERCASE ALPHABETS",
+    "ALLOWED TO USE A PEN",
+    "EACH BOX MAY CONTAIN ONLY ONE CHARACTER",
+    "MARK ONLY ONE OPTION",
+)
 
 _GEMINI_LAYOUT_PROMPT = (
     "You are classifying a SEAMO exam answer-sheet header crop.\n"
@@ -87,6 +119,135 @@ class PageLayoutDetection:
         # Drop nulls so storage stays compact; keep format_b only when True
         out = {k: v for k, v in data.items() if v is not None and v is not False}
         return out
+
+
+def classify_pdf_text_pages(
+    pdf_path: str,
+    *,
+    registry=None,
+) -> List[Optional[PageLayoutDetection]]:
+    """Classify pages from strong layout signatures in embedded PDF text.
+
+    Only text geometrically located in the bottom footer band may establish a
+    layout.  Top-band text participates solely in format-B detection.  A page
+    without a complete ``SEAMO [X] 20xx Paper L`` footer, or whose template is
+    unknown, is returned as ``None`` so callers can run the existing raster
+    OCR / Gemini classifier without changing its fallback behaviour.
+    """
+    import pymupdf
+
+    detections: List[Optional[PageLayoutDetection]] = []
+    with pymupdf.open(pdf_path) as document:
+        for page_index, page in enumerate(document):
+            try:
+                rect = page.rect
+                footer_y = rect.y1 - rect.height * PDF_TEXT_FOOTER_FRACTION
+                header_y = rect.y0 + rect.height * PDF_TEXT_HEADER_FRACTION
+                footer_text = page.get_text(
+                    "text",
+                    clip=pymupdf.Rect(rect.x0, footer_y, rect.x1, rect.y1),
+                ) or ""
+                match = _PDF_TEXT_FOOTER_RE.search(footer_text)
+                if match is None:
+                    detections.append(None)
+                    continue
+
+                header_text = page.get_text(
+                    "text",
+                    clip=pymupdf.Rect(rect.x0, rect.y0, rect.x1, header_y),
+                ) or ""
+                full_text = page.get_text("text") or ""
+                family = classify_embedded_page_family(
+                    full_text,
+                    band_text=f"{header_text}\n{footer_text}",
+                )
+                if family is None:
+                    detections.append(None)
+                    continue
+                brand = "seamo_x" if match.group(1) else "seamo"
+                detection = resolve_layout_fields(
+                    brand,
+                    match.group(2),
+                    match.group(3).lower(),
+                    family,
+                    registry=registry,
+                    method="pdf_text",
+                    raw_text=footer_text.strip(),
+                )
+                detections.append(detection if detection.template_id else None)
+            except Exception as exc:
+                logger.warning(
+                    "Embedded PDF text classification failed on page %d: %s",
+                    page_index + 1,
+                    exc,
+                )
+                detections.append(None)
+    return detections
+
+
+def classify_pdf_text_page_families(pdf_path: str) -> List[Optional[bool]]:
+    """Return independent per-page classic/format-B hints from printed text.
+
+    Unlike :func:`classify_pdf_text_pages`, this does not require a parseable
+    footer because it supplies only the physical form family.  Callers may use
+    the hint to correct the family selected by raster OCR while retaining the
+    raster-read series, year, and paper letter.
+    """
+    import pymupdf
+
+    families: List[Optional[bool]] = []
+    with pymupdf.open(pdf_path) as document:
+        for page_index, page in enumerate(document):
+            try:
+                rect = page.rect
+                footer_y = rect.y1 - rect.height * PDF_TEXT_FOOTER_FRACTION
+                header_y = rect.y0 + rect.height * PDF_TEXT_HEADER_FRACTION
+                footer_text = page.get_text(
+                    "text",
+                    clip=pymupdf.Rect(rect.x0, footer_y, rect.x1, rect.y1),
+                ) or ""
+                header_text = page.get_text(
+                    "text",
+                    clip=pymupdf.Rect(rect.x0, rect.y0, rect.x1, header_y),
+                ) or ""
+                families.append(
+                    classify_embedded_page_family(
+                        page.get_text("text") or "",
+                        band_text=f"{header_text}\n{footer_text}",
+                    )
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Embedded PDF family classification failed on page %d: %s",
+                    page_index + 1,
+                    exc,
+                )
+                families.append(None)
+    return families
+
+
+def apply_embedded_family_hint(
+    detection: PageLayoutDetection,
+    family: Optional[bool],
+    *,
+    registry=None,
+) -> PageLayoutDetection:
+    """Correct only a raster detection's form family from positive PDF text."""
+    if family is None or bool(detection.format_b) == bool(family):
+        return detection
+    if not detection.brand or not detection.year or not detection.paper:
+        return detection
+
+    corrected = resolve_layout_fields(
+        detection.brand,
+        detection.year,
+        detection.paper,
+        bool(family),
+        registry=registry,
+        method=f"{detection.method}+pdf_text_family",
+        raw_text=detection.raw_text,
+    )
+    return corrected if corrected.template_id else detection
 
 
 # Optional injectable: (bgr_image) -> {brand, year, paper, format_b}
@@ -243,6 +404,28 @@ def is_format_b(text: str) -> bool:
     return bool(_FORMAT_B_RE.search(_normalize_ocr(text) or text or ""))
 
 
+def classify_embedded_page_family(
+    text: str,
+    *,
+    band_text: str = "",
+) -> Optional[bool]:
+    """Return True for format B, False for classic, or None if ambiguous.
+
+    Strong full-page instruction signatures are safe because they are printed
+    form text, while the weaker ``PEN AND PAPER EXAM`` phrase only counts in
+    the header/footer bands.  Conflicting or absent evidence is intentionally
+    deferred to raster OCR/Gemini.
+    """
+    normalized = re.sub(r"[^A-Z0-9]+", " ", (text or "").upper())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    format_b = any(marker in normalized for marker in _PDF_TEXT_FORMAT_B_MARKERS)
+    format_b = format_b or is_format_b(band_text)
+    classic = any(marker in normalized for marker in _PDF_TEXT_CLASSIC_MARKERS)
+    if format_b == classic:
+        return None
+    return format_b
+
+
 def resolve_layout_fields(
     brand: Optional[str],
     year: Optional[str],
@@ -295,55 +478,6 @@ def resolve_layout_fields(
     return base
 
 
-def promote_format_b_detections(
-    detections: List[PageLayoutDetection],
-    *,
-    registry=None,
-) -> List[PageLayoutDetection]:
-    """If any page is format B, upgrade classic siblings that already parse paper.
-
-    Homogeneous format-B uploads often OCR SEAMO but miss BRING on some pages.
-    Mixed classic+fb in one PDF is rare; promotion is the deliberate tradeoff.
-    """
-    doc_is_fb = any(
-        d.format_b or (d.template_id or "").endswith("_fb") for d in detections
-    )
-    if not doc_is_fb:
-        return detections
-
-    reg = registry if registry is not None else get_template_registry()
-    out: List[PageLayoutDetection] = []
-    for d in detections:
-        tid = d.template_id or ""
-        if tid.endswith("_fb"):
-            out.append(d)
-            continue
-        if not tid:
-            out.append(d)
-            continue
-        # Classic id — promote to _fb twin when present
-        brand = d.brand
-        year = d.year
-        paper = d.paper
-        if brand and year and paper:
-            fb_id = f"{brand}_{year}_{paper}_fb"
-        elif tid and not tid.endswith("_fb"):
-            fb_id = f"{tid}_fb"
-        else:
-            out.append(d)
-            continue
-        if reg.get(fb_id) is None:
-            out.append(d)
-            continue
-        out.append(
-            replace(
-                d,
-                template_id=fb_id,
-                format_b=True,
-                warning="format_b_promoted",
-            )
-        )
-    return out
 
 
 def _parse_and_resolve(text: str, *, registry=None) -> PageLayoutDetection:
@@ -370,6 +504,15 @@ def _normalize_ocr(text: str) -> str:
     t = t.replace("SEAM0", "SEAMO")
     # SEAMQO / SEAMBO / etc. → SEAMO (optional char between M and O)
     t = re.sub(r"SEAM.?O", "SEAMO", t)
+    # Keep an explicit SEAMO X series marker when OCR appends one or two
+    # garbage characters to the logo (observed: ``SEAMOQO X 2026``).  Anchor
+    # the repair to ``X + year`` so an ordinary SEAMO footer cannot be
+    # promoted to the X series by unrelated nearby text.
+    t = re.sub(
+        r"\bSEAMO[A-Z0-9]{1,2}(?=\s+X\s+20\d{2}\b)",
+        "SEAMO",
+        t,
+    )
     t = t.replace("SEAMOX", "SEAMO X")
     # Year / paper letter OCR noise
     t = re.sub(r"[£E]025\b", "2025", t)
@@ -409,7 +552,11 @@ def _crop_gemini_header(image_bgr: np.ndarray) -> np.ndarray:
     return image_bgr[0:y1, 0:w]
 
 
-def _gemini_classify_header(image_bgr: np.ndarray) -> Dict[str, Any]:
+def _gemini_classify_header(
+    image_bgr: np.ndarray,
+    *,
+    model=None,
+) -> Dict[str, Any]:
     """Default Gemini fallback: classify layout from the top-band crop."""
     import google.generativeai as genai
     from PIL import Image
@@ -422,7 +569,8 @@ def _gemini_classify_header(image_bgr: np.ndarray) -> Dict[str, Any]:
         return {}
     rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
     pil_image = Image.fromarray(rgb)
-    model, _name = create_gemini_model()
+    if model is None:
+        model, _name = create_gemini_model()
     response = llm_call(
         "layout_header",
         model,

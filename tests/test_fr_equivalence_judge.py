@@ -29,6 +29,28 @@ def _tiny_manifest() -> AnswerKeyManifest:
     )
 
 
+def _text_manifest() -> AnswerKeyManifest:
+    return AnswerKeyManifest(
+        template_id="test_text",
+        version=1,
+        source_filename="x.pdf",
+        source_sha256="abc",
+        total_marks=12,
+        questions=(
+            ManifestQuestion(
+                1, "free_response", ("(a+b)(b+c)(c-a)",), 6, "text"
+            ),
+            ManifestQuestion(
+                2,
+                "diagram",
+                ("2x2 circles; bottom-left crossed",),
+                6,
+                "text",
+            ),
+        ),
+    )
+
+
 class FakeJudge:
     def __init__(self, verdicts: dict[int, tuple[str, str]]):
         self.verdicts = verdicts
@@ -53,6 +75,23 @@ def test_deterministic_correct_and_blank_skip_judge():
     assert merged.awarded_marks == result.awarded_marks
 
 
+def test_deterministically_valid_wrong_fr_skips_judge():
+    manifest = _tiny_manifest()
+    result = MarkingService(manifest).mark(
+        {"1": "A", "21": "20", "22": "4:40"}
+    )
+    judge = FakeJudge({})
+
+    merged = apply_fr_equivalence_judge(result, manifest, judge)
+
+    assert judge.calls == []
+    by_q = {outcome.question_number: outcome for outcome in merged.outcomes}
+    assert by_q[21].status == "incorrect"
+    assert by_q[22].status == "incorrect"
+    assert by_q[21].judge_source == "deterministic"
+    assert by_q[22].judge_source == "deterministic"
+
+
 def test_llm_equivalent_promotes_invalid_time_to_correct():
     manifest = _tiny_manifest()
     result = MarkingService(manifest).mark({"1": "A", "21": "19", "22": "5:00vaqt"})
@@ -69,10 +108,55 @@ def test_llm_equivalent_promotes_invalid_time_to_correct():
     assert merged.awarded_marks == 3 + 6 + 3
 
 
+def test_text_and_diagram_nonexact_responses_are_judged():
+    manifest = _text_manifest()
+    result = MarkingService(manifest).mark(
+        {
+            "1": "b²c + bc² + c²a - ca² - a²b - ab²",
+            "2": "four circles in a square; lower-left circle has an X",
+        }
+    )
+    assert {outcome.status for outcome in result.outcomes} == {"incorrect"}
+    judge = FakeJudge(
+        {
+            1: ("equivalent", "algebraic expansion"),
+            2: ("equivalent", "same crossed-circle placement"),
+        }
+    )
+
+    merged = apply_fr_equivalence_judge(result, manifest, judge)
+
+    assert len(judge.calls) == 1
+    assert {item["type"] for item in judge.calls[0]} == {
+        "free_response",
+        "diagram",
+    }
+    assert all(outcome.status == "correct" for outcome in merged.outcomes)
+    assert merged.awarded_marks == 12
+
+
+def test_prompt_treats_preprinted_diagram_scaffolds_as_context():
+    prompt = build_judge_prompt(
+        [
+            {
+                "question_number": 5,
+                "type": "diagram",
+                "accepted_answers": ["preprinted triangle; top=2"],
+                "response": "top=2",
+            }
+        ]
+    )
+
+    assert "candidate-variable content" in prompt
+    assert "preprinted scaffold" in prompt
+    assert "Clock: 7:45" in prompt
+    assert "BL after '=' means that cell was blank" in prompt
+
+
 def test_not_equivalent_and_uncertain_and_mcq_excluded():
     manifest = _tiny_manifest()
     result = MarkingService(manifest).mark(
-        {"1": "B", "21": "0=19", "22": "4:40"}
+        {"1": "B", "21": "0=19", "22": "4:40vaqt"}
     )
     judge = FakeJudge(
         {
@@ -165,6 +249,21 @@ def test_parse_judge_response_handles_prose_wrapped_json():
 
     assert parsed == [
         {"question_number": 22, "verdict": "equivalent", "reason": "same time"}
+    ]
+
+
+def test_parse_judge_response_repairs_invalid_latex_backslash_escapes():
+    parsed = parse_judge_response(
+        r'{"items":[{"question_number":15,"verdict":"not_equivalent",'
+        r'"reason":"94 differs from \sqrt{3} and \(3\)."}]}'
+    )
+
+    assert parsed == [
+        {
+            "question_number": 15,
+            "verdict": "not_equivalent",
+            "reason": r"94 differs from \sqrt{3} and \(3\).",
+        }
     ]
 
 

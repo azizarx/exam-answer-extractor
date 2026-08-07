@@ -19,6 +19,7 @@ def _render_page_chunk(
     page_indices: List[int],
     image_paths: List[str],
     dpi: int,
+    grayscale: bool,
 ) -> int:
     """Render a contiguous set of pages with one document handle."""
     zoom = dpi / 72.0
@@ -26,7 +27,10 @@ def _render_page_chunk(
     doc = pymupdf.open(pdf_path)
     try:
         for i in page_indices:
-            pix = doc[i].get_pixmap(matrix=mat)
+            render_options = {"matrix": mat, "alpha": False}
+            if grayscale:
+                render_options["colorspace"] = pymupdf.csGRAY
+            pix = doc[i].get_pixmap(**render_options)
             pix.save(image_paths[i])
     finally:
         doc.close()
@@ -42,19 +46,33 @@ def _chunk_indices(n_pages: int, n_chunks: int) -> List[List[int]]:
 class PDFConverter:
     """Converts PDF files to images"""
 
-    def __init__(self, dpi: int = 200, fmt: str = "PNG", max_workers: Optional[int] = None):
+    def __init__(
+        self,
+        dpi: int = 200,
+        fmt: str = "PNG",
+        max_workers: Optional[int] = None,
+        grayscale: Optional[bool] = None,
+    ):
         self.dpi = dpi
         self.fmt = fmt
-        if max_workers is None:
+        if max_workers is None or grayscale is None:
             try:
                 from backend.config import get_settings
-                max_workers = int(get_settings().max_pdf_render_workers)
+                settings = get_settings()
+                if max_workers is None:
+                    max_workers = int(settings.max_pdf_render_workers)
+                if grayscale is None:
+                    grayscale = bool(settings.pdf_render_grayscale)
             except Exception:
-                max_workers = 4
+                if max_workers is None:
+                    max_workers = 4
+                if grayscale is None:
+                    grayscale = True
         self.max_workers = max(1, int(max_workers))
+        self.grayscale = bool(grayscale)
         logger.info(
-            "Initialized PDFConverter with DPI=%s, format=%s, workers=%s",
-            dpi, fmt, self.max_workers,
+            "Initialized PDFConverter with DPI=%s, format=%s, workers=%s, grayscale=%s",
+            dpi, fmt, self.max_workers, self.grayscale,
         )
 
     def convert_from_file(self, pdf_path: str, output_dir: str = None) -> List[str]:
@@ -77,11 +95,20 @@ class PDFConverter:
 
             chunks = _chunk_indices(n_pages, self.max_workers)
             if len(chunks) == 1:
-                _render_page_chunk(pdf_path, chunks[0], image_paths, self.dpi)
+                _render_page_chunk(
+                    pdf_path, chunks[0], image_paths, self.dpi, self.grayscale,
+                )
             else:
                 with ThreadPoolExecutor(max_workers=len(chunks)) as pool:
                     futs = [
-                        pool.submit(_render_page_chunk, pdf_path, chunk, image_paths, self.dpi)
+                        pool.submit(
+                            _render_page_chunk,
+                            pdf_path,
+                            chunk,
+                            image_paths,
+                            self.dpi,
+                            self.grayscale,
+                        )
                         for chunk in chunks
                     ]
                     for fut in as_completed(futs):
@@ -138,7 +165,10 @@ class PDFConverter:
 
             for page_num in range(len(pdf_document)):
                 page = pdf_document[page_num]
-                pix = page.get_pixmap(matrix=mat)
+                render_options = {"matrix": mat, "alpha": False}
+                if self.grayscale:
+                    render_options["colorspace"] = pymupdf.csGRAY
+                pix = page.get_pixmap(**render_options)
                 img_data = pix.tobytes("png")
                 img = Image.open(io.BytesIO(img_data))
                 images.append(img)

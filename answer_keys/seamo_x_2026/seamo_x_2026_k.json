@@ -1,0 +1,26 @@
+{
+  "template_id": "seamo_x_2026_k",
+  "version": 1,
+  "source": {
+    "filename": "seamo_x_2026/Paper K key.pdf",
+    "sha256": "66cfdc93914fb6b9bd6ac75504aaafedc9f1475a563ea63a6e35c3cf9b925721"
+  },
+  "total_marks": 50,
+  "questions": [
+    {"number": 1, "type": "mcq", "accepted_answers": ["C"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 2, "type": "mcq", "accepted_answers": ["B"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 3, "type": "mcq", "accepted_answers": ["A"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 4, "type": "mcq", "accepted_answers": ["A"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 5, "type": "mcq", "accepted_answers": ["B"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 6, "type": "mcq", "accepted_answers": ["B"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 7, "type": "mcq", "accepted_answers": ["A"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 8, "type": "mcq", "accepted_answers": ["C"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 9, "type": "mcq", "accepted_answers": ["C"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 10, "type": "mcq", "accepted_answers": ["B"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 11, "type": "mcq", "accepted_answers": ["A"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 12, "type": "mcq", "accepted_answers": ["B"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 13, "type": "mcq", "accepted_answers": ["C"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 14, "type": "mcq", "accepted_answers": ["C"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 15, "type": "mcq", "accepted_answers": ["C"], "marks": 4, "normalizer": "uppercase"}
+  ]
+}

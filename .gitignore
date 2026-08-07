@@ -20,54 +20,95 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
+# Virtual environments
+.venv/
 venv/
 ENV/
 env/
 
-# Environment Variables
+# Environment / secrets
 .env
 .env.local
+.env.*.local
 
-# IDE
+# IDE / editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# Database
-*.db
-*.sqlite3
-
-# Logs
-*.log
-logs/
+.claude/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Temporary files
+# Databases (never commit local DBs)
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+exam_db.sqlite*
+
+# Logs / caches
+*.log
+logs/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Temp
 temp/
 tmp/
 *.tmp
 *.temp
 
-# Test files
-test_*.pdf
-sample_*.pdf
-
-# Celery
+# Celery (legacy)
 celerybeat-schedule
 celerybeat.pid
 
-# Coverage
-.coverage
-htmlcov/
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
 
-# pytest
-.pytest_cache/
+# Runtime storage — keep directory placeholders via .gitkeep only
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/results/*
+!storage/results/.gitkeep
+storage/pipeline_runs/*
+!storage/pipeline_runs/.gitkeep
+storage/cv_overlays/
+storage/annotations/
+storage/OCRResults/
+storage/debug/
+storage/pdfs/
+storage/app.db
+storage/exam_extractor.db
 
-# MyPy
-.mypy_cache/
+# Local experiment dumps / archives (not part of the product)
+New folder/
+New folder.rar
+*.rar
+*.zip
+graphify-out/
+audit_zone_*.json
+tickets?/
+UZ1_Paper_A*.json
+test.pdf
+
+# Large sample PDFs (not needed to run the API; keep tests/fixtures)
+backend/examples/**/*.pdf
+backend/examples/UZ1-35_ID3-224_merged.pdf
+
+# Answer-key source scans (structured JSON under answer_keys/ is what we ship)
+answer_keys/**/*.pdf
+answer_keys/**/*.docx
+answer_keys/**/*.doc
+
+# Proto / one-off local scripts outputs
+scripts/**/*.png
+scripts/**/out/

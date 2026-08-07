@@ -1,0 +1,30 @@
+{
+  "template_id": "seamo_x_2026_e",
+  "version": 1,
+  "source": {
+    "filename": "seamo_x_2026/Paper E key.pdf",
+    "sha256": "f8d73d22cf7ec52384328eead827c5d57f232f2724328d37274afb255262a751"
+  },
+  "reconciliation": {
+    "additional_source": {"filename": "seamo_x_2026/Paper E portal.pdf", "sha256": "32faa1ce65a1683abd71d407f3995aa62c9631783087e25fa98cee027067a56b"},
+    "decision": "Retain the portal's equivalent mixed-number and decimal forms for Q3 and Q4."
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "free_response", "accepted_answers": ["(-1,6)"], "marks": 6, "normalizer": "text"},
+    {"number": 2, "type": "numeric", "accepted_answers": ["60"], "marks": 6, "normalizer": "integer"},
+    {"number": 3, "type": "free_response", "accepted_answers": ["7/3", "2 1/3", "2.3̇"], "marks": 6, "normalizer": "text"},
+    {"number": 4, "type": "free_response", "accepted_answers": ["19/2", "9 1/2", "9.5"], "marks": 6, "normalizer": "text"},
+    {"number": 5, "type": "numeric", "accepted_answers": ["7"], "marks": 6, "normalizer": "integer"},
+    {"number": 6, "type": "free_response", "accepted_answers": ["4√3"], "marks": 6, "normalizer": "text"},
+    {"number": 7, "type": "numeric", "accepted_answers": ["3"], "marks": 6, "normalizer": "integer"},
+    {"number": 8, "type": "numeric", "accepted_answers": ["2343"], "marks": 6, "normalizer": "integer"},
+    {"number": 9, "type": "free_response", "accepted_answers": ["329/480"], "marks": 6, "normalizer": "text"},
+    {"number": 10, "type": "numeric", "accepted_answers": ["6"], "marks": 6, "normalizer": "integer"},
+    {"number": 11, "type": "numeric", "accepted_answers": ["2"], "marks": 8, "normalizer": "integer"},
+    {"number": 12, "type": "free_response", "accepted_answers": ["C"], "marks": 8, "normalizer": "text"},
+    {"number": 13, "type": "numeric", "accepted_answers": ["9"], "marks": 8, "normalizer": "integer"},
+    {"number": 14, "type": "free_response", "accepted_answers": ["1/9"], "marks": 8, "normalizer": "text"},
+    {"number": 15, "type": "numeric", "accepted_answers": ["32"], "marks": 8, "normalizer": "integer"}
+  ]
+}

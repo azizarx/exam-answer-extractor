@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Code, Copy, Check, Zap, Key, CheckCircle, Database, FileJson, BookOpen } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 const ApiDocsPage = () => {
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [activeTab, setActiveTab] = useState('extract');
@@ -53,11 +55,13 @@ const ApiDocsPage = () => {
             <h1 className="text-4xl font-bold">Exam Extractor API</h1>
           </div>
           <p className="text-blue-100 text-lg max-w-2xl">
-            Extract candidate answers from scanned exam PDF sheets, auto-mark them against answer keys, and manage answer keys — all via simple REST endpoints.
+            Server-to-server PDF → JSON extraction. Primary endpoint: <code className="bg-blue-600/50 px-1 rounded">POST /extract/json</code>.
+            This UI is for testing; integrators should use OpenAPI or <code className="bg-blue-600/50 px-1 rounded">docs/API.md</code>.
           </p>
           <div className="flex gap-3 mt-6 flex-wrap">
-            <span className="bg-blue-600/40 px-3 py-1 rounded-full text-sm">Base URL: http://localhost:8000</span>
+            <span className="bg-blue-600/40 px-3 py-1 rounded-full text-sm">Base URL: {API_BASE}</span>
             <span className="bg-blue-600/40 px-3 py-1 rounded-full text-sm">Content: multipart/form-data</span>
+            <span className="bg-blue-600/40 px-3 py-1 rounded-full text-sm">Auth: optional X-API-Key</span>
           </div>
         </div>
       </div>
@@ -114,13 +118,27 @@ const ApiDocsPage = () => {
 
             <Endpoint method="POST" path="/extract/json" desc="Synchronous extraction — returns JSON immediately">
               <p className="text-sm text-slate-600 mb-3">
-                Upload a PDF file and receive structured candidate data instantly. No database records are created. This is the primary endpoint for third-party integrations.
+                Upload a PDF and receive structured candidate data in the response. No submission DB row.
+                This is the primary endpoint for third-party servers. Omit <code className="bg-slate-100 px-1 rounded">template_id</code> to auto-detect layout per page from the footer.
+                Use a client timeout of at least 10 minutes for multi-page PDFs.
               </p>
-              <h4 className="font-semibold text-slate-700 mb-2">Request</h4>
+              <h4 className="font-semibold text-slate-700 mb-2">Request (auto layout)</h4>
               <div className="bg-slate-800 rounded-lg p-4 relative mb-4">
-                <CopyBtn code={'curl -X POST http://localhost:8000/extract/json \\\n  -F "file=@exam_sheet.pdf"'} idx="e1" />
-                <pre className="text-green-300 font-mono text-sm overflow-x-auto">{'curl -X POST http://localhost:8000/extract/json \\\n  -F "file=@exam_sheet.pdf"'}</pre>
+                <CopyBtn code={`curl -X POST ${API_BASE}/extract/json \\\n  -H "X-API-Key: $API_KEY" \\\n  -F "file=@exam_sheet.pdf"`} idx="e1" />
+                <pre className="text-green-300 font-mono text-sm overflow-x-auto">{`curl -X POST ${API_BASE}/extract/json \\
+  -H "X-API-Key: $API_KEY" \\
+  -F "file=@exam_sheet.pdf"`}</pre>
               </div>
+              <h4 className="font-semibold text-slate-700 mb-2">Request (forced template)</h4>
+              <div className="bg-slate-800 rounded-lg p-4 relative mb-4">
+                <CopyBtn code={`curl -X POST "${API_BASE}/extract/json?template_id=seamo_2025_b" \\\n  -H "X-API-Key: $API_KEY" \\\n  -F "file=@exam_sheet.pdf"`} idx="e1b" />
+                <pre className="text-green-300 font-mono text-sm overflow-x-auto">{`curl -X POST "${API_BASE}/extract/json?template_id=seamo_2025_b" \\
+  -H "X-API-Key: $API_KEY" \\
+  -F "file=@exam_sheet.pdf"`}</pre>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">
+                List ids via <code className="bg-slate-100 px-1 rounded">GET /templates/all</code>. If the server has <code className="bg-slate-100 px-1 rounded">API_KEY</code> unset, omit the header.
+              </p>
 
               <h4 className="font-semibold text-slate-700 mb-2">Response (200 OK)</h4>
               <div className="bg-slate-800 rounded-lg p-4 relative">
@@ -178,48 +196,47 @@ const ApiDocsPage = () => {
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Marking Endpoints</h2>
             <p className="text-slate-600 mb-6">Auto-mark candidate answers against an answer key. Supports inline keys or stored answer keys.</p>
 
-            <Endpoint method="POST" path="/extract/json/mark" desc="Extract PDF + auto-mark in one step">
+            <Endpoint method="POST" path="/extract/json/mark" desc="Extract PDF + mark against a stored answer key">
               <p className="text-sm text-slate-600 mb-3">
-                Upload a PDF and provide an answer key to get marked results immediately. You can provide the answer key <strong>inline</strong> via a <code className="bg-slate-100 px-1 rounded">mark_request</code> form field, reference a <strong>stored answer key</strong> by ID, or let the system <strong>auto-match</strong> by paper type.
+                Extract then mark against a <strong>stored</strong> answer key. Inline keys are rejected.
+                Optional <code className="bg-slate-100 px-1 rounded">template_id</code> forces layout; omit for auto-detect.
               </p>
-
-              <h4 className="font-semibold text-slate-700 mb-2">With inline answer key</h4>
-              <div className="bg-slate-800 rounded-lg p-4 relative mb-4">
-                <CopyBtn code={'curl -X POST http://localhost:8000/extract/json/mark \\\n  -F "file=@exam_sheet.pdf" \\\n  -F \'mark_request={"answer_key":{"1":"D","2":"B","3":"A","4":"C","5":"B"},"drawing_key":{"31":"circle"}}\''} idx="m1" />
-                <pre className="text-green-300 font-mono text-sm overflow-x-auto">{`curl -X POST http://localhost:8000/extract/json/mark \\
-  -F "file=@exam_sheet.pdf" \\
-  -F 'mark_request={"answer_key":{"1":"D","2":"B","3":"A","4":"C","5":"B"},"drawing_key":{"31":"circle"}}'`}</pre>
-              </div>
 
               <h4 className="font-semibold text-slate-700 mb-2">With stored answer key ID</h4>
               <div className="bg-slate-800 rounded-lg p-4 relative mb-4">
-                <CopyBtn code={'curl -X POST http://localhost:8000/extract/json/mark \\\n  -F "file=@exam_sheet.pdf" \\\n  -F \'mark_request={"answer_key_id": 1}\''} idx="m2" />
-                <pre className="text-green-300 font-mono text-sm overflow-x-auto">{`curl -X POST http://localhost:8000/extract/json/mark \\
+                <CopyBtn code={`curl -X POST "${API_BASE}/extract/json/mark?template_id=seamo_2025_a" \\\n  -H "X-API-Key: $API_KEY" \\\n  -F "file=@exam_sheet.pdf" \\\n  -F 'mark_request={"answer_key_id": 1}'`} idx="m2" />
+                <pre className="text-green-300 font-mono text-sm overflow-x-auto">{`curl -X POST "${API_BASE}/extract/json/mark?template_id=seamo_2025_a" \\
+  -H "X-API-Key: $API_KEY" \\
   -F "file=@exam_sheet.pdf" \\
   -F 'mark_request={"answer_key_id": 1}'`}</pre>
               </div>
 
               <h4 className="font-semibold text-slate-700 mb-2">Auto-match (no mark_request)</h4>
               <p className="text-xs text-slate-500 mb-4">
-                If you omit <code className="bg-slate-100 px-1 rounded">mark_request</code>, the system auto-matches stored answer keys by <code className="bg-slate-100 px-1 rounded">paper_type</code> (fuzzy match). If no match is found, candidates are returned unmarked.
+                Uses the active stored key for the forced <code className="bg-slate-100 px-1 rounded">template_id</code>,
+                or (auto mode) the active key matching each candidate&apos;s <code className="bg-slate-100 px-1 rounded">template_id</code>.
+                Candidates without a matching key are returned unmarked.
               </p>
 
               <h4 className="font-semibold text-slate-700 mb-2">Marked Response</h4>
               <div className="bg-slate-800 rounded-lg p-4 relative">
-                <CopyBtn code={'{\n  "filename": "exam_sheet.pdf",\n  "total_candidates": 35,\n  "candidates": [\n    {\n      "candidate_name": "JOHN SMITH",\n      "candidate_number": "12345",\n      "country": "USA",\n      "paper_type": "PAPER A",\n      "answers": { "1": "D", "2": "A", "3": "A", "4": "BL", "5": "C" },\n      "marked_answers": { "1": "P", "2": "A", "3": "P", "4": "BL", "5": "C" },\n      "marked_drawing": { "31": "P" },\n      "score": { "correct": 2, "total": 5, "percentage": 40.0 }\n    }\n  ]\n}'} idx="m3" />
+                <CopyBtn code={'{\n  "filename": "exam_sheet.pdf",\n  "template_id": "seamo_2025_a",\n  "mode": "forced",\n  "total_candidates": 1,\n  "candidates": [\n    {\n      "candidate_name": "JOHN SMITH",\n      "answers": { "1": "D", "2": "A" },\n      "marking": {\n        "awarded_marks": 3,\n        "max_marks": 100,\n        "percentage": 3.0,\n        "answer_key_id": 1,\n        "outcomes": []\n      }\n    }\n  ]\n}'} idx="m3" />
                 <pre className="text-green-300 font-mono text-sm overflow-x-auto">{`{
   "filename": "exam_sheet.pdf",
-  "total_candidates": 35,
+  "template_id": "seamo_2025_a",
+  "mode": "forced",
+  "total_candidates": 1,
   "candidates": [
     {
       "candidate_name": "JOHN SMITH",
-      "candidate_number": "12345",
-      "country": "USA",
-      "paper_type": "PAPER A",
-      "answers":        { "1": "D", "2": "A", "3": "A", "4": "BL", "5": "C" },
-      "marked_answers": { "1": "P", "2": "A", "3": "P", "4": "BL", "5": "C" },
-      "marked_drawing": { "31": "P" },
-      "score": { "correct": 2, "total": 5, "percentage": 40.0 }
+      "answers": { "1": "D", "2": "A" },
+      "marking": {
+        "awarded_marks": 3,
+        "max_marks": 100,
+        "percentage": 3.0,
+        "answer_key_id": 1,
+        "outcomes": []
+      }
     }
   ]
 }`}</pre>
@@ -939,7 +956,7 @@ main().catch(console.error);`}</pre>
             <Link to="/" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
               Try Upload Demo
             </Link>
-            <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors">
+            <a href={`${API_BASE}/docs`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors">
               OpenAPI (Swagger) Docs
             </a>
           </div>

@@ -175,10 +175,10 @@ def log_llm_error(stage: str, t0: float, exc: BaseException, logger: logging.Log
                  stage, dt, type(exc).__name__, str(exc)[:300])
 
 
-# Per-attempt sleeps for HTTP 429 (ResourceExhausted). With the rate limiter
-# below, 429s should be rare — these are a safety net for whatever the limiter
-# undershoots (e.g. Mathpix or other concurrent users on the same key).
-_RATE_LIMIT_BACKOFF_SECONDS = (5.0, 15.0, 30.0, 60.0, 60.0, 60.0, 60.0, 60.0)
+# Bounded sleeps between transient attempts.  With two configured retries a
+# failed call is capped at three request deadlines instead of the previous
+# nested 27-attempt worst case.
+_TRANSIENT_BACKOFF_SECONDS = (2.0, 5.0, 10.0)
 
 
 # Process-wide token bucket for Gemini calls (sliding 60s window). Cap comes
@@ -254,12 +254,22 @@ def llm_call(
         getattr(generation_config, "temperature", "?"),
         getattr(generation_config, "max_output_tokens", "?"),
     )
-    _acquire_gemini_token(stage, logger)
     t0 = time.perf_counter()
+    from backend.config import get_settings
+
+    settings = get_settings()
+    retries = max(0, int(settings.gemini_transient_retries or 0))
+    timeout = float(settings.gemini_request_timeout_seconds or 0)
     attempt = 0
     while True:
         try:
-            response = model.generate_content(contents, generation_config=generation_config)
+            # Every network attempt consumes quota and therefore acquires its
+            # own sliding-window token.
+            _acquire_gemini_token(stage, logger)
+            kwargs = {"generation_config": generation_config}
+            if timeout > 0:
+                kwargs["request_options"] = {"timeout": timeout}
+            response = model.generate_content(contents, **kwargs)
             break
         except Exception as exc:
             # google.api_core.exceptions.ResourceExhausted is the 429 path.
@@ -274,13 +284,15 @@ def llm_call(
                 or "504" in msg
                 or "503" in msg
             )
-            if (is_429 or is_deadline) and attempt < len(_RATE_LIMIT_BACKOFF_SECONDS):
-                delay = _RATE_LIMIT_BACKOFF_SECONDS[attempt]
+            if (is_429 or is_deadline) and attempt < retries:
+                delay = _TRANSIENT_BACKOFF_SECONDS[
+                    min(attempt, len(_TRANSIENT_BACKOFF_SECONDS) - 1)
+                ]
                 attempt += 1
                 kind = "429 rate-limited" if is_429 else "deadline/unavailable"
                 logger.warning(
                     "LLM[%s] %s; sleeping %.0fs (attempt %d/%d)",
-                    stage, kind, delay, attempt, len(_RATE_LIMIT_BACKOFF_SECONDS),
+                    stage, kind, delay, attempt, retries,
                 )
                 time.sleep(delay)
                 continue

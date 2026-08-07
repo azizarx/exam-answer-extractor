@@ -137,7 +137,7 @@
             "w": 715,
             "h": 280
           },
-          "prompt_hint": "Read the time shown on the analog clock face. Return in HH:MM format."
+          "prompt_hint": "Read the drawn hands on the analog clock. Return exactly 'Clock: HH:MM' when unambiguous; otherwise state both hand endpoints."
         },
         "6": {
           "type": "diagram",
@@ -147,7 +147,7 @@
             "w": 715,
             "h": 280
           },
-          "prompt_hint": "Identify the pattern or answer represented in the 2x2 grid drawing."
+          "prompt_hint": "Return exactly '2x2 grid: TL=<state>, TR=<state>, BL=<state>, BR=<state>'; use O, crossed O, or BL (blank) for each state."
         },
         "9": {
           "type": "diagram",
@@ -157,7 +157,7 @@
             "w": 715,
             "h": 280
           },
-          "prompt_hint": "Count the number of shaded sections in the pie chart / circle diagram. Return as an integer."
+          "prompt_hint": "The circle has 12 fixed sectors. Identify every shaded sector by its exact clock-face interval, for example 'Pie chart: shaded sector 4-5 o'clock'; never use a vague direction such as lower-right."
         }
       }
     }

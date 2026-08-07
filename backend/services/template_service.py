@@ -68,6 +68,17 @@ class ScoringParams:
     min_page_coverage: float = 0.60
     min_avg_ratio: float = 1.10
 
+    def scaled(self, factor: float) -> "ScoringParams":
+        """Scale absolute pixel thresholds with area (factor²); ratios stay put."""
+        area = factor * factor
+        return ScoringParams(
+            min_ink_pixels=max(1, round(self.min_ink_pixels * area)),
+            min_ratio=self.min_ratio,
+            binary_threshold=self.binary_threshold,
+            min_page_coverage=self.min_page_coverage,
+            min_avg_ratio=self.min_avg_ratio,
+        )
+
 
 @dataclass
 class GridGeometry:
@@ -133,7 +144,7 @@ class AnswerSection:
             region=self.region.scaled(factor),
             grid=self.grid.scaled(factor) if self.grid else None,
             extraction_strategy=self.extraction_strategy,
-            scoring=self.scoring,  # thresholds are unitless, no scaling
+            scoring=self.scoring.scaled(factor) if self.scoring else None,
             question_overrides={
                 q: QuestionOverride(
                     type=ov.type,
@@ -188,10 +199,9 @@ class ExamTemplate:
             return 1.0
         return actual_dpi / self.reference_dpi
 
-    def at_dpi(self, actual_dpi: int) -> "ExamTemplate":
-        """Return a copy with all coordinates scaled to actual_dpi."""
-        f = self.scale_factor(actual_dpi)
-        if f == 1.0:
+    def scaled(self, factor: float) -> "ExamTemplate":
+        """Return a copy with all geometry scaled by ``factor`` (image / reference)."""
+        if abs(factor - 1.0) < 1e-6:
             return self
         return ExamTemplate(
             id=self.id,
@@ -199,19 +209,42 @@ class ExamTemplate:
             brand=self.brand,
             year=self.year,
             paper=self.paper,
-            reference_dpi=actual_dpi,
-            page_size=(round(self.page_size[0] * f), round(self.page_size[1] * f)),
+            reference_dpi=max(1, round(self.reference_dpi * factor)),
+            page_size=(round(self.page_size[0] * factor), round(self.page_size[1] * factor)),
             anchor=AnchorConfig(
-                region=self.anchor.region.scaled(f),
+                region=self.anchor.region.scaled(factor),
                 min_match_score=self.anchor.min_match_score,
             ),
             detection=self.detection,
-            header_region=self.header_region.scaled(f),
+            header_region=self.header_region.scaled(factor),
             header_fields=self.header_fields,
-            sections=[s.scaled(f) for s in self.sections],
+            sections=[s.scaled(factor) for s in self.sections],
             variant_of=self.variant_of,
             answer_key_template_id=self.answer_key_template_id,
         )
+
+    def at_dpi(self, actual_dpi: int) -> "ExamTemplate":
+        """Return a copy with all coordinates scaled to actual_dpi."""
+        return self.scaled(self.scale_factor(actual_dpi))
+
+    def adapted_to_image(self, image: np.ndarray) -> Tuple["ExamTemplate", float]:
+        """Scale template to the page image using width vs ``page_size``.
+
+        Height alone is unreliable (scanner feed can add vertical margin).
+        Within ~3% of reference width we leave the template unchanged.
+        """
+        if image is None or image.size == 0:
+            return self, 1.0
+        img_w = int(image.shape[1])
+        ref_w = int(self.page_size[0] or 2481)
+        if ref_w <= 0 or img_w <= 0:
+            return self, 1.0
+        factor = img_w / ref_w
+        # Ignore small width drift from scanner margins / PDF crop.
+        # Only rescale for clear DPI mismatches (e.g. 200 vs 300).
+        if abs(factor - 1.0) < 0.10:
+            return self, 1.0
+        return self.scaled(factor), factor
 
     @property
     def total_questions(self) -> int:
@@ -600,29 +633,44 @@ class TemplateRegistry:
     ) -> Optional[np.ndarray]:
         """
         Get the anchor region image for template matching.
-        Crops from the reference_image using the template's anchor coordinates.
-        In production this would come from a stored reference image per template.
+
+        Resolution order:
+          1. Explicitly primed / cached image for this template id
+          2. On-disk ``{id}_anchor.png``, walking ``variant_of`` parents
+          3. Uncached crop from ``reference_image`` (calibration only)
+
+        Live crops are intentionally NOT cached: caching a crop from page N
+        and then matching page N+1 against it produces false (dx, dy) locks.
         """
         tid = template.id
         if tid in self._anchor_images:
             return self._anchor_images[tid]
 
-        # Try to load a stored reference anchor image
-        anchor_path = self._templates_dir / f"{tid}_anchor.png"
-        if anchor_path.exists():
-            img = cv2.imread(str(anchor_path))
-            self._anchor_images[tid] = img
-            return img
+        # Walk this template then variant_of parents for a stored anchor PNG.
+        seen: set[str] = set()
+        walk_id: Optional[str] = tid
+        while walk_id and walk_id not in seen:
+            seen.add(walk_id)
+            anchor_path = self._templates_dir / f"{walk_id}_anchor.png"
+            if anchor_path.exists():
+                img = cv2.imread(str(anchor_path))
+                self._anchor_images[tid] = img
+                if walk_id != tid:
+                    logger.info(
+                        "Anchor for %s loaded from parent template file %s",
+                        tid, anchor_path.name,
+                    )
+                return img
+            parent = self._templates.get(walk_id)
+            walk_id = parent.variant_of if parent else None
 
         # Fallback: crop from the provided image (only useful when the
-        # reference_image IS the template's reference page)
+        # reference_image IS the template's reference page). Do not cache.
         r = template.anchor.region
         if r.w > 0 and r.h > 0:
             h, w = reference_image.shape[:2]
             if r.y + r.h <= h and r.x + r.w <= w:
-                anchor = reference_image[r.y : r.y + r.h, r.x : r.x + r.w].copy()
-                self._anchor_images[tid] = anchor
-                return anchor
+                return reference_image[r.y : r.y + r.h, r.x : r.x + r.w].copy()
 
         self._anchor_images[tid] = None
         return None

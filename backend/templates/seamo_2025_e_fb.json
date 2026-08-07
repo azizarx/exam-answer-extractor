@@ -1,6 +1,6 @@
 {
   "id": "seamo_2025_e_fb",
-  "name": "SEAMO 2025 Paper E — format B",
+  "name": "SEAMO 2025 Paper E \u2014 format B",
   "brand": "seamo",
   "year": 2025,
   "paper": "E",
@@ -16,7 +16,110 @@
     ]
   },
   "anchor": {
-    "min_match_score": 0.74
+    "min_match_score": 0.88
   },
-  "notes_for_calib": "Paper E previously showed large |dy| false locks; pipeline now zeros offset on huge_dy. Raise/lower min_match_score after overlay QA."
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 20
+      },
+      "region": {
+        "x": 249,
+        "y": 1155,
+        "w": 572,
+        "h": 1650
+      },
+      "grid": {
+        "rows": 20,
+        "cols": 1,
+        "questions_per_col": [
+          20
+        ],
+        "options": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "row_positions": [
+          1195,
+          1274,
+          1354,
+          1434,
+          1513,
+          1593,
+          1673,
+          1752,
+          1832,
+          1912,
+          1992,
+          2071,
+          2151,
+          2231,
+          2310,
+          2390,
+          2470,
+          2549,
+          2629,
+          2709
+        ],
+        "col_positions": [
+          [
+            314,
+            420,
+            535,
+            645,
+            756
+          ]
+        ],
+        "cell_width": 45,
+        "cell_height": 36,
+        "bubble_height": 20,
+        "row_pitch": 79.7,
+        "first_row_offset": 38
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 110,
+        "min_ratio": 1.2,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.25
+      }
+    },
+    {
+      "type": "open_response",
+      "questions": {
+        "start": 21,
+        "end": 25
+      },
+      "region": {
+        "x": 880,
+        "y": 1180,
+        "w": 720,
+        "h": 1300
+      },
+      "grid": {
+        "rows": 5,
+        "cols": 1,
+        "questions_per_col": [
+          5
+        ],
+        "cell_width": 694,
+        "cell_height": 160,
+        "row_positions": [
+          1252,
+          1502,
+          1748,
+          1993,
+          2241
+        ],
+        "row_pitch": 247.0
+      },
+      "extraction_strategy": "llm"
+    }
+  ]
 }

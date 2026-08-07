@@ -1,6 +1,6 @@
 {
   "id": "seamo_2025_c_fb",
-  "name": "SEAMO 2025 Paper C — format B",
+  "name": "SEAMO 2025 Paper C \u2014 format B",
   "brand": "seamo",
   "year": 2025,
   "paper": "C",
@@ -16,7 +16,110 @@
     ]
   },
   "anchor": {
-    "min_match_score": 0.70
+    "min_match_score": 0.85
   },
-  "notes_for_calib": "Tune row_positions / col_positions via gold CV overlays (storage/cv_overlays). Shared a_fb geometry is a starting point; Paper C was the weakest FB cov (~0.71)."
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 20
+      },
+      "region": {
+        "x": 301,
+        "y": 1149,
+        "w": 582,
+        "h": 1700
+      },
+      "grid": {
+        "rows": 20,
+        "cols": 1,
+        "questions_per_col": [
+          20
+        ],
+        "options": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "row_positions": [
+          1189,
+          1271,
+          1354,
+          1436,
+          1518,
+          1601,
+          1683,
+          1765,
+          1848,
+          1930,
+          2012,
+          2094,
+          2177,
+          2259,
+          2341,
+          2424,
+          2506,
+          2588,
+          2671,
+          2753
+        ],
+        "col_positions": [
+          [
+            366,
+            474,
+            592,
+            704,
+            818
+          ]
+        ],
+        "cell_width": 45,
+        "cell_height": 36,
+        "bubble_height": 20,
+        "row_pitch": 82.3,
+        "first_row_offset": 38
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 110,
+        "min_ratio": 1.2,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.25
+      }
+    },
+    {
+      "type": "open_response",
+      "questions": {
+        "start": 21,
+        "end": 25
+      },
+      "region": {
+        "x": 880,
+        "y": 1180,
+        "w": 720,
+        "h": 1300
+      },
+      "grid": {
+        "rows": 5,
+        "cols": 1,
+        "questions_per_col": [
+          5
+        ],
+        "cell_width": 694,
+        "cell_height": 160,
+        "row_positions": [
+          1252,
+          1502,
+          1748,
+          1993,
+          2241
+        ],
+        "row_pitch": 247.0
+      },
+      "extraction_strategy": "llm"
+    }
+  ]
 }

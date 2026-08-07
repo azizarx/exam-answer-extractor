@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 ANSWER_KEYS = ROOT / "answer_keys"
-STRUCTURED_KEYS = ANSWER_KEYS / "structured"
+STRUCTURED_KEYS = ANSWER_KEYS / "seamo_2025"
 PAPERS = ("a", "b", "c", "d", "e", "f", "k")
 INTEGER_PATTERN = re.compile(r"-?(?:0|[1-9]\d*)")
 EXPECTED_ANSWERS = {

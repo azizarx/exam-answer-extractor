@@ -14,5 +14,112 @@
       "Paper F",
       "SENIOR"
     ]
-  }
+  },
+  "anchor": {
+    "min_match_score": 0.82
+  },
+  "sections": [
+    {
+      "type": "mcq_grid",
+      "questions": {
+        "start": 1,
+        "end": 20
+      },
+      "region": {
+        "x": 297,
+        "y": 1153,
+        "w": 554,
+        "h": 1598
+      },
+      "grid": {
+        "rows": 20,
+        "cols": 1,
+        "questions_per_col": [
+          20
+        ],
+        "options": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "row_positions": [
+          1193,
+          1270,
+          1347,
+          1424,
+          1501,
+          1578,
+          1654,
+          1731,
+          1808,
+          1885,
+          1962,
+          2039,
+          2116,
+          2193,
+          2270,
+          2347,
+          2424,
+          2501,
+          2578,
+          2655
+        ],
+        "col_positions": [
+          [
+            362,
+            463,
+            574,
+            679,
+            786
+          ]
+        ],
+        "cell_width": 45,
+        "cell_height": 36,
+        "bubble_height": 20,
+        "row_pitch": 76.9,
+        "first_row_offset": 38
+      },
+      "extraction_strategy": "cv_then_llm",
+      "scoring": {
+        "min_ink_pixels": 110,
+        "min_ratio": 1.2,
+        "binary_threshold": 180,
+        "min_page_coverage": 0.6,
+        "min_avg_ratio": 1.25
+      }
+    },
+    {
+      "type": "open_response",
+      "questions": {
+        "start": 21,
+        "end": 25
+      },
+      "region": {
+        "x": 880,
+        "y": 1180,
+        "w": 720,
+        "h": 1300
+      },
+      "grid": {
+        "rows": 5,
+        "cols": 1,
+        "questions_per_col": [
+          5
+        ],
+        "cell_width": 694,
+        "cell_height": 160,
+        "row_positions": [
+          1252,
+          1502,
+          1748,
+          1993,
+          2241
+        ],
+        "row_pitch": 247.0
+      },
+      "extraction_strategy": "llm"
+    }
+  ]
 }

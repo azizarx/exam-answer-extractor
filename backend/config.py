@@ -30,6 +30,16 @@ class Settings(BaseSettings):
     app_env: str = "development"
     debug: bool = True
     log_level: str = "INFO"
+
+    # Comma-separated browser origins allowed by CORS. Use "*" for any origin
+    # (server-to-server callers ignore CORS). Example:
+    # CORS_ORIGINS=https://my-tool.example.com,http://localhost:3000
+    cors_origins: str = "*"
+
+    # Optional shared secret for server-to-server access. When non-empty,
+    # callers must send X-API-Key (or Authorization: Bearer). Leave blank
+    # for open local/dev use.
+    api_key: str = ""
     
     # File Upload
     max_file_size_mb: int = 50
@@ -48,6 +58,9 @@ class Settings(BaseSettings):
 
     # Parallel PDF page renders (each worker opens its own PyMuPDF handle).
     max_pdf_render_workers: int = 4
+    # Answer sheets are monochrome; grayscale PNGs preserve CV/handwriting
+    # detail while cutting render CPU, temporary storage, and decode memory.
+    pdf_render_grayscale: bool = True
 
     # Parallel layout classification (footer OCR; Gemini fallback only on misses).
     max_classify_workers: int = 8
@@ -79,6 +92,12 @@ class Settings(BaseSettings):
     # last resort when CV coverage/anchor quality is poor.
     enable_page_deskew: bool = True
     mcq_llm_last_resort: bool = False
+    # Hard per-attempt deadline and total retry count for Gemini.  All retry
+    # ownership lives in run_logger.llm_call; callers must not wrap it again.
+    gemini_request_timeout_seconds: float = 60.0
+    gemini_transient_retries: int = 2
+    # Legacy name retained for existing deployments; no longer read by the
+    # extraction loop now that retries are centralized.
     llm_deadline_retries: int = 2
 
     # NOTE: Gemini calls intentionally do NOT pass max_output_tokens. With

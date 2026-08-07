@@ -36,31 +36,64 @@ def render_mcq_overlay(
     *,
     registry: Optional[TemplateRegistry] = None,
 ) -> np.ndarray:
-    """Return a copy of the page with bubbles, answers, and anchor diagnostics."""
+    """Return a copy of the page with bubbles, answers, and anchor diagnostics.
+
+    The template is scaled to the image DPI (same as ``extract_page``) so
+    box geometry lines up with the ROIs that were actually scored.
+    """
     out = image_bgr.copy()
+    template, scale = template.adapted_to_image(image_bgr)
     dx, dy = result.dx, result.dy
+    # Lattice-aligned Absolute sections (dx=dy=0); otherwise median + offset.
+    draw_sections = list(template.sections)
+    if result.overlay_mcq_sections:
+        aligned = list(result.overlay_mcq_sections)
+        ai = 0
+        rebuilt = []
+        for section in template.sections:
+            if section.type == "mcq_grid" and ai < len(aligned):
+                rebuilt.append(aligned[ai])
+                ai += 1
+            else:
+                rebuilt.append(section)
+        draw_sections = rebuilt
+        dx, dy = 0, 0
 
     # Anchor rectangle (template coords shifted)
     ar = template.anchor.region
+    ax = result.dx
+    ay = result.dy
     cv2.rectangle(
         out,
-        (ar.x + dx, ar.y + dy),
-        (ar.x + dx + ar.w, ar.y + dy + ar.h),
+        (ar.x + ax, ar.y + ay),
+        (ar.x + ax + ar.w, ar.y + ay + ar.h),
         (255, 128, 0),
         2,
     )
+    scale_note = f" scale={scale:.3f}" if abs(scale - 1.0) >= 0.10 else ""
+    lattice_note = " lattice" if result.overlay_mcq_sections else ""
     _draw_label(
         out,
-        f"anchor={result.anchor_score:.3f} dx={dx} dy={dy} warn={result.warning}",
+        f"anchor={result.anchor_score:.3f} dx={result.dx} dy={result.dy} "
+        f"warn={result.warning} page={image_bgr.shape[1]}x{image_bgr.shape[0]}"
+        f"{scale_note}{lattice_note}",
         (20, 40),
         (255, 128, 0),
     )
 
-    for section in template.sections:
+    for section in draw_sections:
         if section.type != "mcq_grid" or section.grid is None:
             continue
         grid = section.grid
-        scoring = section.scoring or ScoringParams()
+        # Section outline
+        sr = section.region
+        cv2.rectangle(
+            out,
+            (sr.x + dx, sr.y + dy),
+            (sr.x + dx + sr.w, sr.y + dy + sr.h),
+            (200, 200, 0),
+            1,
+        )
         n_visual = len(grid.col_positions) if grid.col_positions else 1
         row_by_q = {r.question: r for s in result.sections for r in s.rows}
 
@@ -71,10 +104,10 @@ def render_mcq_overlay(
             else:
                 continue
             labels = list(grid.options or [])
-            # questions in this visual column
             q_start = section.question_start
-            # Walk rows in order for this column
-            qps = grid.questions_per_col or [section.question_end - section.question_start + 1]
+            qps = grid.questions_per_col or [
+                section.question_end - section.question_start + 1
+            ]
             q_offset = sum(qps[:vcol]) if vcol < len(qps) else 0
             for row_i, row_y in enumerate(row_ys):
                 qnum = q_start + q_offset + row_i
@@ -87,13 +120,20 @@ def render_mcq_overlay(
                     if li >= len(labels):
                         break
                     x1 = int(x_center - grid.cell_width / 2)
-                    y1 = int(row_y + grid.cell_height)
                     x2 = int(x_center + grid.cell_width / 2)
+                    # Match mcq_extractor._score_bubbles: skip label band, score fill.
+                    y1 = int(row_y + grid.cell_height)
                     y2 = int(y1 + (grid.bubble_height or grid.cell_height))
-                    cv2.rectangle(out, (x1, y1), (x2, y2), color, 1)
-                    if row and labels[li] == ans:
-                        cv2.rectangle(out, (x1, y1), (x2, y2), color, 2)
-                _draw_label(out, f"Q{qnum}:{ans}", (cols[0] - 80, row_y + 20), color)
+                    thickness = 2 if (row and labels[li] == ans) else 1
+                    cv2.rectangle(out, (x1, y1), (x2, y2), color, thickness)
+                    if row_i == 0:
+                        _draw_label(out, labels[li], (x1 + 4, y1 - 6), (180, 180, 180))
+                _draw_label(
+                    out,
+                    f"Q{qnum}:{ans}",
+                    (int(cols[0] - 90), int(row_y + grid.cell_height + 22)),
+                    color,
+                )
 
     return out
 
@@ -111,13 +151,17 @@ def overlay_page_file(
     if image is None:
         raise FileNotFoundError(image_path)
     image, _ = deskew_if_enabled(image, enabled=deskew)
-    result = extract_page(image, template, page_number=1, registry=registry)
+    # extract_page adapts template to image DPI internally; overlay redraws
+    # with the same adaptation so boxes match scored ROIs.
+    result = extract_page(
+        image, template, page_number=1, registry=registry, deskew=False,
+    )
     overlay = render_mcq_overlay(image, template, result, registry=registry)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(out_path), overlay)
     logger.info(
-        "OVERLAY wrote %s coverage=%.2f warning=%s",
-        out_path, result.coverage, result.warning,
+        "OVERLAY wrote %s coverage=%.2f warning=%s page=%dx%d",
+        out_path, result.coverage, result.warning, image.shape[1], image.shape[0],
     )
     return result

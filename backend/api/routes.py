@@ -564,12 +564,13 @@ def process_pdf_extraction(
                     pass
                 else:
                     normalized[mapped_key] = v
-            # Build extra_fields, excluding known columns and internal keys
-            # Also convert values to strings for schema compatibility
-            extra = {}
+            # Preserve extractor-owned nested metadata (notably answer trust and
+            # needs_review_questions) for the marking workflow.  Additional
+            # top-level display fields remain string-normalized for compatibility.
+            nested_extra = normalized.get("extra_fields")
+            extra = dict(nested_extra) if isinstance(nested_extra, dict) else {}
             for k, v in normalized.items():
                 if k not in KNOWN_COLUMNS and k not in EXCLUDED_KEYS:
-                    # Convert to string for schema compatibility
                     extra[k] = str(v) if v is not None else ''
             detection = normalized.get("detection")
             if detection is not None and not isinstance(detection, dict):
@@ -1105,21 +1106,69 @@ async def delete_submission(submission_id: int, db: Session = Depends(get_db)):
     return {"status": "success", "message": f"Submission {submission_id} deleted"}
 
 
-@router.post("/extract/json")
-async def extract_json(
-    file: UploadFile = File(...),
-    template_id: str = Query(..., description="Required: exam layout template id."),
-):
-    """Synchronous PDF → JSON extraction endpoint for third-party use.
+def _validate_optional_template_id(template_id: Optional[str]) -> Optional[str]:
+    """Return cleaned template_id or raise 400 if unknown."""
+    if not template_id:
+        return None
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+    if registry.get(template_id) is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown template_id '{template_id}'. Available: {registry.list_ids()}",
+        )
+    return template_id
 
-    Accepts a PDF upload and returns structured JSON immediately without
-    creating DB records or using background tasks. template_id is REQUIRED.
+
+def _run_sync_extraction(
+    pdf_path: str,
+    image_paths: list,
+    *,
+    template_id: Optional[str],
+    filename: str,
+) -> dict:
+    """Forced-template or auto-layout sync extraction (no DB persistence)."""
+    settings = get_settings()
+    if template_id:
+        extractor = TemplateExtractor(template_id)
+        return extractor.extract_pdf(
+            pdf_path,
+            image_paths,
+            max_workers=settings.max_extraction_workers,
+            filename=filename,
+        )
+    return extract_pdf_auto(
+        pdf_path,
+        image_paths,
+        max_workers=settings.max_extraction_workers,
+    )
+
+
+@router.post(
+    "/extract/json",
+    summary="Extract PDF → JSON (sync, integration primary)",
+    response_description="Structured extraction JSON with candidates and answers",
+)
+async def extract_json(
+    file: UploadFile = File(..., description="Scanned exam answer-sheet PDF"),
+    template_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional layout template id (see GET /templates/all). "
+            "When omitted, each page is classified from the printed footer."
+        ),
+    ),
+):
+    """Synchronous PDF → JSON extraction for third-party servers.
+
+    Upload a PDF and receive structured candidate data in the HTTP response.
+    No submission row is created. Prefer this endpoint for server-to-server use.
+
+    Set a client timeout of **≥ 10 minutes** for multi-page PDFs.
     """
     if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-    from backend.services.template_service import get_template_registry
-    if get_template_registry().get(template_id) is None:
-        raise HTTPException(status_code=400, detail=f"Unknown template_id '{template_id}'")
+    template_id = _validate_optional_template_id(template_id)
 
     try:
         pdf_converter = get_pdf_converter()
@@ -1127,12 +1176,10 @@ async def extract_json(
         saved = storage.save_pdf(file.file, file.filename)
         image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
 
-        settings = get_settings()
-        extractor = TemplateExtractor(template_id)
-        extraction_result = extractor.extract_pdf(
+        extraction_result = _run_sync_extraction(
             saved["absolute_path"],
             image_paths,
-            max_workers=settings.max_extraction_workers,
+            template_id=template_id,
             filename=file.filename,
         )
 
@@ -1157,28 +1204,38 @@ async def extract_json(
         raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")
 
 
-@router.post("/extract/json/mark")
+@router.post(
+    "/extract/json/mark",
+    summary="Extract PDF + mark against stored answer key (sync)",
+)
 async def extract_and_mark(
-    file: UploadFile = File(...),
-    template_id: str = Query(..., description="Required: exam layout template id."),
-    mark_request: Optional[str] = Form(None),
+    file: UploadFile = File(..., description="Scanned exam answer-sheet PDF"),
+    template_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional forced layout id. When omitted, layout is auto-detected "
+            "and each candidate is marked against the active key for their template."
+        ),
+    ),
+    mark_request: Optional[str] = Form(
+        None,
+        description='Optional JSON: {"answer_key_id": <int>}. Inline keys are rejected.',
+    ),
     db: Session = Depends(get_db),
 ):
-    """
-    Synchronous: extract PDF + auto-mark against an answer key.
+    """Synchronous extract + mark against a **stored** answer key.
 
-    template_id is REQUIRED. mark_request may select a stored immutable
-    answer-key version by ID. Inline answer keys are intentionally rejected.
+    ``mark_request`` may select a stored immutable answer-key version by ID.
+    Inline answer keys are intentionally rejected.
 
-    If no mark_request is provided, uses only the active answer key whose
-    template_id exactly matches template_id. If unavailable, returns unmarked
-    results.
+    Without ``mark_request``:
+    - forced ``template_id`` → active key for that template
+    - auto layout → active key matching each candidate's ``template_id``
+    Missing keys leave that candidate unmarked (no marking block).
     """
     if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-    from backend.services.template_service import get_template_registry
-    if get_template_registry().get(template_id) is None:
-        raise HTTPException(status_code=400, detail=f"Unknown template_id '{template_id}'")
+    template_id = _validate_optional_template_id(template_id)
 
     try:
         pdf_converter = get_pdf_converter()
@@ -1186,12 +1243,10 @@ async def extract_and_mark(
         saved = storage.save_pdf(file.file, file.filename)
         image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
 
-        settings = get_settings()
-        extractor = TemplateExtractor(template_id)
-        extraction_result = extractor.extract_pdf(
+        extraction_result = _run_sync_extraction(
             saved["absolute_path"],
             image_paths,
-            max_workers=settings.max_extraction_workers,
+            template_id=template_id,
             filename=file.filename,
         )
 
@@ -1213,43 +1268,63 @@ async def extract_and_mark(
                 )
             selected_key_id = parsed_request["answer_key_id"]
 
-        key_query = db.query(AnswerKey).filter(
-            AnswerKey.template_id == template_id,
-        )
-        if selected_key_id is None:
-            key_query = key_query.filter(AnswerKey.is_active.is_(True))
-        else:
-            key_query = key_query.filter(AnswerKey.id == selected_key_id)
-        matched_ak = key_query.one_or_none()
-        if selected_key_id is not None and matched_ak is None:
-            existing_key = db.get(AnswerKey, selected_key_id)
-            if existing_key is None:
+        # Resolve keys: explicit id, or active key(s) by template.
+        key_by_template: dict[str, AnswerKey] = {}
+        forced_key: Optional[AnswerKey] = None
+        if selected_key_id is not None:
+            forced_key = db.get(AnswerKey, selected_key_id)
+            if forced_key is None:
                 raise HTTPException(status_code=404, detail="Answer key not found")
-            raise HTTPException(
-                status_code=409,
-                detail="Answer key template does not match requested template",
-            )
-
-        if matched_ak is None:
-            marked_candidates = candidates
-        else:
-            marker = MarkingService(manifest_from_key(matched_ak))
-            marked_candidates = []
-            for candidate in candidates:
-                result = marker.mark(candidate.get("answers") or {})
-                marked_candidates.append(
-                    {
-                        **candidate,
-                        "marking": {
-                            "awarded_marks": result.awarded_marks,
-                            "max_marks": result.max_marks,
-                            "percentage": result.percentage,
-                            "outcomes": [
-                                asdict(outcome) for outcome in result.outcomes
-                            ],
-                        },
-                    }
+            if template_id and forced_key.template_id != template_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Answer key template does not match requested template",
                 )
+        elif template_id:
+            forced_key = (
+                db.query(AnswerKey)
+                .filter(
+                    AnswerKey.template_id == template_id,
+                    AnswerKey.is_active.is_(True),
+                )
+                .one_or_none()
+            )
+        else:
+            active_keys = (
+                db.query(AnswerKey)
+                .filter(AnswerKey.is_active.is_(True))
+                .all()
+            )
+            for ak in active_keys:
+                tid = getattr(ak, "template_id", None)
+                if tid and tid not in key_by_template:
+                    key_by_template[tid] = ak
+
+        marked_candidates = []
+        for candidate in candidates:
+            cand_template = template_id or candidate.get("template_id")
+            matched_ak = forced_key
+            if matched_ak is None and cand_template:
+                matched_ak = key_by_template.get(cand_template)
+            if matched_ak is None:
+                marked_candidates.append(candidate)
+                continue
+            marker = MarkingService(manifest_from_key(matched_ak))
+            result = marker.mark(candidate.get("answers") or {})
+            marked_candidates.append(
+                {
+                    **candidate,
+                    "marking": {
+                        "awarded_marks": result.awarded_marks,
+                        "max_marks": result.max_marks,
+                        "percentage": result.percentage,
+                        "answer_key_id": matched_ak.id,
+                        "outcomes": [
+                            asdict(outcome) for outcome in result.outcomes
+                        ],
+                    },
+                }
+            )
 
         # Cleanup images
         for img in image_paths:
@@ -1260,6 +1335,8 @@ async def extract_and_mark(
 
         return JSONResponse(content={
             "filename": file.filename,
+            "template_id": template_id,
+            "mode": "forced" if template_id else "auto",
             "total_candidates": len(marked_candidates),
             "candidates": marked_candidates,
         })

@@ -29,11 +29,45 @@ def test_gold_eval_flags_silent_wrong_vs_review():
     assert summarize([page2])["meets_zero_silent_wrong"] is False
 
 
-def test_classify_row_emits_in_for_multi_fill():
-    scoring = ScoringParams(min_ink_pixels=10, min_ratio=1.5)
-    ans, best, second, ratio = _classify_row({"A": 40, "B": 38, "C": 2}, scoring)
-    assert ans == "IN"
-    assert best >= second
+def test_ambiguous_mcq_flags_in_and_thin_ratio():
+    from backend.services.mcq_extractor import (
+        PageResult,
+        RowResult,
+        SectionResult,
+        ambiguous_mcq_questions,
+    )
+
+    page = PageResult(
+        page_number=1,
+        template_id="t",
+        status="ok",
+        sections=[
+            SectionResult(
+                section_type="mcq_grid",
+                question_start=1,
+                question_end=3,
+                rows=[
+                    RowResult(1, "A", 400, 100, 4.0, {"A": 400}),
+                    RowResult(2, "IN", 300, 290, 1.03, {"A": 300, "B": 290}),
+                    RowResult(3, "E", 260, 216, 1.20, {"E": 260, "D": 216}),
+                ],
+            )
+        ],
+    )
+    flagged = ambiguous_mcq_questions(page, min_ratio=1.2, min_ink_pixels=180)
+    assert "2" in flagged and "3" in flagged
+    assert "1" not in flagged
+    # Light fill classified BL should also be reviewed.
+    page.sections[0].rows.append(RowResult(4, "BL", 146, 99, 1.47, {"C": 146}))
+    flagged2 = ambiguous_mcq_questions(page, min_ratio=1.2, min_ink_pixels=180)
+    assert "4" in flagged2
+
+    # A synchronized printed-label lattice proves the blank ROI geometry;
+    # scan noise in a true blank must not force manual review.
+    page.overlay_mcq_sections = [object()]
+    flagged3 = ambiguous_mcq_questions(page, min_ratio=1.2, min_ink_pixels=180)
+    assert "4" not in flagged3
+    assert "2" in flagged3 and "3" in flagged3
 
 
 def test_assemble_candidate_cv_owns_mcq_and_trust():
@@ -56,10 +90,23 @@ def test_assemble_candidate_cv_owns_mcq_and_trust():
     assert cand["extra_fields"]["level"] == "K"
 
 
-def test_normalize_integer_accepts_units():
-    assert normalize_integer("12 cm").value == "12"
-    assert normalize_integer("12.0").value == "12"
-    assert normalize_integer("12").value == "12"
+def test_adapted_to_image_scales_low_dpi_pages():
+    import numpy as np
+    from backend.services.template_service import get_template_registry
+
+    t = get_template_registry().get_or_raise("seamo_2025_d_fb")
+    # ~200 DPI page (width ~2/3 of reference 2481)
+    img = np.zeros((2330, 1650, 3), dtype=np.uint8)
+    adapted, factor = t.adapted_to_image(img)
+    assert abs(factor - (1650 / t.page_size[0])) < 0.02 or abs(factor - 1650 / 2481) < 0.05
+    assert adapted.sections[0].grid.col_positions[0][0] < t.sections[0].grid.col_positions[0][0]
+    assert adapted.sections[0].scoring.min_ink_pixels < t.sections[0].scoring.min_ink_pixels
+
+    # Near-reference width must not rescale (scanner margin noise).
+    img300 = np.zeros((3508, 2500, 3), dtype=np.uint8)
+    adapted2, factor2 = t.adapted_to_image(img300)
+    assert factor2 == 1.0
+    assert adapted2 is t
 
 
 def test_apply_extraction_trust_zeros_marks():

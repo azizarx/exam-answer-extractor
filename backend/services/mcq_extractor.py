@@ -5,19 +5,18 @@ Replaces the hardcoded NewMcqSolution.py with a template-driven approach.
 Given an ExamTemplate with one or more mcq_grid sections, extracts bubble
 answers from scanned page images using CV ink scoring.
 
-Algorithm (same proven logic as NewMcqSolution.py, now parameterized):
-  1. Template-match the anchor region to find (dx, dy) page offset
-  2. Shift all grid column positions by dx; compute row positions from
-     the anchor's detected y-position + the known offsets
+Algorithm:
+  1. Detect the synchronized lattice of printed option labels when available
+  2. Fall back to anchor / affine hypotheses when that geometry is unsupported
   3. For each question row, score ink pixels in each option bubble
   4. Pick the highest-scoring option if it exceeds thresholds
-  5. Reject pages with low overall confidence
+  5. Surface weak classifications for review without moving trusted geometry
 """
 
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -39,9 +38,36 @@ logger = logging.getLogger(__name__)
 # Result types
 # ---------------------------------------------------------------------------
 
-# Absolute vertical offset beyond which the anchor lock is treated as a false
-# match even if the correlation score looks acceptable (Paper E failure mode).
-HUGE_DY_THRESHOLD = 80
+# Offsets beyond this are almost always a false lock (e.g. thin rule → examiner
+# bar, dx≈1400). Real page-to-page shifts on format-B gold are typically ≤120px.
+# Values are in reference-DPI pixels; extract_page scales them to the page.
+FALSE_LOCK_DX_THRESHOLD = 300
+FALSE_LOCK_DY_THRESHOLD = 300
+
+# Legacy names kept for importers / tests. Used only as a soft "large shift"
+# log marker — no longer auto-zero the offset (see dual-hypothesis below).
+HUGE_DY_THRESHOLD = 25
+HUGE_DX_THRESHOLD = 25
+
+# Offsets above this (at reference DPI) force a notable_offset warning even
+# when under the huge_* clamp — moderate drift is still unsafe to auto-trust.
+# (Reserved; not currently used for whole-page review — E/B good pages drift ~12px.)
+NOTABLE_OFFSET_THRESHOLD = 10
+
+# Letter answers whose winner/runner-up ratio is below min_ratio + margin are
+# treated as ambiguous and flagged for review (bottom-of-page warp).
+RATIO_TRUST_MARGIN = 0.15
+
+# When coverage looks fine but median ink among resolved letters is weak,
+# printed glyphs are often being scored as fills (Paper B blank sheets).
+WEAK_FILL_MEDIAN_THRESHOLD = 360
+
+# Uneven photocopy backgrounds can cross the normal binary threshold inside
+# every option box and make one real mark look like a multi-mark.  Integrated
+# darkness below the same threshold preserves how much darker the intended
+# fill is instead of reducing every dark pixel to a binary vote.
+INK_ENERGY_MIN_RATIO = 1.20
+INK_ENERGY_MIN_MEAN_DEFICIT = 20.0
 
 
 @dataclass
@@ -100,6 +126,9 @@ class PageResult:
     sections: List[SectionResult] = field(default_factory=list)
     reason: Optional[str] = None  # set when status == "error"
     warning: Optional[str] = None  # advisory; set when CV quality was low
+    # Absolute MCQ AnswerSections used for scoring when lattice align applied
+    # (dx=dy=0). Overlay/QA should draw these instead of the median template.
+    overlay_mcq_sections: Optional[List[Any]] = None
 
     @property
     def answers(self) -> Dict[str, str]:
@@ -367,6 +396,125 @@ def extract_mcq_section(
     return result
 
 
+def _apply_classic_ink_energy(
+    gray: np.ndarray,
+    section: AnswerSection,
+    result: SectionResult,
+    *,
+    base_threshold: int,
+) -> SectionResult:
+    """Recover or confirm one dark mark on a noisy classic sheet.
+
+    Binary counting remains authoritative for blanks and confident letters.
+    For an apparent multi-mark or thin-ratio letter, integrate each pixel's
+    darkness below the normal threshold.  A large, dominant energy winner is a
+    real fill; genuine double marks retain two comparable energies and remain
+    ``IN``.  A letter is never changed here: matching energy can only strengthen
+    its confidence, while disagreement remains flagged for review.
+    """
+    scoring = section.scoring or ScoringParams()
+    review_ratio = float(scoring.min_ratio) + RATIO_TRUST_MARGIN
+    if not any(
+        row.answer == "IN"
+        or (
+            row.answer not in ("", "BL")
+            and row.ratio < review_ratio
+        )
+        for row in result.rows
+    ):
+        return result
+
+    grid = section.grid
+    if grid is None:
+        return result
+
+    labels = list(grid.options)
+    questions_per_col = grid.questions_per_col or [grid.rows]
+    row_index = 0
+    for visual_col in range(grid.cols or 1):
+        row_ys = _compute_row_positions(
+            grid,
+            section.region,
+            0,
+            visual_col,
+        )
+        col_xs = _compute_col_positions(
+            grid,
+            section.region,
+            0,
+            visual_col,
+        )
+        count = (
+            questions_per_col[visual_col]
+            if visual_col < len(questions_per_col)
+            else 0
+        )
+        for row_y in row_ys[:count]:
+            if row_index >= len(result.rows):
+                break
+            current = result.rows[row_index]
+            is_letter = current.answer not in ("", "BL", "IN")
+            if current.answer != "IN" and not (
+                is_letter and current.ratio < review_ratio
+            ):
+                row_index += 1
+                continue
+
+            energies: Dict[str, int] = {}
+            areas: Dict[str, int] = {}
+            page_h, page_w = gray.shape[:2]
+            for option_index, x_center in enumerate(col_xs):
+                if option_index >= len(labels):
+                    break
+                label = labels[option_index]
+                x1 = max(0, int(x_center - grid.cell_width / 2))
+                y1 = max(0, int(row_y + grid.cell_height))
+                x2 = min(page_w, int(x_center + grid.cell_width / 2))
+                y2 = min(page_h, int(y1 + grid.bubble_height))
+                roi = gray[y1:y2, x1:x2]
+                areas[label] = int(roi.size)
+                if roi.size:
+                    deficit = np.maximum(
+                        0,
+                        int(base_threshold) - roi.astype(np.int16),
+                    )
+                    energies[label] = int(deficit.sum())
+                else:
+                    energies[label] = 0
+
+            ranked = sorted(
+                energies.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            if len(ranked) >= 2:
+                best_label, best_energy = ranked[0]
+                second_energy = ranked[1][1]
+                ratio = float(best_energy) / float(max(1, second_energy))
+                mean_deficit = float(best_energy) / float(
+                    max(1, areas.get(best_label, 0))
+                )
+                if (
+                    ratio >= INK_ENERGY_MIN_RATIO
+                    and mean_deficit >= INK_ENERGY_MIN_MEAN_DEFICIT
+                    and (
+                        current.answer == "IN"
+                        or best_label == current.answer
+                    )
+                ):
+                    result.rows[row_index] = RowResult(
+                        question=current.question,
+                        answer=best_label,
+                        best_score=best_energy,
+                        second_score=second_energy,
+                        ratio=ratio,
+                        scores=energies,
+                    )
+            row_index += 1
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Page-level extraction
 # ---------------------------------------------------------------------------
@@ -388,6 +536,16 @@ def _match_anchor(
     anchor_img = registry._get_anchor_image(template, image)
     if anchor_img is None:
         return (0.0, 0, 0, None)
+
+    # Disk / primed anchors are stored at the template's reference scale.
+    # After adapted_to_image(), resize so matchTemplate geometry lines up.
+    tw = int(template.anchor.region.w)
+    th = int(template.anchor.region.h)
+    if tw > 0 and th > 0 and (anchor_img.shape[1] != tw or anchor_img.shape[0] != th):
+        interp = cv2.INTER_AREA if (
+            anchor_img.shape[1] > tw or anchor_img.shape[0] > th
+        ) else cv2.INTER_LINEAR
+        anchor_img = cv2.resize(anchor_img, (tw, th), interpolation=interp)
 
     gray_page = image
     if len(image.shape) == 3:
@@ -442,34 +600,16 @@ def extract_page(
     if applied:
         logger.info("MCQ[%d/%s] deskew_applied=%.2fdeg", page_number, template.id, applied)
 
-    # Step 1: Anchor matching
-    anchor_score, dx, dy, _ = _match_anchor(image, template, registry)
-    logger.info(
-        "MCQ[%d/%s] anchor score=%.3f offset=(%d,%d) min_required=%.2f",
-        page_number, template.id, anchor_score, dx, dy, template.anchor.min_match_score,
-    )
-
-    low_anchor_warning: Optional[str] = None
-    if anchor_score < template.anchor.min_match_score:
-        # Low-confidence match is usually a false lock (e.g. examiner bar).
-        # Prefer unshifted template coords over a large wrong (dx, dy).
+    template, scale = template.adapted_to_image(image)
+    if abs(scale - 1.0) >= 0.10:
         logger.info(
-            "MCQ[%d/%s] ADVISORY anchor_match_low score=%.3f; using dx=0,dy=0 "
-            "(ignored offset=(%d,%d))",
-            page_number, template.id, anchor_score, dx, dy,
+            "MCQ[%d/%s] template_scaled factor=%.3f page=%dx%d",
+            page_number, template.id, scale,
+            image.shape[1], image.shape[0],
         )
-        low_anchor_warning = "anchor_match_low"
-        dx, dy = 0, 0
-    elif abs(dy) > HUGE_DY_THRESHOLD:
-        logger.info(
-            "MCQ[%d/%s] ADVISORY huge_dy |dy|=%d>%d score=%.3f; using dx=0,dy=0 "
-            "(ignored offset=(%d,%d))",
-            page_number, template.id, abs(dy), HUGE_DY_THRESHOLD, anchor_score, dx, dy,
-        )
-        low_anchor_warning = "huge_dy"
-        dx, dy = 0, 0
-
-    # Step 2: Binarize
+    # Find/binarize the MCQ area before doing legacy anchor work.  The printed
+    # label lattice is self-registering, so a successful fit makes the much
+    # more expensive full-page template match unnecessary.
     mcq_sections = [s for s in template.sections if s.type == "mcq_grid"]
     if not mcq_sections:
         logger.info("MCQ[%d/%s] no mcq sections; nothing to do", page_number, template.id)
@@ -477,25 +617,309 @@ def extract_page(
             page_number=page_number,
             template_id=template.id,
             status="ok",
-            anchor_score=anchor_score,
-            dx=dx,
-            dy=dy,
-            warning=low_anchor_warning,
+            anchor_score=1.0,
+            dx=0,
+            dy=0,
         )
 
-    # Use the threshold from the first MCQ section (usually consistent)
     threshold = (mcq_sections[0].scoring or ScoringParams()).binary_threshold
-
     gray = image
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     _, bin_inv = cv2.threshold(gray, threshold, 255, cv2.THRESH_BINARY_INV)
 
-    # Step 3: Extract each MCQ section
-    section_results: List[SectionResult] = []
+    # Primary geometry path for forms with a repeated printed option-label
+    # lattice.  Unlike anchor/ink ranking, this is synchronized across all
+    # option columns and all rows, so it cannot silently choose the adjacent
+    # question-number column or the option-letter band as a fill band.
+    from backend.services.mcq_label_lattice import align_mcq_section_from_labels
+
+    label_results: List[SectionResult] = []
+    label_geometry: List[AnswerSection] = []
+    label_fits = []
+    label_thresholds: List[int] = []
     for section in mcq_sections:
-        sr = extract_mcq_section(bin_inv, section, dx, dy)
-        section_results.append(sr)
+        geometry_thresholds = [
+            threshold,
+            *(
+                candidate
+                for candidate in (160, 150, 140, 130, 120, 110, 100)
+                if candidate < threshold
+            ),
+        ]
+        aligned = None
+        label_fit = None
+        chosen_threshold = threshold
+        successful_fits = []
+        for geometry_threshold in dict.fromkeys(geometry_thresholds):
+            candidate_section, candidate_fit = align_mcq_section_from_labels(
+                gray,
+                section,
+                binary_threshold=geometry_threshold,
+            )
+            label_fit = candidate_fit
+            if candidate_section is not None and candidate_fit.ok:
+                successful_fits.append(
+                    (candidate_section, candidate_fit, geometry_threshold)
+                )
+            if candidate_fit.warning == "label_lattice_unsupported_geometry":
+                break
+        assert label_fit is not None
+        if successful_fits:
+            aligned, label_fit, chosen_threshold = max(
+                successful_fits,
+                key=lambda candidate: (
+                    candidate[1].n_observed_rows,
+                    candidate[1].n_strong_rows,
+                    -candidate[1].n_inferred_rows,
+                    -candidate[1].row_rmse,
+                    -candidate[1].col_rmse,
+                ),
+            )
+        label_fits.append(label_fit)
+        label_thresholds.append(chosen_threshold)
+        if aligned is None or not label_fit.ok:
+            break
+        label_geometry.append(aligned)
+        section_result = extract_mcq_section(bin_inv, aligned, 0, 0)
+        if not template.id.endswith("_fb"):
+            section_result = _apply_classic_ink_energy(
+                gray,
+                aligned,
+                section_result,
+                base_threshold=threshold,
+            )
+        label_results.append(section_result)
+
+    if len(label_results) == len(mcq_sections):
+        result = PageResult(
+            page_number=page_number,
+            template_id=template.id,
+            status="ok",
+            # The lattice itself is the registration signal on this path.
+            # Report a fully trusted registration rather than a skipped anchor.
+            anchor_score=1.0,
+            dx=0,
+            dy=0,
+            sections=label_results,
+            overlay_mcq_sections=label_geometry,
+        )
+        logger.info(
+            "MCQ[%d/%s] label_lattice_applied coverage=%.2f fits=%s",
+            page_number,
+            template.id,
+            result.coverage,
+            [
+                {
+                    "sx": round(fit.sx, 3),
+                    "sy": round(fit.sy, 3),
+                    "col_rmse": round(fit.col_rmse, 2),
+                    "row_rmse": round(fit.row_rmse, 2),
+                    "observed_rows": fit.n_observed_rows,
+                    "inferred_rows": fit.n_inferred_rows,
+                }
+                for fit in label_fits
+            ],
+        )
+        if any(value != threshold for value in label_thresholds):
+            logger.info(
+                "MCQ[%d/%s] label_lattice_thresholds=%s scoring_threshold=%d",
+                page_number,
+                template.id,
+                label_thresholds,
+                threshold,
+            )
+        return result
+
+    if label_fits:
+        logger.info(
+            "MCQ[%d/%s] label_lattice_unavailable warn=%s; using legacy fallback",
+            page_number,
+            template.id,
+            label_fits[-1].warning,
+        )
+
+    # Legacy fallback only: template-match the anchor and evaluate both the
+    # identity and plausible shifted hypotheses.
+    false_dx = max(8, int(round(FALSE_LOCK_DX_THRESHOLD * scale)))
+    false_dy = max(8, int(round(FALSE_LOCK_DY_THRESHOLD * scale)))
+    huge_dx = max(8, int(round(HUGE_DX_THRESHOLD * scale)))
+    huge_dy = max(8, int(round(HUGE_DY_THRESHOLD * scale)))
+    anchor_score, raw_dx, raw_dy, _ = _match_anchor(image, template, registry)
+    logger.info(
+        "MCQ[%d/%s] anchor score=%.3f offset=(%d,%d) min_required=%.2f",
+        page_number, template.id, anchor_score, raw_dx, raw_dy,
+        template.anchor.min_match_score,
+    )
+
+    # Step 3: Dual-hypothesis offset selection.
+    # Previously we zeroed any low-score or |offset|>25 lock. That discarded
+    # real ~50–120px page shifts while false locks (~1400px) need rejecting.
+    # Try identity always; also try the anchor offset unless it is absurd.
+    # Pick by median letter ink (then coverage/ratio) so printed glyphs don't win.
+    candidates: List[Tuple[int, int]] = [(0, 0)]
+    if (raw_dx, raw_dy) != (0, 0):
+        if abs(raw_dx) > false_dx or abs(raw_dy) > false_dy:
+            logger.info(
+                "MCQ[%d/%s] skip_false_lock |dx|=%d|dy|=%d thresholds=(%d,%d) "
+                "score=%.3f — trying identity only",
+                page_number, template.id, abs(raw_dx), abs(raw_dy),
+                false_dx, false_dy, anchor_score,
+            )
+        else:
+            candidates.append((raw_dx, raw_dy))
+
+    def _run_offset(dx: int, dy: int) -> Tuple[List[SectionResult], float, float, float]:
+        sections = [extract_mcq_section(bin_inv, section, dx, dy) for section in mcq_sections]
+        rows = [r for s in sections for r in s.rows]
+        if not rows:
+            return sections, 0.0, 0.0, 0.0
+        resolved = sum(s.resolved_count for s in sections)
+        total = sum(s.total_count for s in sections)
+        cov = resolved / max(1, total)
+        avg_r = sum(r.ratio for r in rows) / len(rows)
+        letter_ink = sorted(
+            r.best_score for r in rows if r.answer not in ("BL", "IN", "")
+        )
+        med_ink = float(letter_ink[len(letter_ink) // 2]) if letter_ink else 0.0
+        return sections, cov, avg_r, med_ink
+
+    best_sections: List[SectionResult] = []
+    best_dx, best_dy = 0, 0
+    best_cov, best_ratio, best_med_ink = -1.0, -1.0, -1.0
+    for cdx, cdy in candidates:
+        sections, cov, avg_r, med_ink = _run_offset(cdx, cdy)
+        # Prefer real dark fills over high "coverage" from printed glyphs.
+        key = (med_ink, cov, avg_r, -(abs(cdx) + abs(cdy)))
+        best_key = (best_med_ink, best_cov, best_ratio, -(abs(best_dx) + abs(best_dy)))
+        if key > best_key:
+            best_sections, best_dx, best_dy = sections, cdx, cdy
+            best_cov, best_ratio, best_med_ink = cov, avg_r, med_ink
+
+    if len(candidates) > 1:
+        logger.info(
+            "MCQ[%d/%s] offset_pick chosen=(%d,%d) cov=%.2f ratio=%.2f med_ink=%.0f "
+            "candidates=%s raw=(%d,%d)",
+            page_number, template.id, best_dx, best_dy, best_cov, best_ratio,
+            best_med_ink, candidates, raw_dx, raw_dy,
+        )
+
+    section_results = best_sections
+    dx, dy = best_dx, best_dy
+
+    # Step 3b: Per-page anisotropic lattice alignment (sx,sy,tx,ty).
+    # Column + row lattice detection (LS); fail closed to translation.
+    from backend.services.mcq_lattice_align import (
+        align_mcq_section,
+        sanitize_lattice_dy_prior,
+    )
+
+    scoring = mcq_sections[0].scoring or ScoringParams()
+    dx_prior = float(raw_dx) if abs(raw_dx) <= false_dx else float(dx)
+    dy_prior = float(raw_dy) if abs(raw_dy) <= false_dy else float(dy)
+    if abs(raw_dx) > false_dx or abs(raw_dy) > false_dy:
+        dx_prior, dy_prior = float(dx), float(dy)
+    dy_prior = sanitize_lattice_dy_prior(dy_prior, anchor_score=float(anchor_score))
+
+    lattice_used = False
+    lattice_warning: Optional[str] = None
+    lattice_sections: List[SectionResult] = []
+    lattice_geom: List[AnswerSection] = []
+    lattice_ok_all = True
+    for section in mcq_sections:
+        new_sec, fit = align_mcq_section(
+            gray,
+            section,
+            binary_threshold=threshold,
+            dx_prior=dx_prior,
+            dy_prior=dy_prior,
+            anchor_score=float(anchor_score),
+        )
+        if not fit.ok or new_sec is None:
+            lattice_ok_all = False
+            lattice_warning = fit.warning or "lattice_align_failed"
+            break
+        sr = extract_mcq_section(bin_inv, new_sec, 0, 0)
+        lattice_sections.append(sr)
+        lattice_geom.append(new_sec)
+
+    if lattice_ok_all and lattice_sections:
+        lat_rows = [r for s in lattice_sections for r in s.rows]
+        lat_resolved = sum(s.resolved_count for s in lattice_sections)
+        lat_total = sum(s.total_count for s in lattice_sections)
+        lat_cov = lat_resolved / max(1, lat_total)
+        lat_letter = sorted(
+            r.best_score for r in lat_rows if r.answer not in ("BL", "IN", "")
+        )
+        lat_med = float(lat_letter[len(lat_letter) // 2]) if lat_letter else 0.0
+        lat_avg_r = (
+            sum(r.ratio for r in lat_rows) / len(lat_rows) if lat_rows else 0.0
+        )
+        n_in = sum(1 for r in lat_rows if r.answer == "IN")
+        weak_letter = any(
+            r.answer not in ("BL", "IN", "") and r.best_score < 250
+            for r in lat_rows
+        )
+        tmp = PageResult(
+            page_number=page_number,
+            template_id=template.id,
+            status="ok",
+            sections=lattice_sections,
+        )
+        amb_hard = hard_ambiguous_mcq_questions(
+            tmp,
+            min_ratio=float(scoring.min_ratio),
+            min_ink_pixels=int(scoring.min_ink_pixels),
+        )
+        if lat_cov < scoring.min_page_coverage:
+            lattice_warning = lattice_warning or "low_coverage"
+        elif lat_avg_r < scoring.min_avg_ratio:
+            lattice_warning = lattice_warning or "low_avg_ratio"
+        # Blank-aware: low median ink is only a page-geometry smell when most
+        # rows resolved to letters. Sparse pages (many true blanks) often have
+        # lighter fills without being misaligned.
+        elif lat_med < WEAK_FILL_MEDIAN_THRESHOLD and lat_cov >= 0.85:
+            lattice_warning = lattice_warning or "weak_fill_scores"
+        elif n_in >= 1 or weak_letter:
+            lattice_warning = lattice_warning or "weak_fill_scores"
+        elif len(amb_hard) >= 4:
+            # Many thin letter ratios ⇒ likely misaligned; a single ambiguous
+            # letter stays as per-question review after lattice apply.
+            lattice_warning = lattice_warning or "weak_fill_scores"
+
+        if lattice_warning is None:
+            # Trusted lattice geometry — absolute coords, no further dx/dy.
+            section_results = lattice_sections
+            dx, dy = 0, 0
+            lattice_used = True
+            logger.info(
+                "MCQ[%d/%s] lattice_applied cov=%.2f med_ink=%.0f",
+                page_number, template.id, lat_cov, lat_med,
+            )
+        else:
+            logger.info(
+                "MCQ[%d/%s] lattice_rejected warn=%s — keeping translation hypothesis",
+                page_number, template.id, lattice_warning,
+            )
+
+    # Anchor-quality warnings. Coverage alone is not enough — wrong grids can
+    # "resolve" printed text. Escalate when the lock is conflicted.
+    low_anchor_warning: Optional[str] = None
+    if not lattice_used:
+        raw_is_absurd = abs(raw_dx) > false_dx or abs(raw_dy) > false_dy
+        raw_is_large = abs(raw_dx) > huge_dx or abs(raw_dy) > huge_dy
+        if raw_is_absurd:
+            if best_cov < scoring.min_page_coverage:
+                low_anchor_warning = "huge_dy" if abs(raw_dy) > abs(raw_dx) else "huge_dx"
+        elif (dx, dy) == (0, 0) and raw_is_large:
+            low_anchor_warning = "huge_dy" if abs(raw_dy) > abs(raw_dx) else "huge_dx"
+        elif (dx, dy) != (0, 0) and raw_is_large and best_med_ink < WEAK_FILL_MEDIAN_THRESHOLD:
+            low_anchor_warning = "huge_dy" if abs(dy) > abs(dx) else "huge_dx"
+        elif (dx, dy) == (0, 0) and anchor_score < template.anchor.min_match_score:
+            if best_cov < scoring.min_page_coverage:
+                low_anchor_warning = "anchor_match_low"
+        if lattice_warning and not low_anchor_warning and best_cov < scoring.min_page_coverage:
+            low_anchor_warning = lattice_warning
 
     # Step 4: Page-level quality check (advisory only).
     result = PageResult(
@@ -507,9 +931,9 @@ def extract_page(
         dy=dy,
         sections=section_results,
         warning=low_anchor_warning,
+        overlay_mcq_sections=list(lattice_geom) if lattice_used else None,
     )
 
-    scoring = mcq_sections[0].scoring or ScoringParams()
     all_rows = [r for s in section_results for r in s.rows]
 
     if not all_rows:
@@ -530,14 +954,122 @@ def extract_page(
         result.warning = "low_coverage"
     elif avg_ratio < scoring.min_avg_ratio and not result.warning:
         result.warning = "low_avg_ratio"
+    elif not result.warning:
+        letter_best = sorted(
+            r.best_score for r in all_rows
+            if r.answer not in ("BL", "IN", "")
+        )
+        if letter_best:
+            med_ink = letter_best[len(letter_best) // 2]
+            dense = result.coverage >= max(scoring.min_page_coverage, 0.85)
+            # Blank-aware exception: sparse pages with strong letter ink under a
+            # trusted lattice may keep per-question review only (e.g. many true
+            # blanks). Weak ink on a translation lock still means whole-page review.
+            lattice_ok = bool(result.overlay_mcq_sections)
+            strong_sparse = (not dense) and lattice_ok and med_ink >= 300
+            if (
+                result.coverage >= scoring.min_page_coverage
+                and med_ink < WEAK_FILL_MEDIAN_THRESHOLD
+                and not strong_sparse
+            ):
+                result.warning = "weak_fill_scores"
+
+    # Many hard-ambiguous rows (IN / thin letter) ⇒ grid likely misaligned.
+    # Blank gray-zone flags stay per-question and do not dump the whole page.
+    if not result.warning:
+        amb_hard = hard_ambiguous_mcq_questions(
+            result,
+            min_ratio=float(scoring.min_ratio),
+            min_ink_pixels=int(scoring.min_ink_pixels),
+        )
+        if len(amb_hard) >= 4:
+            result.warning = "weak_fill_scores"
+            logger.info(
+                "MCQ[%d/%s] hard_ambiguous_rows=%d → weak_fill_scores",
+                page_number, template.id, len(amb_hard),
+            )
 
     logger.info(
-        "MCQ[%d/%s] ACCEPT answers=%d warning=%s",
+        "MCQ[%d/%s] ACCEPT answers=%d warning=%s dx=%d dy=%d",
         page_number, template.id,
         sum(s.resolved_count for s in section_results),
-        result.warning,
+        result.warning, dx, dy,
     )
     return result
+
+
+def ambiguous_mcq_questions(
+    page_result: "PageResult",
+    *,
+    min_ratio: float = 1.2,
+    min_ink_pixels: int = 110,
+) -> List[str]:
+    """Question numbers that should not be auto-trusted.
+
+    Flags:
+      * ``IN`` (multi-mark)
+      * letter answers with razor-thin winner ratio
+      * ``BL`` with enough ink that a light/partial fill may have been missed
+      * ``BL`` with near-zero ink on an otherwise filled page (ROI miss)
+    """
+    ratio_threshold = min_ratio + RATIO_TRUST_MARGIN
+    # Ink above this but still classified BL → possible under-threshold fill.
+    blank_gray_zone = max(40, int(min_ink_pixels * 0.55))
+    page_has_fills = any(
+        (row.answer or "").strip().upper() not in ("", "BL", "IN")
+        for section in page_result.sections
+        for row in section.rows
+    )
+    flagged: List[str] = []
+    seen: set[str] = set()
+    # A successful printed-label lattice fit proves every blank ROI is on the
+    # intended row/column.  On that path, border/noise ink and true zero-ink
+    # blanks are not geometry uncertainty.  Keep the conservative blank rules
+    # for legacy anchor geometry, where an empty ROI can still mean a miss.
+    legacy_geometry = not bool(page_result.overlay_mcq_sections)
+    for section in page_result.sections:
+        for row in section.rows:
+            q = str(row.question)
+            if q in seen:
+                continue
+            ans = (row.answer or "").strip().upper()
+            suspicious = False
+            if ans == "IN":
+                suspicious = True
+            elif ans not in ("", "BL") and row.ratio < ratio_threshold:
+                suspicious = True
+            elif legacy_geometry and ans == "BL" and row.best_score >= blank_gray_zone:
+                suspicious = True
+            elif legacy_geometry and ans == "BL" and page_has_fills and row.best_score < 5:
+                # Completely empty ROI while other bubbles filled → geometry miss.
+                suspicious = True
+            if suspicious:
+                seen.add(q)
+                flagged.append(q)
+    return flagged
+
+
+def hard_ambiguous_mcq_questions(
+    page_result: "PageResult",
+    *,
+    min_ratio: float = 1.2,
+    min_ink_pixels: int = 110,
+) -> List[str]:
+    """Ambiguous questions that imply geometry / mark conflict (not blank gray-zone).
+
+    Used for whole-page review escalation. Blank-only ambiguity stays per-question.
+    """
+    answers = {
+        str(k): str(v or "").strip().upper()
+        for k, v in (page_result.answers or {}).items()
+    }
+    return [
+        q
+        for q in ambiguous_mcq_questions(
+            page_result, min_ratio=min_ratio, min_ink_pixels=min_ink_pixels,
+        )
+        if answers.get(q, "") not in ("", "BL")
+    ]
 
 
 # ---------------------------------------------------------------------------

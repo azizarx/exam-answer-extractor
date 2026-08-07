@@ -1,0 +1,95 @@
+:root {
+  --bg: #1a1d23;
+  --panel: #242830;
+  --fg: #e8eaed;
+  --accent: #5b9fd4;
+  --ok: #3d9a6a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 13px/1.4 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  display: flex;
+  height: 100vh;
+}
+#sidebar {
+  width: 320px;
+  flex-shrink: 0;
+  background: var(--panel);
+  padding: 12px;
+  overflow: auto;
+  border-right: 1px solid #333;
+}
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#toolbar {
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid #333;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+#viewport { flex: 1; overflow: auto; position: relative; background: #111; cursor: crosshair; }
+#viewport.move-mode { cursor: grab; }
+#viewport.move-mode.dragging { cursor: grabbing; }
+#viewport.resize-mode { cursor: default; }
+#viewport.resize-ew { cursor: ew-resize; }
+#viewport.resize-ns { cursor: ns-resize; }
+#viewport.resize-nwse { cursor: nwse-resize; }
+canvas { display: block; image-rendering: pixelated; }
+h1 { font-size: 15px; margin: 0 0 10px; }
+h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa0a6;
+  margin: 14px 0 6px;
+}
+label { display: block; margin: 4px 0 2px; color: #9aa0a6; }
+select, input, button { font: inherit; }
+select, input[type="number"], input[type="text"] {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background: #1a1d23;
+  color: var(--fg);
+}
+button {
+  padding: 6px 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: var(--fg);
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.active { outline: 2px solid var(--accent); }
+button.full { width: 100%; margin-top: 6px; }
+.row { display: flex; gap: 6px; }
+.row > * { flex: 1; }
+.row.tight { margin-top: 6px; }
+.spacer { flex: 1; }
+#status { font-size: 12px; color: #9aa0a6; margin-top: 8px; white-space: pre-wrap; }
+#coords {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  background: #1a1d23;
+  padding: 8px;
+  border-radius: 4px;
+  max-height: 220px;
+  overflow: auto;
+}
+.hint { font-size: 11px; color: #9aa0a6; margin: 6px 0; }
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #333;
+  margin-right: 4px;
+}
+.pill.on { background: var(--ok); color: #fff; }

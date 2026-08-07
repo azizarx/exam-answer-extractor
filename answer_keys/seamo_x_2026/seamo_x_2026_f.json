@@ -1,0 +1,30 @@
+{
+  "template_id": "seamo_x_2026_f",
+  "version": 1,
+  "source": {
+    "filename": "seamo_x_2026/Paper F key.pdf",
+    "sha256": "c3a4423002a8445a27b7e0882367dbda1df5b3d50b489bce45121ca5c52fb0c1"
+  },
+  "reconciliation": {
+    "additional_source": {"filename": "seamo_x_2026/Paper F portal.pdf", "sha256": "979724f012c885bfc5a0c659aa5b6f5dfddb0712898a229315957849ae5a835c"},
+    "decision": "Retain both portal forms for Q8."
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "numeric", "accepted_answers": ["616"], "marks": 6, "normalizer": "integer"},
+    {"number": 2, "type": "numeric", "accepted_answers": ["30"], "marks": 6, "normalizer": "integer"},
+    {"number": 3, "type": "numeric", "accepted_answers": ["1"], "marks": 6, "normalizer": "integer"},
+    {"number": 4, "type": "free_response", "accepted_answers": ["B"], "marks": 6, "normalizer": "text"},
+    {"number": 5, "type": "numeric", "accepted_answers": ["8"], "marks": 6, "normalizer": "integer"},
+    {"number": 6, "type": "numeric", "accepted_answers": ["112"], "marks": 6, "normalizer": "integer"},
+    {"number": 7, "type": "numeric", "accepted_answers": ["1"], "marks": 6, "normalizer": "integer"},
+    {"number": 8, "type": "free_response", "accepted_answers": ["±2/r", "-2/r, 2/r"], "marks": 6, "normalizer": "text"},
+    {"number": 9, "type": "numeric", "accepted_answers": ["1"], "marks": 6, "normalizer": "integer"},
+    {"number": 10, "type": "numeric", "accepted_answers": ["32"], "marks": 6, "normalizer": "integer"},
+    {"number": 11, "type": "free_response", "accepted_answers": ["143/210"], "marks": 8, "normalizer": "text"},
+    {"number": 12, "type": "free_response", "accepted_answers": ["n(n+1)!"], "marks": 8, "normalizer": "text"},
+    {"number": 13, "type": "numeric", "accepted_answers": ["9"], "marks": 8, "normalizer": "integer"},
+    {"number": 14, "type": "numeric", "accepted_answers": ["1519"], "marks": 8, "normalizer": "integer"},
+    {"number": 15, "type": "free_response", "accepted_answers": ["2a²"], "marks": 8, "normalizer": "text"}
+  ]
+}

@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional, Protocol, Sequence
@@ -17,14 +18,26 @@ from sqlalchemy.orm import Session
 from backend.services.template_service import ExamTemplate, TemplateRegistry
 
 
-ALLOWED_TYPES = {"mcq", "numeric", "time"}
+ALLOWED_TYPES = {"mcq", "numeric", "time", "free_response", "diagram"}
 TYPE_NORMALIZERS = {
     "mcq": "uppercase",
     "numeric": "integer",
     "time": "time_12_24",
+    "free_response": "text",
+    "diagram": "text",
 }
-INTEGER_RE = re.compile(r"^[+-]?\d+$")
 MAX_INTEGER_DIGITS = 1000
+INTEGER_VALUE_RE = re.compile(
+    r"^(?P<currency>[$£€])?\s*"
+    r"(?P<number>[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:[.,]\d+)?)"
+    r"\s*(?P<unit>"
+    r"(?:mm|cm|dm|km|m|in|ft|yd|au)(?:\^?[23])?"
+    r"|(?:mg|kg|g|ml|l)"
+    r"|(?:s|sec|secs|second|seconds|min|mins|minute|minutes|h|hr|hrs|hour|hours)"
+    r"|(?:deg|degree|degrees|°|%|marks?|points?|[$£€])"
+    r")?\.?$",
+    re.IGNORECASE,
+)
 TIME_RE = re.compile(
     r"^(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<period>[AP]\.?M\.?)?$",
     re.IGNORECASE,
@@ -113,17 +126,21 @@ def normalize_integer(response: Any) -> NormalizedResponse:
     sentinel = _sentinel(response)
     if sentinel:
         return sentinel
-    value = response.strip().replace(",", "")
-    if not INTEGER_RE.fullmatch(value):
-        # Accept "12", "12.0", "12 cm", "12cm" — single integer + optional unit.
-        match = re.fullmatch(
-            r"([+-]?\d+)(?:\.0+)?(?:\s*(?:cm|mm|m|kg|g|%|marks?))?",
-            value,
-            re.IGNORECASE,
-        )
-        if match is None:
+    value = unicodedata.normalize("NFKC", response).strip()
+    value = value.replace("−", "-").replace("–", "-")
+    match = INTEGER_VALUE_RE.fullmatch(value)
+    if match is None:
+        return NormalizedResponse("invalid", None)
+    value = match.group("number")
+    if re.fullmatch(r"[+-]?\d{1,3}(?:,\d{3})+", value):
+        value = value.replace(",", "")
+    elif "," in value:
+        value = value.replace(",", ".")
+    if "." in value:
+        whole, fraction = value.split(".", 1)
+        if not fraction or set(fraction) != {"0"}:
             return NormalizedResponse("invalid", None)
-        value = match.group(1)
+        value = whole
     unsigned = value.lstrip("+-")
     if len(unsigned) > MAX_INTEGER_DIGITS:
         return NormalizedResponse("invalid", None)
@@ -156,10 +173,25 @@ def normalize_time_12_24(response: Any) -> NormalizedResponse:
     return NormalizedResponse("valid", f"{hour:02d}:{minute:02d}")
 
 
+def normalize_text(response: Any) -> NormalizedResponse:
+    """Conservative exact-match normalization for expressions and diagrams.
+
+    Non-exact values are intentionally left for the equivalence judge.  NFKC
+    makes presentation forms comparable while preserving mathematical content.
+    """
+    sentinel = _sentinel(response)
+    if sentinel:
+        return sentinel
+    value = unicodedata.normalize("NFKC", response).strip()
+    value = re.sub(r"\s+", " ", value).casefold()
+    return NormalizedResponse("valid", value)
+
+
 NORMALIZERS: dict[str, ResponseNormalizer] = {
     "uppercase": normalize_uppercase,
     "integer": normalize_integer,
     "time_12_24": normalize_time_12_24,
+    "text": normalize_text,
 }
 
 
@@ -181,7 +213,7 @@ class ManifestRegistry:
         loaded: list[AnswerKeyManifest] = []
         versions: set[tuple[str, int]] = set()
         active: dict[str, AnswerKeyManifest] = {}
-        for path in sorted(self.manifests_dir.glob("*.json")):
+        for path in sorted(self.manifests_dir.rglob("*.json")):
             manifest = self.load(path)
             identity = (manifest.template_id, manifest.version)
             if identity in versions:
@@ -260,13 +292,17 @@ class ManifestRegistry:
             r"[0-9a-f]{64}", manifest.source_sha256
         ):
             raise ManifestValidationError("source sha256 must be lowercase hexadecimal")
+        if not isinstance(manifest.source_filename, str) or not manifest.source_filename:
+            raise ManifestValidationError("source filename must be a non-empty string")
+        source_relative = Path(manifest.source_filename)
         if (
-            not isinstance(manifest.source_filename, str)
-            or not manifest.source_filename
-            or Path(manifest.source_filename).name != manifest.source_filename
-            or Path(manifest.source_filename).suffix.lower() != ".pdf"
+            source_relative.is_absolute()
+            or source_relative.suffix.lower() != ".pdf"
+            or any(part in {"", ".", ".."} for part in source_relative.parts)
         ):
-            raise ManifestValidationError("source filename must name a PDF in source directory")
+            raise ManifestValidationError(
+                "source filename must be a safe relative PDF path in source directory"
+            )
 
         template = self.template_registry.get(manifest.template_id)
         if template is None:
@@ -306,8 +342,20 @@ class ManifestRegistry:
             raise ManifestValidationError(f"unsupported question type {question.type}")
         if template_type == "mcq" and question.type != "mcq":
             raise ManifestValidationError(f"question {question.number} must be mcq")
-        if template_type == "numeric" and question.type not in {"numeric", "time"}:
-            raise ManifestValidationError(f"question {question.number} must be numeric or time")
+        if template_type == "numeric" and question.type not in {
+            "numeric", "time", "free_response"
+        }:
+            raise ManifestValidationError(
+                f"question {question.number} must be numeric, time, or free_response"
+            )
+        if template_type == "free_response" and question.type not in {
+            "numeric", "time", "free_response"
+        }:
+            raise ManifestValidationError(
+                f"question {question.number} must be numeric, time, or free_response"
+            )
+        if template_type == "diagram" and question.type != "diagram":
+            raise ManifestValidationError(f"question {question.number} must be diagram")
         if not isinstance(question.normalizer, str):
             raise ManifestValidationError("question normalizer must be a string")
         if question.normalizer != TYPE_NORMALIZERS[question.type]:
@@ -392,8 +440,12 @@ class MarkingService:
         )
 
 
-FR_TYPES = frozenset({"numeric", "time"})
-FALLBACK_STATUSES = frozenset({"incorrect", "invalid"})
+FR_TYPES = frozenset({"numeric", "time", "free_response", "diagram"})
+# A valid normalized numeric/time value that differs from the accepted value is
+# conclusively incorrect.  Gemini is only needed when deterministic parsing
+# cannot establish a value at all.
+FALLBACK_STATUSES = frozenset({"invalid"})
+TEXT_FALLBACK_STATUSES = frozenset({"incorrect", "invalid"})
 
 
 def apply_extraction_trust(
@@ -452,7 +504,12 @@ def apply_fr_equivalence_judge(
             continue
         if question.type not in FR_TYPES:
             continue
-        if outcome.status not in FALLBACK_STATUSES:
+        fallback_statuses = (
+            TEXT_FALLBACK_STATUSES
+            if question.type in {"free_response", "diagram"}
+            else FALLBACK_STATUSES
+        )
+        if outcome.status not in fallback_statuses:
             continue
         items.append(
             {
@@ -714,6 +771,10 @@ def _template_question_types(template: ExamTemplate) -> dict[int, str]:
                 resolved[number] = "mcq"
             elif raw_type == "numeric_grid":
                 resolved[number] = "numeric"
+            elif raw_type == "open_response":
+                resolved[number] = "free_response"
+            elif raw_type == "diagram":
+                resolved[number] = "diagram"
             else:
                 raise ManifestValidationError(
                     f"template question {number} has unsupported type {raw_type}"

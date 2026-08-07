@@ -7,6 +7,8 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -29,6 +31,7 @@ from backend.db.models import (
 from backend.services.marking_workflow import (
     MARKING_RUN_STALE_AFTER,
     MarkingInProgressError,
+    _LazyGeminiJudge,
     _is_processing_ownership_violation,
     mark_submission_answers,
     recover_stale_marking_runs,
@@ -147,6 +150,52 @@ def test_completed_run_persists_weighted_results_and_provenance(engine):
             100.0,
         )
         assert marking.outcomes[0]["status"] == "correct"
+
+
+def test_marking_does_not_reload_each_candidate_after_provenance_commit(engine):
+    with Session(engine) as db:
+        submission = ExamSubmission(
+            filename="bulk.pdf",
+            original_pdf_key="bulk.pdf",
+            template_id="seamo_2025_a",
+            status="completed",
+        )
+        db.add(submission)
+        db.flush()
+        submission_id = submission.id
+        db.add(_key("seamo_2025_a"))
+        db.add_all(
+            CandidateResult(
+                submission_id=submission_id,
+                candidate_number=f"{number:03d}",
+                answers={"1": "C"},
+            )
+            for number in range(8)
+        )
+        db.commit()
+
+        selects = []
+
+        def capture_selects(_conn, _cursor, statement, _params, _context, _many):
+            compact = " ".join(statement.lower().split())
+            if compact.startswith("select"):
+                selects.append(compact)
+
+        event.listen(engine, "before_cursor_execute", capture_selects)
+        try:
+            run = mark_submission_answers(db, submission_id)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture_selects)
+
+        candidate_selects = [
+            statement for statement in selects if "from candidate_results" in statement
+        ]
+        key_selects = [
+            statement for statement in selects if "from answer_keys" in statement
+        ]
+        assert run.status == "completed"
+        assert len(candidate_selects) == 1
+        assert len(key_selects) == 1
 
 
 def test_mixed_templates_mark_with_per_candidate_keys(engine):
@@ -276,6 +325,80 @@ def test_workflow_uses_fr_judge_and_persists_judged_outcome(engine):
         assert marking.outcomes[0]["status"] == "correct"
         assert marking.outcomes[0]["response"] == "5:00vaqt"
         assert marking.outcomes[0]["judge_source"] == "llm"
+
+
+def test_workflow_does_not_judge_extraction_review_questions(engine):
+    class CountingJudge:
+        def __init__(self):
+            self.calls = []
+
+        def judge(self, items):
+            self.calls.append(items)
+            return []
+
+    with Session(engine) as db:
+        submission_id, candidate_id = _submission(
+            db, answers={"1": "5:00vaqt"}
+        )
+        candidate = db.get(CandidateResult, candidate_id)
+        candidate.extra_fields = {
+            "needs_review_questions": ["1"],
+            "answer_trust": {"1": "needs_review"},
+        }
+        key = _key("seamo_2025_a")
+        key.question_spec = [
+            {
+                "number": 1,
+                "type": "time",
+                "accepted_answers": ["5:00 PM"],
+                "marks": 3,
+                "normalizer": "time_12_24",
+            }
+        ]
+        db.add(key)
+        db.commit()
+        judge = CountingJudge()
+
+        run = mark_submission_answers(db, submission_id, fr_judge=judge)
+        marking = db.scalar(
+            select(CandidateMarking).where(CandidateMarking.marking_run_id == run.id)
+        )
+
+        assert run.status == "completed"
+        assert judge.calls == []
+        assert marking.outcomes[0]["status"] == "needs_review"
+        assert marking.outcomes[0]["judge_source"] == "extraction_trust"
+
+
+def test_lazy_judge_initializes_once_under_concurrent_first_use(monkeypatch):
+    constructor_started = threading.Event()
+    release_constructor = threading.Event()
+    count_lock = threading.Lock()
+    constructor_count = 0
+
+    class SlowJudge:
+        def __init__(self):
+            nonlocal constructor_count
+            with count_lock:
+                constructor_count += 1
+            constructor_started.set()
+            assert release_constructor.wait(timeout=2)
+
+        def judge(self, _items):
+            return []
+
+    monkeypatch.setattr(
+        "backend.services.marking_workflow.GeminiFrEquivalenceJudge", SlowJudge
+    )
+    judge = _LazyGeminiJudge()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [pool.submit(judge.judge, [{}]) for _ in range(8)]
+        assert constructor_started.wait(timeout=2)
+        time.sleep(0.05)
+        release_constructor.set()
+        assert [future.result() for future in futures] == [[]] * 8
+
+    assert constructor_count == 1
 
 
 def test_no_exact_active_key_creates_unavailable_run_without_marks(engine):
@@ -709,6 +832,11 @@ def test_post_commit_refresh_failure_reuses_existing_terminal_run(
 def test_process_extraction_commits_raw_rows_before_terminal_marking(
     engine, monkeypatch, tmp_path
 ):
+    trust_metadata = {
+        "school": "Example School",
+        "needs_review_questions": ["1"],
+        "answer_trust": {"1": "needs_review"},
+    }
     factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
     with factory() as db:
         submission = ExamSubmission(
@@ -739,6 +867,7 @@ def test_process_extraction_commits_raw_rows_before_terminal_marking(
                         "candidate_number": "001",
                         "paper_type": "A",
                         "answers": {"1": "C"},
+                        "extra_fields": trust_metadata,
                     }
                 ],
                 "pages_processed": 1,
@@ -772,6 +901,11 @@ def test_process_extraction_commits_raw_rows_before_terminal_marking(
                     CandidateResult.submission_id == target_submission_id
                 )
             )
+            observed["extra_fields"] = observer.scalar(
+                select(CandidateResult.extra_fields).where(
+                    CandidateResult.submission_id == target_submission_id
+                )
+            )
         raise RuntimeError("secret workflow details")
 
     monkeypatch.setattr(routes, "mark_submission_answers", fake_mark)
@@ -782,6 +916,7 @@ def test_process_extraction_commits_raw_rows_before_terminal_marking(
 
     with factory() as db:
         assert observed["raw_count"] == 1
+        assert observed["extra_fields"] == trust_metadata
         assert db.get(ExamSubmission, submission_id).status == "completed"
         run = db.scalar(
             select(MarkingRun).where(MarkingRun.submission_id == submission_id)
@@ -1027,7 +1162,7 @@ def test_startup_sync_is_idempotent_on_explicit_temp_database(engine):
 
     with Session(engine) as db:
         rows = db.scalars(select(AnswerKey)).all()
-        assert len(rows) == 7
+        assert len(rows) == 14
         assert all(row.is_active for row in rows)
 
     assert hashlib.sha256(checked_db.read_bytes()).hexdigest() == before_hash
