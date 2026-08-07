@@ -1,0 +1,18 @@
+{
+  "id": "seamo_2025_k_fb",
+  "name": "SEAMO 2025 Paper K (Kindergarten) \u2014 format B",
+  "brand": "seamo",
+  "year": 2025,
+  "paper": "K",
+  "variant_of": "seamo_2026_k_fb",
+  "answer_key_template_id": "seamo_2025_k",
+  "detection": {
+    "filename_pattern": "SEAMO.*2025",
+    "text_markers": [
+      "SEAMO",
+      "2025",
+      "Paper K",
+      "KINDERGARTEN"
+    ]
+  }
+}

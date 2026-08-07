@@ -1,93 +1,543 @@
-# aimarker
+# Exam Answer Sheet Extraction System
 
+A complete system for extracting answers from PDF exam sheets using AI-powered OCR and computer vision. The system automatically processes uploaded PDFs, extracts both multiple-choice and free-response answers, and stores them in a database with JSON backups in cloud storage.
 
+## 🎯 Features
 
-## Getting started
+- **PDF Upload & Storage**: Upload exam PDFs to DigitalOcean Spaces (S3-compatible)
+- **AI-Powered Extraction**: Uses OpenAI GPT-4 Vision API for accurate answer extraction
+- **Dual Extraction Methods**: 
+  - Traditional OCR with Tesseract (fallback/alternative)
+  - AI Vision API (primary, more accurate)
+- **Structured Data Output**: JSON format with validation
+- **Database Storage**: PostgreSQL with SQLAlchemy ORM
+- **Async Processing**: Background task queue with Celery
+- **RESTful API**: FastAPI with automatic documentation
+- **Complete Audit Trail**: Processing logs for every operation
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## 🏗️ Architecture
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/azafoura/aimarker.git
-git branch -M main
-git push -uf origin main
+User → Upload PDF → DigitalOcean Spaces (Storage)
+            ↓
+       FastAPI Backend
+            ↓
+     Celery Task Queue
+            ↓
+AI Extractor Service (GPT-4 Vision / OCR)
+            ↓
+Generate JSON → Save to Spaces → DB Insert
 ```
 
-## Integrate with your tools
+## 📋 Tech Stack
 
-* [Set up project integrations](https://gitlab.com/azafoura/aimarker/-/settings/integrations)
+| Component | Technology |
+|-----------|-----------|
+| **Backend API** | FastAPI (Python 3.9+) |
+| **AI Extraction** | OpenAI GPT-4 Vision API |
+| **OCR (Alternative)** | Tesseract OCR + pytesseract |
+| **PDF Processing** | pdf2image + Pillow |
+| **Storage** | DigitalOcean Spaces (S3-compatible) |
+| **Database** | PostgreSQL 12+ |
+| **Task Queue** | Celery + Redis |
+| **ORM** | SQLAlchemy |
 
-## Collaborate with your team
+## 🚀 Quick Start
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Prerequisites
 
-## Test and Deploy
+1. **Python 3.9+** installed
+2. **PostgreSQL** database running
+3. **Redis** server (for Celery)
+4. **Tesseract OCR** installed:
+   - Windows: Download from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
+   - Linux: `sudo apt-get install tesseract-ocr`
+   - macOS: `brew install tesseract`
+5. **Poppler** (for pdf2image):
+   - Windows: Download from [Poppler Windows](https://github.com/oschwartz10612/poppler-windows/releases)
+   - Linux: `sudo apt-get install poppler-utils`
+   - macOS: `brew install poppler`
+6. **DigitalOcean Spaces** account with bucket created
+7. **OpenAI API** key
 
-Use the built-in continuous integration in GitLab.
+### Installation
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+1. **Clone or navigate to the project directory:**
 
-***
+```powershell
+cd c:\Users\azizn\OneDrive\Desktop\Project1
+```
 
-# Editing this README
+2. **Create a virtual environment:**
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
 
-## Suggestions for a good README
+3. **Install dependencies:**
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```powershell
+pip install -r requirements.txt
+```
 
-## Name
-Choose a self-explaining name for your project.
+4. **Configure environment variables:**
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Copy `.env.example` to `.env` and fill in your credentials:
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+Required configuration:
+```env
+# DigitalOcean Spaces
+SPACES_REGION=sgp1
+SPACES_ENDPOINT=https://sgp1.digitaloceanspaces.com
+SPACES_KEY=your_actual_spaces_key
+SPACES_SECRET=your_actual_spaces_secret
+SPACES_BUCKET=exam-answer-sheets
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+# OpenAI
+OPENAI_API_KEY=your_actual_openai_key
+OPENAI_MODEL=gpt-4o
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/exam_db
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+# Redis
+REDIS_URL=redis://localhost:6379/0
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+5. **Create the database:**
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+```powershell
+# Using PostgreSQL CLI
+psql -U postgres
+CREATE DATABASE exam_db;
+\q
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+6. **Initialize database tables:**
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```powershell
+python -c "from backend.db.database import init_db; init_db()"
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### Running the Application
 
-## License
-For open source projects, say how it is licensed.
+#### Option 1: Full Stack (Backend + Frontend) ⭐ RECOMMENDED
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Start everything with one command:
+
+```powershell
+.\start-fullstack.ps1
+```
+
+This will start:
+- Backend API at http://localhost:8000
+- Frontend App at http://localhost:3000
+
+**Then open your browser to http://localhost:3000**
+
+#### Option 2: Backend Only (API Development)
+
+Start the FastAPI server:
+
+```powershell
+python main.py
+```
+
+The API will be available at `http://localhost:8000`
+
+- **API Documentation**: http://localhost:8000/docs
+- **Alternative Docs**: http://localhost:8000/redoc
+
+#### Option 3: Production Mode (with Celery)
+
+**Terminal 1 - Start Redis** (if not running as service):
+
+```powershell
+redis-server
+```
+
+**Terminal 2 - Start Celery Worker:**
+
+```powershell
+celery -A backend.worker worker --loglevel=info -Q exam_processing --pool=solo
+```
+
+Note: Use `--pool=solo` on Windows, or `--pool=prefork` on Linux/macOS
+
+**Terminal 3 - Start FastAPI:**
+
+```powershell
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Terminal 4 - Start Frontend (Optional):**
+
+```powershell
+cd frontend
+npm run dev
+```
+
+## 🌐 Frontend Web Interface
+
+### Quick Start
+
+The easiest way to use the system is through the web interface:
+
+1. **Start the full stack:**
+```powershell
+.\start-fullstack.ps1
+```
+
+2. **Open your browser:**
+```
+http://localhost:3000
+```
+
+3. **Upload a PDF:**
+   - Drag and drop your exam answer sheet
+   - Or click "Browse Files"
+   - Click "Start Extraction"
+
+4. **Track Progress:**
+   - Automatically redirected to tracking page
+   - Real-time status updates
+   - Results appear when complete
+
+5. **View & Export Results:**
+   - See all extracted answers
+   - Export as JSON
+   - Beautiful, responsive UI
+
+### Frontend Features
+
+✨ **Beautiful UI** - Modern design with Tailwind CSS  
+🎯 **Drag & Drop** - Intuitive file upload  
+⚡ **Real-time Updates** - Live processing status  
+📱 **Responsive** - Works on all devices  
+💾 **Export** - Download results as JSON  
+🎨 **Component-based** - Easy to maintain  
+
+See `frontend/README.md` for more details.
+
+---
+
+## 📖 API Usage (Programmatic)
+
+### 1. Upload PDF for Processing
+
+```bash
+POST /api/v1/upload
+Content-Type: multipart/form-data
+
+file: [PDF file]
+```
+
+**Example with curl:**
+
+```bash
+curl -X POST "http://localhost:8000/api/v1/upload" \
+  -H "accept: application/json" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@exam_answer_sheet.pdf"
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "PDF uploaded successfully. Processing started.",
+  "submission_id": 1,
+  "filename": "exam_answer_sheet.pdf",
+  "spaces_key": "pdfs/exam_answer_sheet.pdf"
+}
+```
+
+### 2. Check Processing Status
+
+```bash
+GET /api/v1/status/{submission_id}
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/status/1"
+```
+
+**Response:**
+```json
+{
+  "submission_id": 1,
+  "filename": "exam_answer_sheet.pdf",
+  "status": "completed",
+  "created_at": "2025-11-17T10:30:00",
+  "processed_at": "2025-11-17T10:31:45",
+  "pages_count": 3,
+  "mcq_count": 25,
+  "free_response_count": 3,
+  "error_message": null
+}
+```
+
+Status values:
+- `pending` - Upload complete, waiting for processing
+- `processing` - Currently extracting answers
+- `completed` - Extraction complete, data saved
+- `failed` - Extraction failed (see error_message)
+
+### 3. Get Extracted Answers
+
+```bash
+GET /api/v1/submission/{submission_id}
+```
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/submission/1"
+```
+
+**Response:**
+```json
+{
+  "submission_id": 1,
+  "filename": "exam_answer_sheet.pdf",
+  "status": "completed",
+  "created_at": "2025-11-17T10:30:00",
+  "processed_at": "2025-11-17T10:31:45",
+  "multiple_choice": [
+    {"question": 1, "answer": "A"},
+    {"question": 2, "answer": "C"},
+    {"question": 3, "answer": "B"}
+  ],
+  "free_response": [
+    {
+      "question": 1,
+      "response": "Photosynthesis is the process by which plants convert light energy..."
+    },
+    {
+      "question": 2,
+      "response": "The main causes of World War I included..."
+    }
+  ]
+}
+```
+
+### 4. List All Submissions
+
+```bash
+GET /api/v1/submissions?skip=0&limit=100&status=completed
+```
+
+### 5. Delete Submission
+
+```bash
+DELETE /api/v1/submission/{submission_id}
+```
+
+## 🗂️ Project Structure
+
+```
+Project1/
+├── backend/
+│   ├── __init__.py
+│   ├── config.py                 # Configuration management
+│   ├── worker.py                 # Celery background tasks
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes.py            # API endpoints
+│   │   └── schemas.py           # Pydantic models
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── space_client.py      # DigitalOcean Spaces client
+│   │   ├── pdf_to_images.py     # PDF conversion
+│   │   ├── ocr_engine.py        # Tesseract OCR
+│   │   ├── ai_extractor.py      # OpenAI Vision API
+│   │   └── json_generator.py    # JSON formatting
+│   └── db/
+│       ├── __init__.py
+│       ├── database.py          # DB connection
+│       └── models.py            # SQLAlchemy models
+├── main.py                      # FastAPI application
+├── requirements.txt             # Python dependencies
+├── .env.example                 # Environment template
+├── .env                         # Your configuration (create this)
+└── README.md                    # This file
+```
+
+## 🔧 Configuration Details
+
+### Database Models
+
+**ExamSubmission**: Tracks each PDF submission
+- Filename, upload timestamp, processing status
+- Links to Spaces storage keys
+- Processing metadata
+
+**MultipleChoiceAnswer**: Stores MCQ answers
+- Question number and selected option (A-E)
+
+**FreeResponseAnswer**: Stores written answers
+- Question number and response text
+- Automatic word count
+
+**ProcessingLog**: Audit trail
+- All processing actions and outcomes
+
+### Service Architecture
+
+#### 1. **SpacesClient** (`space_client.py`)
+- Upload/download PDFs and JSON files
+- S3-compatible API using boto3
+- Presigned URL generation for secure access
+
+#### 2. **PDFConverter** (`pdf_to_images.py`)
+- Converts PDF pages to high-resolution images
+- Configurable DPI (default: 300)
+- Batch processing support
+
+#### 3. **OCREngine** (`ocr_engine.py`)
+- Tesseract-based text extraction
+- Confidence score tracking
+- Pattern-based answer parsing
+
+#### 4. **AIExtractor** (`ai_extractor.py`)
+- OpenAI GPT-4 Vision API integration
+- Structured JSON extraction with prompts
+- Multi-page document support
+- Built-in validation
+
+#### 5. **JSONGenerator** (`json_generator.py`)
+- Formats extracted data into standardized JSON
+- Adds metadata and timestamps
+- Validation results inclusion
+
+## 🧪 Testing
+
+### Test with Sample PDF
+
+1. Create a simple test PDF with answers
+2. Upload using the API
+3. Monitor processing in logs
+4. Retrieve results
+
+### API Testing with Swagger
+
+Visit `http://localhost:8000/docs` for interactive API testing.
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**1. Import errors for packages**
+- Solution: Ensure virtual environment is activated and all packages installed
+```powershell
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+**2. Tesseract not found**
+- Solution: Install Tesseract and add to PATH, or set in code:
+```python
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+```
+
+**3. Poppler not found**
+- Solution: Download Poppler and add `bin/` folder to PATH
+
+**4. Database connection error**
+- Solution: Verify PostgreSQL is running and DATABASE_URL is correct
+
+**5. Redis connection error**
+- Solution: Start Redis server or update REDIS_URL
+
+**6. OpenAI API errors**
+- Solution: Check API key validity and account credits
+
+## 🔐 Security Considerations
+
+**Production Deployment:**
+
+1. **Environment Variables**: Never commit `.env` file
+2. **API Keys**: Rotate regularly, use key management service
+3. **CORS**: Configure `allow_origins` appropriately in `main.py`
+4. **Database**: Use strong passwords, enable SSL
+5. **File Upload**: Add virus scanning, size limits
+6. **Authentication**: Add JWT or OAuth2 for API access
+7. **Rate Limiting**: Implement to prevent abuse
+
+## 📊 Monitoring & Logging
+
+All operations are logged with timestamps and details:
+
+- **Application logs**: Console output with configurable level
+- **Database logs**: ProcessingLog table tracks all actions
+- **Error tracking**: Failures captured with full stack traces
+- **OCR artifacts**: `storage/OCRResults/YYYY/MM/DD/<context>/<source>/<run>/`
+  - `OCRResults.json` summary (per-page confidence + status)
+  - `pages/page_001.txt`, `page_002.txt`, ... raw OCR text per page
+
+## 🚀 Deployment
+
+### Docker Deployment (Recommended)
+
+Create `Dockerfile`:
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### Cloud Deployment
+
+- **AWS**: Deploy on EC2 or ECS with RDS PostgreSQL
+- **DigitalOcean**: Use App Platform or Droplets
+- **Heroku**: Use with Heroku Postgres add-on
+- **Azure**: Deploy to App Service with Azure Database
+
+## 📝 License
+
+This project is provided as-is for educational and commercial use.
+
+## 🤝 Contributing
+
+Contributions welcome! Areas for improvement:
+
+- Frontend UI for file upload
+- Batch processing of multiple PDFs
+- Answer key comparison and grading
+- Export to Excel/CSV
+- Student identification from PDFs
+- Handwriting recognition improvements
+
+## 📧 Support
+
+For issues or questions:
+- Check logs in console output
+- Review API documentation at `/docs`
+- Verify all environment variables are set
+- Ensure external services (DB, Redis, Spaces) are accessible
+
+---
+
+**Built with ❤️ using FastAPI, OpenAI, and modern Python tools**

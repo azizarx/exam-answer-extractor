@@ -1,0 +1,31 @@
+{
+  "template_id": "seamo_x_2026_a",
+  "version": 2,
+  "source": {
+    "filename": "seamo_x_2026/Paper A key.pdf",
+    "sha256": "8fa4169e2e71f468785beb60914e1ad7b302d43fb2e48ef73748f904b239551b"
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "numeric", "accepted_answers": ["34"], "marks": 4, "normalizer": "integer"},
+    {"number": 2, "type": "numeric", "accepted_answers": ["4"], "marks": 4, "normalizer": "integer"},
+    {"number": 3, "type": "numeric", "accepted_answers": ["14"], "marks": 4, "normalizer": "integer"},
+    {"number": 4, "type": "diagram", "accepted_answers": ["Analog clock showing 7:45: minute hand at 9 and hour hand between 7 and 8, nearer 8", "Clock: 7:45", "Clock drawing: hands point to 9 and approximately 7–8"], "marks": 4, "normalizer": "text"},
+    {"number": 5, "type": "numeric", "accepted_answers": ["60"], "marks": 4, "normalizer": "integer"},
+    {"number": 6, "type": "diagram", "accepted_answers": ["2x2 grid with a circle in every cell; the bottom-left circle is crossed out and the other three are uncrossed", "2x2 grid: TL=O, TR=O, BL=crossed O, BR=O", "2×2 grid: bottom-left circle crossed; other three circles not crossed"], "marks": 4, "normalizer": "text"},
+    {"number": 7, "type": "numeric", "accepted_answers": ["40"], "marks": 4, "normalizer": "integer"},
+    {"number": 8, "type": "numeric", "accepted_answers": ["631"], "marks": 4, "normalizer": "integer"},
+    {"number": 9, "type": "diagram", "accepted_answers": ["Preprinted circle divided into 12 equal sectors; exactly the sector spanning 4-5 o'clock is shaded", "Pie chart: shaded sector 4-5 o'clock"], "marks": 4, "normalizer": "text"},
+    {"number": 10, "type": "numeric", "accepted_answers": ["31"], "marks": 4, "normalizer": "integer"},
+    {"number": 11, "type": "free_response", "accepted_answers": ["Wednesday"], "marks": 6, "normalizer": "text"},
+    {"number": 12, "type": "numeric", "accepted_answers": ["94"], "marks": 6, "normalizer": "integer"},
+    {"number": 13, "type": "numeric", "accepted_answers": ["61"], "marks": 6, "normalizer": "integer"},
+    {"number": 14, "type": "numeric", "accepted_answers": ["6"], "marks": 6, "normalizer": "integer"},
+    {"number": 15, "type": "numeric", "accepted_answers": ["14"], "marks": 6, "normalizer": "integer"},
+    {"number": 16, "type": "numeric", "accepted_answers": ["66"], "marks": 6, "normalizer": "integer"},
+    {"number": 17, "type": "numeric", "accepted_answers": ["10"], "marks": 6, "normalizer": "integer"},
+    {"number": 18, "type": "numeric", "accepted_answers": ["12"], "marks": 6, "normalizer": "integer"},
+    {"number": 19, "type": "numeric", "accepted_answers": ["54"], "marks": 6, "normalizer": "integer"},
+    {"number": 20, "type": "numeric", "accepted_answers": ["2178"], "marks": 6, "normalizer": "integer"}
+  ]
+}

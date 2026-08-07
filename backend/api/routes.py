@@ -1,0 +1,1347 @@
+"""
+FastAPI routes for exam answer sheet processing
+"""
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Query
+from fastapi.responses import JSONResponse, FileResponse
+from dataclasses import asdict
+import json as _json
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from datetime import datetime
+from pathlib import Path
+import logging
+import time
+
+from backend.db.database import get_db, SessionLocal
+from backend.db.models import (
+    ExamSubmission,
+    ProcessingLog, CandidateResult, AnswerKey, MarkingRun,
+    Exam, ExamDocument, GeneratedJSON,
+)
+from backend.api.schemas import (
+    UploadResponse,
+    ProcessingStatusResponse,
+    SubmissionDetailResponse,
+    CandidateResultSchema,
+    ErrorResponse,
+    ExamCreateSchema,
+    ExamResponse,
+    ExamDocumentResponse,
+    ExamDetailResponse,
+    GeneratedJSONResponse,
+)
+from backend.services.local_storage import get_local_storage
+from backend.services.pdf_to_images import get_pdf_converter
+from backend.services.template_extractor import TemplateExtractor, extract_pdf_auto
+from backend.services.json_generator import get_json_generator
+from backend.services.space_client import get_spaces_client
+from backend.services.image_preprocessor import ImagePreprocessor
+from backend.services.run_logger import attach_run_log, detach_run_log, step_timer
+from backend.services.marking_workflow import (
+    MarkingInProgressError,
+    manifest_from_key,
+    mark_submission_answers,
+    record_failed_marking_attempt,
+)
+from backend.services.marking_service import MarkingService
+from backend.config import get_settings
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+# ---------------------------- Template APIs ----------------------------
+
+
+@router.get("/templates")
+async def list_templates():
+    """List all available exam layout templates with preview image URLs."""
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+
+    # Map template_id -> reference image filename
+    _PREVIEW_MAP = {
+        "seamo_2025_k": "seamo_2025_page1.png",
+        "seamo_2025_a": "seamo_2025_page2.png",
+        "seamo_x_2026_k": "seamo_x_2026_page1.png",
+        "seamo_x_2026_a": "seamo_x_2026_page2.png",
+        "seamo_x_2026_b": "seamo_x_2026_page3.png",
+        "seamo_x_2026_c": "seamo_x_2026_page4.png",
+    }
+
+    results = []
+    seen_previews = set()
+    for t in registry.list_templates():
+        base_id = t.variant_of or t.id
+        preview_file = _PREVIEW_MAP.get(base_id)
+        # Only show one card per unique layout (skip variants)
+        if preview_file and preview_file in seen_previews:
+            continue
+        if preview_file:
+            seen_previews.add(preview_file)
+        results.append({
+            "id": t.id,
+            "name": t.name,
+            "brand": t.brand,
+            "year": t.year,
+            "paper": t.paper,
+            "has_mcq": t.has_mcq,
+            "has_free_response": t.has_free_response,
+            "total_questions": t.total_questions,
+            "preview_url": f"/templates/{t.id}/preview" if preview_file else None,
+            "variant_of": t.variant_of,
+        })
+    return results
+
+
+@router.get("/templates/all")
+async def list_all_templates():
+    """List ALL templates including variants (for programmatic use)."""
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+    return [
+        {
+            "id": t.id,
+            "name": t.name,
+            "brand": t.brand,
+            "year": t.year,
+            "paper": t.paper,
+            "has_mcq": t.has_mcq,
+            "has_free_response": t.has_free_response,
+            "total_questions": t.total_questions,
+            "variant_of": t.variant_of,
+        }
+        for t in registry.list_templates()
+    ]
+
+
+@router.get("/templates/{template_id}/preview")
+async def get_template_preview(template_id: str):
+    """Return the reference image for a template as a PNG."""
+    from backend.services.template_service import get_template_registry
+
+    _PREVIEW_MAP = {
+        "seamo_2025_k": "seamo_2025_page1.png",
+        "seamo_2025_a": "seamo_2025_page2.png",
+        "seamo_x_2026_k": "seamo_x_2026_page1.png",
+        "seamo_x_2026_a": "seamo_x_2026_page2.png",
+        "seamo_x_2026_b": "seamo_x_2026_page3.png",
+        "seamo_x_2026_c": "seamo_x_2026_page4.png",
+    }
+
+    registry = get_template_registry()
+    t = registry.get(template_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    base_id = t.variant_of or t.id
+    preview_file = _PREVIEW_MAP.get(base_id)
+    if not preview_file:
+        raise HTTPException(status_code=404, detail="No preview image for this template")
+
+    ref_dir = Path(__file__).resolve().parent.parent / "templates" / "reference_images"
+    img_path = ref_dir / preview_file
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Preview image file missing")
+
+    return FileResponse(str(img_path), media_type="image/png")
+
+
+# ---------------------------- Exams APIs ------------------------------
+
+
+@router.post("/exams", response_model=ExamResponse)
+async def create_exam(body: ExamCreateSchema, db: Session = Depends(get_db)):
+    exam = Exam(name=body.name)
+    db.add(exam)
+    db.commit()
+    db.refresh(exam)
+    return exam
+
+
+@router.get("/exams", response_model=List[ExamResponse])
+async def list_exams(db: Session = Depends(get_db)):
+    return db.query(Exam).order_by(Exam.created_at.desc()).all()
+
+
+@router.get("/exams/{exam_id}", response_model=ExamDetailResponse)
+async def get_exam(exam_id: int, db: Session = Depends(get_db)):
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    return exam
+
+
+@router.post("/exams/{exam_id}/correction", response_model=ExamResponse)
+async def upload_correction_pdf(exam_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="A valid PDF file is required")
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    storage = get_local_storage()
+    saved = storage.save_pdf(file.file, f"exam_{exam_id}_correction.pdf")
+    exam.correction_pdf_path = saved["relative_path"]
+    db.commit()
+    db.refresh(exam)
+    return exam
+
+
+@router.post("/exams/{exam_id}/student-pdfs", response_model=ExamDocumentResponse)
+async def upload_student_pdf(exam_id: int, country: Optional[str] = None, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="A valid PDF file is required")
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    storage = get_local_storage()
+    saved = storage.save_pdf(file.file, file.filename)
+    pdf_converter = get_pdf_converter()
+    
+    absolute_path = storage.get_absolute_path(saved["relative_path"])
+    if not absolute_path:
+        raise HTTPException(status_code=500, detail="Could not resolve saved file path")
+
+    image_paths = pdf_converter.convert_from_file(absolute_path)
+    pages = len(image_paths)
+    # cleanup images
+    for img in image_paths:
+        try:
+            Path(img).unlink(missing_ok=True)
+        except Exception:
+            pass
+    doc = ExamDocument(
+        exam_id=exam_id,
+        country=country,
+        file_path=saved["relative_path"],
+        pages_count=pages,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+@router.post("/exams/{exam_id}/extract/{document_id}", response_model=GeneratedJSONResponse)
+async def extract_exam_document(
+    exam_id: int,
+    document_id: int,
+    template_id: str = Query(..., description="Exam layout template id; required."),
+    db: Session = Depends(get_db),
+):
+    # template_id is mandatory: trust-the-template policy.
+    from backend.services.template_service import get_template_registry
+    if get_template_registry().get(template_id) is None:
+        raise HTTPException(status_code=400, detail=f"Unknown template_id '{template_id}'")
+    exam = db.query(Exam).filter(Exam.id == exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    doc = db.query(ExamDocument).filter(ExamDocument.id == document_id, ExamDocument.exam_id == exam_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found for this exam")
+
+    storage = get_local_storage()
+    pdf_converter = get_pdf_converter()
+    space_client = get_spaces_client()
+    image_preprocessor = ImagePreprocessor()
+    
+    absolute_pdf = storage.get_absolute_path(doc.file_path)
+    if absolute_pdf is None:
+        raise HTTPException(status_code=500, detail="Could not resolve PDF file path")
+    
+    try:
+        all_image_paths = pdf_converter.convert_from_file(absolute_pdf)
+    except Exception as e:
+        logger.error(f"Failed to convert PDF for doc_id={document_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"PDF conversion failed: {e}")
+
+    valid_image_paths = []
+    for image_path in all_image_paths:
+        # 1. Check if the page is blank
+        if image_preprocessor.is_blank(image_path):
+            logger.info(f"Skipping blank page: {Path(image_path).name}")
+            continue
+
+        # 2. Archive the valid image to Spaces (if enabled)
+        try:
+            space_client.upload_image(
+                image_path=image_path,
+                submission_id=document_id, # Using document_id as a proxy for submission_id
+                original_pdf_name=Path(absolute_pdf).name
+            )
+        except Exception as e:
+            # Log the error but don't block the main extraction process
+            logger.error(f"Failed to archive image {Path(image_path).name} to Spaces: {e}")
+
+        valid_image_paths.append(image_path)
+
+    if not valid_image_paths:
+        # If all pages were blank, there's nothing to process.
+        logger.warning(f"No valid (non-blank) pages found in PDF for doc_id={document_id}. Aborting extraction.")
+        # We could raise an error or return a specific response.
+        # For now, let's create an empty JSON record to signify it was "processed".
+        record = GeneratedJSON(
+            exam_id=exam_id,
+            file_path=None,
+            filename=f"exam_{exam_id}_doc_{document_id}_empty.json",
+            metadata={"status": "aborted", "reason": "No valid pages found"}
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record
+
+    settings = get_settings()
+    extractor = TemplateExtractor(template_id)
+    extraction_result = extractor.extract_pdf(
+        absolute_pdf,
+        valid_image_paths,
+        max_workers=settings.max_extraction_workers,
+        filename=Path(absolute_pdf).name,
+    )
+
+    json_generator = get_json_generator()
+    if settings.minimal_output:
+        json_data = json_generator.generate_minimal(
+            Path(absolute_pdf).name,
+            extraction_result,
+        )
+    else:
+        json_data = json_generator.generate_with_validation(
+            Path(absolute_pdf).name,
+            extraction_result,
+            None,
+        )
+
+    json_filename = f"exam_{exam_id}_doc_{document_id}.json"
+    saved_json = storage.save_json(json_data, json_filename)
+
+    record = GeneratedJSON(
+        exam_id=exam_id,
+        file_path=saved_json["relative_path"],
+        filename=json_filename,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+
+    # cleanup all generated images (blank and valid)
+    for img in all_image_paths:
+        try:
+            Path(img).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    return record
+
+
+@router.get("/exams/{exam_id}/jsons", response_model=List[GeneratedJSONResponse])
+async def list_exam_jsons(exam_id: int, db: Session = Depends(get_db)):
+    return db.query(GeneratedJSON).filter(GeneratedJSON.exam_id == exam_id).order_by(GeneratedJSON.created_at.desc()).all()
+
+
+@router.get("/jsons/{json_id}")
+async def download_json(json_id: int, db: Session = Depends(get_db)):
+    storage = get_local_storage()
+    record = db.query(GeneratedJSON).filter(GeneratedJSON.id == json_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="JSON not found")
+    if not record.file_path:
+        raise HTTPException(status_code=404, detail="No file associated with this record")
+    abs_path = storage.get_absolute_path(record.file_path)
+    if not abs_path or not Path(abs_path).exists():
+        raise HTTPException(status_code=404, detail="File missing")
+    return JSONResponse(content=_json.loads(Path(abs_path).read_text(encoding="utf-8")))
+
+
+@router.delete("/jsons/{json_id}")
+async def delete_json(json_id: int, db: Session = Depends(get_db)):
+    storage = get_local_storage()
+    record = db.query(GeneratedJSON).filter(GeneratedJSON.id == json_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="JSON not found")
+    if record.file_path:
+        abs_path = storage.get_absolute_path(record.file_path)
+        if abs_path:
+            try:
+                Path(abs_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+    db.delete(record)
+    db.commit()
+    return {"status": "deleted"}
+
+
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _write_processing_log(
+    db: Session,
+    submission_id: int,
+    action: str,
+    status: str,
+    message: str,
+    extra_data: Optional[dict] = None,
+) -> None:
+    """Write a processing log entry without breaking the caller flow."""
+    try:
+        db.add(ProcessingLog(
+            submission_id=submission_id,
+            action=action,
+            status=status,
+            message=message,
+            extra_data=extra_data,
+        ))
+        db.commit()
+    except Exception as log_error:
+        db.rollback()
+        logger.warning("Failed to write log action=%s for submission=%s: %s", action, submission_id, log_error)
+
+
+def process_pdf_extraction(
+    submission_id: int,
+    pdf_path: str,
+    template_id: Optional[str] = None,
+):
+    """Background task to convert pages, extract answers, and persist JSON locally.
+
+    When ``template_id`` is omitted, each page is classified from the footer
+    (OCR) and extracted with that layout. When provided, every page uses the
+    forced template (debug / override).
+    """
+    db = SessionLocal()
+    image_paths: List[str] = []
+    job_started = time.perf_counter()
+    _sub_pre = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    if not _sub_pre:
+        logger.error(f"Submission {submission_id} not found")
+        db.close()
+        return
+    _filename_for_log = str(getattr(_sub_pre, "filename") or Path(pdf_path).name)
+    run_log = attach_run_log(submission_id, _filename_for_log, template_id)
+    run_log_path = run_log.path
+    try:
+        sub = _sub_pre
+        settings = get_settings()
+        logger.info(
+            "CONFIG model=%s fallback=%s preproc=%s(%s) workers=%s template=%s mode=%s",
+            settings.gemini_model,
+            settings.gemini_fallback_models,
+            settings.enable_image_preprocessing,
+            settings.preprocessing_mode,
+            settings.max_extraction_workers,
+            template_id,
+            "forced" if template_id else "auto",
+        )
+
+        setattr(sub, 'status', 'processing')
+        setattr(sub, 'template_id', template_id)  # None in auto mode
+        db.commit()
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_start",
+            status="success",
+            message="Starting PDF extraction",
+            extra_data={
+                "pdf_path": pdf_path,
+                "run_log": str(run_log_path),
+                "template_id": template_id,
+                "mode": "forced" if template_id else "auto",
+            },
+        )
+
+        logger.info(f"Converting PDF to images: {pdf_path}")
+        conversion_started = time.perf_counter()
+        pdf_converter = get_pdf_converter()
+        with step_timer("pdf_to_images", logger):
+            image_paths = pdf_converter.convert_from_file(pdf_path)
+        conversion_seconds = time.perf_counter() - conversion_started
+        logger.info("pdf_to_images: produced %d page images in %.2fs", len(image_paths), conversion_seconds)
+
+        setattr(sub, 'pages_count', len(image_paths))
+        db.commit()
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message=f"Converted PDF to {len(image_paths)} page images",
+            extra_data={
+                "stage": "pdf_to_images",
+                "pages": len(image_paths),
+                "duration_seconds": round(conversion_seconds, 2),
+            },
+        )
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message=(
+                "Template extraction started (forced)"
+                if template_id
+                else "Template extraction started (auto footer OCR)"
+            ),
+            extra_data={
+                "stage": "template_extraction",
+                "workers": int(settings.max_extraction_workers),
+                "pages": len(image_paths),
+                "template_id": template_id,
+                "mode": "forced" if template_id else "auto",
+            },
+        )
+
+        extraction_started = time.perf_counter()
+        if template_id:
+            extractor = TemplateExtractor(template_id)
+            extraction_result = extractor.extract_pdf(
+                pdf_path,
+                image_paths,
+                submission_id=submission_id,
+                db=db,
+                max_workers=settings.max_extraction_workers,
+                filename=str(getattr(sub, "filename", "")),
+            )
+        else:
+            extraction_result = extract_pdf_auto(
+                pdf_path,
+                image_paths,
+                max_workers=settings.max_extraction_workers,
+            )
+        extraction_seconds = time.perf_counter() - extraction_started
+
+        json_gen = get_json_generator()
+        json_data = json_gen.generate_with_validation(
+            str(getattr(sub, 'filename')),
+            extraction_result,
+            None,
+        )
+        storage = get_local_storage()
+        json_filename = f"{Path(str(getattr(sub, 'filename'))).stem}.json"
+        save = storage.save_json(json_data, json_filename)
+        setattr(sub, 'result_json_key', save['relative_path'])
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_stage",
+            status="info",
+            message=f"Saved JSON results to {save['relative_path']}",
+            extra_data={"stage": "save_json", "relative_path": save["relative_path"]},
+        )
+
+        # Save per-candidate results to DB (supports dynamic header fields)
+        KNOWN_COLUMNS = {"candidate_name", "candidate_number", "country", "paper_type"}
+        # Keys to exclude from extra_fields (internal/technical fields)
+        EXCLUDED_KEYS = {
+            "page_number", "answers", "drawing_questions", "extra_fields",
+            "confidence", "is_blank", "template_id", "detection", "diagram_qs",
+        }
+        # Common AI aliases that should map to known columns
+        FIELD_ALIASES = {
+            "candidate_no": "candidate_number",
+            "candidate_id": "candidate_number",
+            "name": "candidate_name",
+            "student_name": "candidate_name",
+            "student_number": "candidate_number",
+        }
+        for candidate in extraction_result.get('candidates', []):
+            # Apply field aliases before splitting known vs extra
+            normalized = {}
+            for k, v in candidate.items():
+                mapped_key = FIELD_ALIASES.get(k, k)
+                # Don't overwrite if the canonical key already has a non-empty value
+                if mapped_key in normalized and normalized[mapped_key]:
+                    # Keep the canonical value, store alias in extra
+                    pass
+                else:
+                    normalized[mapped_key] = v
+            # Preserve extractor-owned nested metadata (notably answer trust and
+            # needs_review_questions) for the marking workflow.  Additional
+            # top-level display fields remain string-normalized for compatibility.
+            nested_extra = normalized.get("extra_fields")
+            extra = dict(nested_extra) if isinstance(nested_extra, dict) else {}
+            for k, v in normalized.items():
+                if k not in KNOWN_COLUMNS and k not in EXCLUDED_KEYS:
+                    extra[k] = str(v) if v is not None else ''
+            detection = normalized.get("detection")
+            if detection is not None and not isinstance(detection, dict):
+                detection = None
+            db.add(CandidateResult(
+                submission_id=submission_id,
+                page_number=normalized.get('page_number'),
+                candidate_name=normalized.get('candidate_name', ''),
+                candidate_number=normalized.get('candidate_number', ''),
+                country=normalized.get('country', ''),
+                paper_type=normalized.get('paper_type', ''),
+                template_id=normalized.get('template_id'),
+                detection=detection,
+                extra_fields=extra if extra else None,
+                answers=normalized.get('answers', {}),
+                drawing_questions=normalized.get('drawing_questions', {}),
+            ))
+
+        candidates = extraction_result.get('candidates', [])
+        answers_count = sum(len((candidate.get('answers') or {})) for candidate in candidates)
+        drawing_count = sum(
+            1
+            for candidate in candidates
+            for answer in (candidate.get('answers') or {}).values()
+            if str(answer).strip().upper() == "DR"
+        )
+        pages_processed = _safe_int(extraction_result.get('pages_processed'), len(image_paths))
+        pages_with_data = _safe_int(extraction_result.get('pages_with_data'), 0)
+        total_duration = time.perf_counter() - job_started
+
+        # Secure raw extraction in its own transaction before marking. The
+        # marking workflow owns separate transactions and cannot roll these
+        # candidate rows back.
+        db.commit()
+
+        prior_marking_run_id = None
+        marking_boundary_known = False
+        try:
+            prior_marking_run = (
+                db.query(MarkingRun)
+                .filter(MarkingRun.submission_id == submission_id)
+                .order_by(MarkingRun.id.desc())
+                .first()
+            )
+            prior_marking_run_id = (
+                prior_marking_run.id if prior_marking_run else None
+            )
+            marking_boundary_known = True
+            marking_run = mark_submission_answers(db, submission_id)
+        except MarkingInProgressError as marking_conflict:
+            db.rollback()
+            marking_run = (
+                db.get(MarkingRun, marking_conflict.run_id)
+                if marking_conflict.run_id is not None
+                else None
+            )
+            logger.info(
+                "Automatic marking already active run_id=%s submission=%s",
+                marking_conflict.run_id,
+                submission_id,
+            )
+        except Exception as marking_error:
+            db.rollback()
+            logger.exception(
+                "Automatic marking invocation failed for submission=%s",
+                submission_id,
+            )
+            try:
+                marking_run = record_failed_marking_attempt(
+                    db,
+                    submission_id,
+                    marking_error,
+                    after_run_id=prior_marking_run_id,
+                    force_new=not marking_boundary_known,
+                )
+            except Exception:
+                db.rollback()
+                logger.exception(
+                    "Could not persist failed marking run for submission=%s",
+                    submission_id,
+                )
+                marking_run = None
+        logger.info(
+            "Automatic marking terminal status=%s run_id=%s submission=%s",
+            marking_run.status if marking_run else "failed-unpersisted",
+            marking_run.id if marking_run else None,
+            submission_id,
+        )
+
+        # Unavailable and failed marking are terminal marking outcomes, not
+        # extraction failures.
+        setattr(sub, 'status', 'completed')
+        setattr(sub, 'processed_at', datetime.utcnow())
+        db.commit()
+
+        _write_processing_log(
+            db,
+            submission_id,
+            action="extract_complete",
+            status="success",
+            message=f"Extracted {len(candidates)} candidates in {total_duration:.1f}s",
+            extra_data={
+                "candidate_count": len(candidates),
+                "answers_count": answers_count,
+                "drawing_count": drawing_count,
+                "pages_processed": pages_processed,
+                "pages_with_data": pages_with_data,
+                "conversion_seconds": round(conversion_seconds, 2),
+                "extraction_seconds": round(extraction_seconds, 2),
+                "total_seconds": round(total_duration, 2),
+            },
+        )
+
+        logger.info(f"Successfully processed submission {submission_id}")
+
+    except Exception as e:
+        logger.exception(f"Failed to process submission {submission_id}: {e}")
+        db.rollback()
+        sub = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+        if sub:
+            setattr(sub, 'status', 'failed')
+            setattr(sub, 'error_message', str(e))
+            db.commit()
+            _write_processing_log(
+                db,
+                submission_id,
+                action="extract_error",
+                status="error",
+                message=str(e),
+                extra_data={"total_seconds": round(time.perf_counter() - job_started, 2)},
+            )
+    finally:
+        for image_path in image_paths:
+            try:
+                Path(image_path).unlink(missing_ok=True)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup image {image_path}: {cleanup_error}")
+        db.close()
+        try:
+            detach_run_log(run_log)
+        except Exception as detach_error:
+            logger.warning(f"Failed to detach run log: {detach_error}")
+
+
+@router.post("/upload", response_model=UploadResponse)
+async def upload_pdf(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    template_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional forced layout id. When omitted, each page is classified "
+            "from the footer (OCR) across all templates."
+        ),
+    ),
+    db: Session = Depends(get_db)
+):
+    """Upload a PDF exam answer sheet for processing.
+
+    Default is auto layout detection per page. Pass ``template_id`` to force
+    a single layout for every page.
+    """
+    if not file or not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    if template_id:
+        from backend.services.template_service import get_template_registry
+        registry = get_template_registry()
+        if registry.get(template_id) is None:
+            available = registry.list_ids()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown template_id '{template_id}'. Available: {available}"
+            )
+
+    try:
+        storage = get_local_storage()
+        logger.info(f"Storing PDF locally: {file.filename}")
+        upload_result = storage.save_pdf(file.file, file.filename)
+
+        # Create database entry
+        submission = ExamSubmission(
+            filename=file.filename,
+            original_pdf_key=upload_result['relative_path'],
+            template_id=template_id,
+            status="pending"
+        )
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+
+        # Log upload
+        log_entry = ProcessingLog(
+            submission_id=submission.id,
+            action="upload",
+            status="success",
+            message=f"Stored {file.filename} at {upload_result['relative_path']}",
+            extra_data={
+                "template_id": template_id,
+                "mode": "forced" if template_id else "auto",
+            },
+        )
+        db.add(log_entry)
+        db.commit()
+
+        # Schedule background processing
+        background_tasks.add_task(
+            process_pdf_extraction, submission.id, upload_result['absolute_path'], template_id
+        )
+        
+        logger.info(f"Created submission {submission.id} for {file.filename}")
+        
+        return UploadResponse(
+            status="success",
+            message="PDF uploaded successfully. Processing started.",
+            submission_id=submission.id,
+            filename=file.filename,
+            storage_path=upload_result['relative_path']
+        )
+        
+    except Exception as e:
+        logger.error(f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@router.get("/status/{submission_id}", response_model=ProcessingStatusResponse)
+async def get_status(submission_id: int, db: Session = Depends(get_db)):
+    """
+    Get processing status of a submission
+    
+    Args:
+        submission_id: Submission ID
+        db: Database session
+        
+    Returns:
+        Processing status details
+    """
+    submission = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    d = submission.__dict__
+    status_value = str(d.get("status") or "unknown")
+
+    # Progress log (latest page-level event)
+    progress_log = (
+        db.query(ProcessingLog)
+        .filter(ProcessingLog.submission_id == d.get("id"), ProcessingLog.action == "page_progress")
+        .order_by(ProcessingLog.created_at.desc())
+        .first()
+    )
+
+    current_page = None
+    current_candidate_name = None
+    if progress_log is not None and isinstance(progress_log.extra_data, dict):
+        current_page = progress_log.extra_data.get("page") or progress_log.extra_data.get("current")
+        current_candidate_name = (
+            progress_log.extra_data.get("label")
+            or progress_log.extra_data.get("candidate_name")
+        )
+
+    # Completion summary log (contains counters and timing)
+    summary_log = (
+        db.query(ProcessingLog)
+        .filter(ProcessingLog.submission_id == d.get("id"), ProcessingLog.action == "extract_complete")
+        .order_by(ProcessingLog.created_at.desc())
+        .first()
+    )
+    summary_extra = summary_log.extra_data if summary_log is not None and isinstance(summary_log.extra_data, dict) else {}
+
+    created_at = d.get("created_at")
+    if not isinstance(created_at, datetime) or created_at is None:
+        created_at = datetime.utcnow()
+
+    cand_count = _safe_int(summary_extra.get("candidate_count"), 0)
+    answers_count = _safe_int(summary_extra.get("answers_count"), 0)
+    drawing_count = _safe_int(summary_extra.get("drawing_count"), 0)
+
+    # Keep status polling lightweight while processing.
+    if status_value == "completed" and cand_count == 0:
+        cand_rows = db.query(CandidateResult).filter(CandidateResult.submission_id == submission.id).all()
+        cand_count = len(cand_rows)
+        answers_count = 0
+        drawing_count = 0
+        for cr in cand_rows:
+            ans = getattr(cr, 'answers', None)
+            if isinstance(ans, dict):
+                answers_count += len(ans)
+            drw = getattr(cr, 'drawing_questions', None)
+            if isinstance(drw, dict) and drw:
+                drawing_count += len(drw)
+            elif isinstance(ans, dict):
+                drawing_count += sum(
+                    1 for value in ans.values()
+                    if str(value).strip().upper() == "DR"
+                )
+
+    return ProcessingStatusResponse(
+        submission_id=int(d.get("id") or 0),
+        filename=str(d.get("filename") or ""),
+        status=status_value,
+        created_at=created_at,
+        processed_at=d.get("processed_at") if isinstance(d.get("processed_at"), datetime) or d.get("processed_at") is None else None,
+        pages_count=int(d.get("pages_count") or 0),
+        candidates_count=cand_count,
+        answers_count=answers_count,
+        drawing_count=drawing_count,
+        error_message=str(d.get("error_message")) if d.get("error_message") is not None else None,
+        current_page=current_page,
+        current_candidate_name=current_candidate_name
+    )
+
+
+@router.get("/submission/{submission_id}", response_model=SubmissionDetailResponse)
+async def get_submission(submission_id: int, db: Session = Depends(get_db)):
+    """
+    Get full submission details with all candidate results
+    """
+    submission = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    status_value = str(getattr(submission, 'status'))
+    if status_value != "completed":
+        raise HTTPException(status_code=400, detail=f"Submission is {status_value}, not completed")
+    
+    # Load candidate results from DB
+    candidate_rows = db.query(CandidateResult).filter(
+        CandidateResult.submission_id == submission_id
+    ).order_by(CandidateResult.page_number).all()
+    from backend.api.marking_routes import (
+        candidate_marking_schema,
+        load_latest_marking,
+        marking_metadata,
+    )
+    latest_run, marking_by_candidate = load_latest_marking(db, submission_id)
+    
+    candidates = []
+    for cr in candidate_rows:
+        # Coerce None values in answers/drawing dicts to empty strings
+        raw_answers = getattr(cr, 'answers') or {}
+        clean_answers = {k: (str(v) if v is not None else '') for k, v in raw_answers.items()}
+        raw_drawing = getattr(cr, 'drawing_questions') or {}
+        clean_drawing = {k: (str(v) if v is not None else '') for k, v in raw_drawing.items()}
+        drawing_payload = clean_drawing if clean_drawing else None
+
+        # Merge extra_fields into display: use candidate_no/candidate_id as candidate_number if empty
+        raw_extra = getattr(cr, 'extra_fields') or {}
+        # Filter out internal keys and convert all values to strings for schema compatibility
+        clean_extra = {}
+        excluded_extra_keys = {'extra_fields', 'confidence', 'is_blank'}
+        for k, v in raw_extra.items():
+            if k not in excluded_extra_keys and v is not None and v != {}:
+                clean_extra[k] = str(v)
+
+        cand_name = str(getattr(cr, 'candidate_name') or '') or raw_extra.get('name', '') or raw_extra.get('student_name', '')
+        cand_number = str(getattr(cr, 'candidate_number') or '') or raw_extra.get('candidate_no', '') or raw_extra.get('candidate_id', '') or raw_extra.get('student_number', '')
+
+        candidates.append(CandidateResultSchema(
+            id=int(getattr(cr, 'id')),
+            candidate_name=cand_name,
+            candidate_number=cand_number,
+            country=str(getattr(cr, 'country') or ''),
+            paper_type=str(getattr(cr, 'paper_type') or ''),
+            template_id=getattr(cr, 'template_id', None),
+            detection=getattr(cr, 'detection', None) if isinstance(getattr(cr, 'detection', None), dict) else None,
+            extra_fields=clean_extra if clean_extra else None,
+            answers=clean_answers,
+            drawing_questions=drawing_payload,
+            marking=candidate_marking_schema(
+                marking_by_candidate.get(int(getattr(cr, 'id'))),
+                cand_number,
+            ),
+        ))
+    
+    return SubmissionDetailResponse(
+        submission_id=int(getattr(submission, 'id')),
+        filename=str(getattr(submission, 'filename')),
+        status=str(getattr(submission, 'status')),
+        created_at=getattr(submission, 'created_at'),
+        processed_at=getattr(submission, 'processed_at'),
+        candidates=candidates,
+        latest_marking=marking_metadata(latest_run),
+    )
+
+
+@router.get("/submissions", response_model=List[ProcessingStatusResponse])
+async def list_submissions(
+    skip: int = 0,
+    limit: int = 100,
+    status: str | None = None,
+    db: Session = Depends(get_db)
+):
+    """
+    List all submissions with optional filtering
+    
+    Args:
+        skip: Number of records to skip
+        limit: Maximum records to return
+        status: Filter by status (optional)
+        db: Database session
+        
+    Returns:
+        List of submissions
+    """
+    query = db.query(ExamSubmission)
+    
+    if status:
+        query = query.filter(ExamSubmission.status == status)
+    
+    submissions = query.order_by(ExamSubmission.created_at.desc()).offset(skip).limit(limit).all()
+    
+    results: List[ProcessingStatusResponse] = []
+    for sub in submissions:
+        # Count candidates and answers for this submission
+        cand_rows = db.query(CandidateResult).filter(CandidateResult.submission_id == sub.id).all()
+        cand_count = len(cand_rows)
+        answers_count = 0
+        drawing_count = 0
+        for cr in cand_rows:
+            ans = getattr(cr, 'answers', None)
+            if isinstance(ans, dict):
+                answers_count += len(ans)
+            drw = getattr(cr, 'drawing_questions', None)
+            if isinstance(drw, dict):
+                drawing_count += len(drw)
+        results.append(ProcessingStatusResponse(
+            submission_id=int(getattr(sub,'id')),
+            filename=str(getattr(sub,'filename')),
+            status=str(getattr(sub,'status')),
+            created_at=getattr(sub,'created_at'),
+            processed_at=getattr(sub,'processed_at'),
+            pages_count=int(getattr(sub,'pages_count') or 0),
+            candidates_count=cand_count,
+            answers_count=answers_count,
+            drawing_count=drawing_count,
+            error_message=str(getattr(sub,'error_message')) if getattr(sub,'error_message') is not None else None
+        ))
+    return results
+
+
+@router.get("/submission/{submission_id}/json")
+async def get_submission_json(submission_id: int, db: Session = Depends(get_db)):
+    """
+    Get the raw JSON result file for a submission
+    """
+    submission = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    result_key = getattr(submission,'result_json_key', None)
+    if result_key is None or str(result_key).strip() == "":
+        raise HTTPException(status_code=404, detail="JSON result not found")
+    try:
+        storage = get_local_storage()
+        key = getattr(submission, 'result_json_key')
+        logger.info(f"Loading JSON for submission {submission_id} from {key}")
+        json_data = storage.read_json(key)
+        if json_data is None:
+            raise HTTPException(status_code=404, detail="JSON result file not found in storage.")
+        # Parse JSON string and return as proper JSON response
+        try:
+            parsed = _json.loads(json_data)
+            return JSONResponse(content=parsed)
+        except _json.JSONDecodeError:
+            # If parsing fails, log and return the raw string as text with application/json media type
+            logger.error(f"Downloaded JSON is invalid JSON for submission {submission_id}")
+            return JSONResponse(content={"raw": json_data})
+    except Exception as e:
+        logger.error(f"Failed to retrieve JSON for {submission_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve JSON: {str(e)}")
+
+
+@router.get("/submission/{submission_id}/logs")
+async def get_submission_logs(submission_id: int, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    Return the most recent processing logs for a submission.
+    """
+    submission = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    logs = (
+        db.query(ProcessingLog)
+        .filter(ProcessingLog.submission_id == submission_id)
+        .order_by(ProcessingLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    out = []
+    for log in logs:
+        dt = getattr(log, 'created_at', None)
+        out.append({
+            "id": getattr(log, 'id', None),
+            "action": getattr(log, 'action', None),
+            "status": getattr(log, 'status', None),
+            "message": getattr(log, 'message', None),
+            "extra_data": getattr(log, 'extra_data', None),
+            "created_at": dt.isoformat() if dt else None,
+        })
+    return out
+
+
+@router.delete("/submission/{submission_id}")
+async def delete_submission(submission_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a submission and all associated data
+    
+    Args:
+        submission_id: Submission ID
+        db: Database session
+        
+    Returns:
+        Deletion confirmation
+    """
+    submission = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
+    
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    
+    storage = get_local_storage()
+    storage.delete_file(getattr(submission, 'original_pdf_key', None))
+    if getattr(submission, 'result_json_key', None):
+        storage.delete_file(getattr(submission, 'result_json_key'))
+    
+    # Delete from database (cascades to answers)
+    db.delete(submission)
+    db.commit()
+    
+    logger.info(f"Deleted submission {submission_id}")
+    
+    return {"status": "success", "message": f"Submission {submission_id} deleted"}
+
+
+def _validate_optional_template_id(template_id: Optional[str]) -> Optional[str]:
+    """Return cleaned template_id or raise 400 if unknown."""
+    if not template_id:
+        return None
+    from backend.services.template_service import get_template_registry
+    registry = get_template_registry()
+    if registry.get(template_id) is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown template_id '{template_id}'. Available: {registry.list_ids()}",
+        )
+    return template_id
+
+
+def _run_sync_extraction(
+    pdf_path: str,
+    image_paths: list,
+    *,
+    template_id: Optional[str],
+    filename: str,
+) -> dict:
+    """Forced-template or auto-layout sync extraction (no DB persistence)."""
+    settings = get_settings()
+    if template_id:
+        extractor = TemplateExtractor(template_id)
+        return extractor.extract_pdf(
+            pdf_path,
+            image_paths,
+            max_workers=settings.max_extraction_workers,
+            filename=filename,
+        )
+    return extract_pdf_auto(
+        pdf_path,
+        image_paths,
+        max_workers=settings.max_extraction_workers,
+    )
+
+
+@router.post(
+    "/extract/json",
+    summary="Extract PDF → JSON (sync, integration primary)",
+    response_description="Structured extraction JSON with candidates and answers",
+)
+async def extract_json(
+    file: UploadFile = File(..., description="Scanned exam answer-sheet PDF"),
+    template_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional layout template id (see GET /templates/all). "
+            "When omitted, each page is classified from the printed footer."
+        ),
+    ),
+):
+    """Synchronous PDF → JSON extraction for third-party servers.
+
+    Upload a PDF and receive structured candidate data in the HTTP response.
+    No submission row is created. Prefer this endpoint for server-to-server use.
+
+    Set a client timeout of **≥ 10 minutes** for multi-page PDFs.
+    """
+    if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    template_id = _validate_optional_template_id(template_id)
+
+    try:
+        pdf_converter = get_pdf_converter()
+        storage = get_local_storage()
+        saved = storage.save_pdf(file.file, file.filename)
+        image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
+
+        extraction_result = _run_sync_extraction(
+            saved["absolute_path"],
+            image_paths,
+            template_id=template_id,
+            filename=file.filename,
+        )
+
+        json_generator = get_json_generator()
+        json_data = json_generator.generate_with_validation(
+            file.filename,
+            extraction_result,
+            None,
+        )
+
+        for img in image_paths:
+            try:
+                Path(img).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        return JSONResponse(content=_json.loads(json_data))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Synchronous extraction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")
+
+
+@router.post(
+    "/extract/json/mark",
+    summary="Extract PDF + mark against stored answer key (sync)",
+)
+async def extract_and_mark(
+    file: UploadFile = File(..., description="Scanned exam answer-sheet PDF"),
+    template_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional forced layout id. When omitted, layout is auto-detected "
+            "and each candidate is marked against the active key for their template."
+        ),
+    ),
+    mark_request: Optional[str] = Form(
+        None,
+        description='Optional JSON: {"answer_key_id": <int>}. Inline keys are rejected.',
+    ),
+    db: Session = Depends(get_db),
+):
+    """Synchronous extract + mark against a **stored** answer key.
+
+    ``mark_request`` may select a stored immutable answer-key version by ID.
+    Inline answer keys are intentionally rejected.
+
+    Without ``mark_request``:
+    - forced ``template_id`` → active key for that template
+    - auto layout → active key matching each candidate's ``template_id``
+    Missing keys leave that candidate unmarked (no marking block).
+    """
+    if not file or not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    template_id = _validate_optional_template_id(template_id)
+
+    try:
+        pdf_converter = get_pdf_converter()
+        storage = get_local_storage()
+        saved = storage.save_pdf(file.file, file.filename)
+        image_paths = pdf_converter.convert_from_file(saved["absolute_path"])
+
+        extraction_result = _run_sync_extraction(
+            saved["absolute_path"],
+            image_paths,
+            template_id=template_id,
+            filename=file.filename,
+        )
+
+        candidates = extraction_result.get("candidates", [])
+        selected_key_id = None
+        if mark_request:
+            try:
+                parsed_request = _json.loads(mark_request)
+            except _json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Invalid mark_request JSON")
+            if (
+                not isinstance(parsed_request, dict)
+                or set(parsed_request) != {"answer_key_id"}
+                or not isinstance(parsed_request["answer_key_id"], int)
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="mark_request only accepts an integer answer_key_id",
+                )
+            selected_key_id = parsed_request["answer_key_id"]
+
+        # Resolve keys: explicit id, or active key(s) by template.
+        key_by_template: dict[str, AnswerKey] = {}
+        forced_key: Optional[AnswerKey] = None
+        if selected_key_id is not None:
+            forced_key = db.get(AnswerKey, selected_key_id)
+            if forced_key is None:
+                raise HTTPException(status_code=404, detail="Answer key not found")
+            if template_id and forced_key.template_id != template_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Answer key template does not match requested template",
+                )
+        elif template_id:
+            forced_key = (
+                db.query(AnswerKey)
+                .filter(
+                    AnswerKey.template_id == template_id,
+                    AnswerKey.is_active.is_(True),
+                )
+                .one_or_none()
+            )
+        else:
+            active_keys = (
+                db.query(AnswerKey)
+                .filter(AnswerKey.is_active.is_(True))
+                .all()
+            )
+            for ak in active_keys:
+                tid = getattr(ak, "template_id", None)
+                if tid and tid not in key_by_template:
+                    key_by_template[tid] = ak
+
+        marked_candidates = []
+        for candidate in candidates:
+            cand_template = template_id or candidate.get("template_id")
+            matched_ak = forced_key
+            if matched_ak is None and cand_template:
+                matched_ak = key_by_template.get(cand_template)
+            if matched_ak is None:
+                marked_candidates.append(candidate)
+                continue
+            marker = MarkingService(manifest_from_key(matched_ak))
+            result = marker.mark(candidate.get("answers") or {})
+            marked_candidates.append(
+                {
+                    **candidate,
+                    "marking": {
+                        "awarded_marks": result.awarded_marks,
+                        "max_marks": result.max_marks,
+                        "percentage": result.percentage,
+                        "answer_key_id": matched_ak.id,
+                        "outcomes": [
+                            asdict(outcome) for outcome in result.outcomes
+                        ],
+                    },
+                }
+            )
+
+        # Cleanup images
+        for img in image_paths:
+            try:
+                Path(img).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        return JSONResponse(content={
+            "filename": file.filename,
+            "template_id": template_id,
+            "mode": "forced" if template_id else "auto",
+            "total_candidates": len(marked_candidates),
+            "candidates": marked_candidates,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Extract & mark failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")

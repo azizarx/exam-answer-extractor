@@ -1,0 +1,13 @@
+{
+  "id": "seamo_x_2026_d",
+  "name": "SEAMO X 2026 Paper D - Junior",
+  "brand": "seamo_x",
+  "year": 2026,
+  "paper": "D",
+  "variant_of": "seamo_x_2026_c",
+
+  "detection": {
+    "filename_pattern": "SEAMO.*X.*2026|ZONE.*Z",
+    "text_markers": ["SEAMO X", "2026", "Paper D", "JUNIOR"]
+  }
+}

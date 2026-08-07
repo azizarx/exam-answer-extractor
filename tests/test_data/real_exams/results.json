@@ -1,0 +1,3957 @@
+{
+  "summary": {
+    "total_pages": 104,
+    "detected": 100,
+    "unmatched": 4,
+    "mcq_extracted": 29
+  },
+  "pages": [
+    {
+      "pdf": "UZ1-35",
+      "page": 1,
+      "template": "seamo_2025_d",
+      "anchor_score": 1.0,
+      "dx": 0,
+      "dy": 0,
+      "render_ms": 358,
+      "detect_ms": 252,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "B",
+            "2": "C",
+            "3": "D",
+            "4": "E",
+            "5": "D",
+            "6": "E",
+            "7": "E",
+            "8": "C",
+            "9": "E",
+            "10": "A",
+            "11": "D",
+            "12": "C",
+            "13": "B",
+            "14": "B",
+            "15": "BL",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.7,
+          "extract_ms": 246
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "WBTBTIT",
+            "22": "22",
+            "23": "0",
+            "24": "D",
+            "25": "LOSOB11"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2501
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 2,
+      "template": "seamo_2025_c",
+      "anchor_score": 1.0,
+      "dx": 0,
+      "dy": 0,
+      "render_ms": 367,
+      "detect_ms": 230,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "A",
+            "4": "D",
+            "5": "E",
+            "6": "A",
+            "7": "B",
+            "8": "E",
+            "9": "E",
+            "10": "A",
+            "11": "C",
+            "12": "C",
+            "13": "D",
+            "14": "D",
+            "15": "BL",
+            "16": "E",
+            "17": "D",
+            "18": "BL",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.8,
+          "extract_ms": 281
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "TTTTT",
+            "22": "BTBT1TI",
+            "23": "",
+            "24": "",
+            "25": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 1529
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 3,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9906,
+      "dx": -8,
+      "dy": -4,
+      "render_ms": 313,
+      "detect_ms": 234,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "D",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "C",
+            "8": "B",
+            "9": "A",
+            "10": "A",
+            "11": "D",
+            "12": "C",
+            "13": "A",
+            "14": "E",
+            "15": "BL",
+            "16": "B",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.75,
+          "extract_ms": 267
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "4ZTTTTT",
+            "22": "1TB1TTI",
+            "23": "I",
+            "24": "A",
+            "25": "L"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2338
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 4,
+      "template": "uz_mcq",
+      "anchor_score": 1.0,
+      "dx": 0,
+      "dy": 0,
+      "render_ms": 347,
+      "detect_ms": 175,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "BL",
+            "3": "BL",
+            "4": "BL",
+            "5": "BL",
+            "6": "BL",
+            "7": "A",
+            "8": "BL",
+            "9": "BL",
+            "10": "C",
+            "11": "A",
+            "12": "B",
+            "13": "A",
+            "14": "E",
+            "15": "E",
+            "16": "B",
+            "17": "B",
+            "18": "A",
+            "19": "D",
+            "20": "A"
+          },
+          "coverage": 0.6,
+          "extract_ms": 175
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 5,
+      "template": "uz_mcq",
+      "anchor_score": 0.9739,
+      "dx": -10,
+      "dy": 15,
+      "render_ms": 345,
+      "detect_ms": 170,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "BL",
+            "3": "BL",
+            "4": "C",
+            "5": "C",
+            "6": "C",
+            "7": "C",
+            "8": "BL",
+            "9": "B",
+            "10": "C",
+            "11": "A",
+            "12": "C",
+            "13": "A",
+            "14": "B",
+            "15": "E",
+            "16": "E",
+            "17": "A",
+            "18": "B",
+            "19": "C",
+            "20": "C"
+          },
+          "coverage": 0.8,
+          "extract_ms": 175
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 6,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9906,
+      "dx": -4,
+      "dy": 3,
+      "render_ms": 406,
+      "detect_ms": 253,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "B",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "C",
+            "8": "E",
+            "9": "C",
+            "10": "A",
+            "11": "D",
+            "12": "B",
+            "13": "D",
+            "14": "C",
+            "15": "E",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "B"
+          },
+          "coverage": 0.8,
+          "extract_ms": 249
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "WTTTTT",
+            "22": "TUTT1TT",
+            "23": "2LSA",
+            "24": "HH",
+            "25": "4H"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2796
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 7,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9919,
+      "dx": -8,
+      "dy": 22,
+      "render_ms": 344,
+      "detect_ms": 250,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "D",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "B",
+            "8": "E",
+            "9": "C",
+            "10": "A",
+            "11": "D",
+            "12": "B",
+            "13": "D",
+            "14": "E",
+            "15": "B",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "C"
+          },
+          "coverage": 0.8,
+          "extract_ms": 265
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "ITTT",
+            "22": "I2T1TTT",
+            "23": "A1",
+            "24": "7",
+            "25": "I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2003
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 8,
+      "template": "uz_mcq",
+      "anchor_score": 0.9816,
+      "dx": 14,
+      "dy": 14,
+      "render_ms": 313,
+      "detect_ms": 174,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "BL",
+            "3": "BL",
+            "4": "BL",
+            "5": "BL",
+            "6": "BL",
+            "7": "BL",
+            "8": "C",
+            "9": "E",
+            "10": "BL",
+            "11": "A",
+            "12": "B",
+            "13": "C",
+            "14": "E",
+            "15": "C",
+            "16": "E",
+            "17": "C",
+            "18": "E",
+            "19": "B",
+            "20": "E"
+          },
+          "coverage": 0.6,
+          "extract_ms": 180
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 9,
+      "template": null,
+      "status": "no_match"
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 10,
+      "template": "uz_mcq",
+      "anchor_score": 0.9686,
+      "dx": -14,
+      "dy": -45,
+      "render_ms": 359,
+      "detect_ms": 172,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "C",
+            "3": "C",
+            "4": "C",
+            "5": "C",
+            "6": "C",
+            "7": "C",
+            "8": "C",
+            "9": "C",
+            "10": "BL",
+            "11": "BL",
+            "12": "B",
+            "13": "C",
+            "14": "C",
+            "15": "B",
+            "16": "E",
+            "17": "D",
+            "18": "C",
+            "19": "C",
+            "20": "C"
+          },
+          "coverage": 0.85,
+          "extract_ms": 177
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 11,
+      "template": null,
+      "status": "no_match"
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 12,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.994,
+      "dx": -11,
+      "dy": -6,
+      "render_ms": 346,
+      "detect_ms": 256,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "B",
+            "4": "B",
+            "5": "E",
+            "6": "D",
+            "7": "D",
+            "8": "D",
+            "9": "C",
+            "10": "D",
+            "11": "B",
+            "12": "A",
+            "13": "E",
+            "14": "E",
+            "15": "BL",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "A"
+          },
+          "coverage": 0.75,
+          "extract_ms": 276
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "W1TTTT",
+            "22": "BITTTTT",
+            "23": "",
+            "24": "",
+            "25": "EFIK"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2360
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 13,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9944,
+      "dx": -2,
+      "dy": 18,
+      "render_ms": 376,
+      "detect_ms": 250,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "D",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "C",
+            "8": "C",
+            "9": "D",
+            "10": "A",
+            "11": "B",
+            "12": "A",
+            "13": "C",
+            "14": "E",
+            "15": "E",
+            "16": "BL",
+            "17": "BL",
+            "18": "E",
+            "19": "E",
+            "20": "A"
+          },
+          "coverage": 0.9,
+          "extract_ms": 252
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "ITH1TTT",
+            "22": "TTTT1TI",
+            "23": "1",
+            "24": "",
+            "25": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2057
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 14,
+      "template": null,
+      "status": "no_match"
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 15,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.987,
+      "dx": -15,
+      "dy": 24,
+      "render_ms": 345,
+      "detect_ms": 238,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "D",
+            "2": "C",
+            "3": "A",
+            "4": "B",
+            "5": "D",
+            "6": "E",
+            "7": "C",
+            "8": "D",
+            "9": "E",
+            "10": "B",
+            "11": "D",
+            "12": "B",
+            "13": "E",
+            "14": "BL",
+            "15": "BL",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "E"
+          },
+          "coverage": 0.7,
+          "extract_ms": 265
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "1BT1IT",
+            "22": "TAOOO",
+            "23": "O9",
+            "24": "0WH",
+            "25": "EIJLOO1O"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 3192
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 16,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.997,
+      "dx": -13,
+      "dy": -9,
+      "render_ms": 343,
+      "detect_ms": 251,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "D",
+            "4": "E",
+            "5": "E",
+            "6": "C",
+            "7": "B",
+            "8": "D",
+            "9": "C",
+            "10": "E",
+            "11": "D",
+            "12": "B",
+            "13": "A",
+            "14": "E",
+            "15": "E",
+            "16": "BL",
+            "17": "D",
+            "18": "BL",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.8,
+          "extract_ms": 237
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "2ATBTTT",
+            "22": "1TTRTT",
+            "23": "",
+            "24": "",
+            "25": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 1712
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 17,
+      "template": "uz_mcq",
+      "anchor_score": 0.9797,
+      "dx": -8,
+      "dy": -29,
+      "render_ms": 360,
+      "detect_ms": 173,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "B",
+            "2": "C",
+            "3": "C",
+            "4": "C",
+            "5": "C",
+            "6": "C",
+            "7": "C",
+            "8": "B",
+            "9": "C",
+            "10": "C",
+            "11": "C",
+            "12": "BL",
+            "13": "D",
+            "14": "B",
+            "15": "C",
+            "16": "D",
+            "17": "C",
+            "18": "C",
+            "19": "D",
+            "20": "B"
+          },
+          "coverage": 0.95,
+          "extract_ms": 173
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 18,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.9919,
+      "dx": -16,
+      "dy": -10,
+      "render_ms": 341,
+      "detect_ms": 278,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "C",
+            "3": "C",
+            "4": "B",
+            "5": "D",
+            "6": "E",
+            "7": "A",
+            "8": "C",
+            "9": "C",
+            "10": "E",
+            "11": "E",
+            "12": "E",
+            "13": "C",
+            "14": "BL",
+            "15": "BL",
+            "16": "BL",
+            "17": "BL",
+            "18": "D",
+            "19": "BL",
+            "20": "E"
+          },
+          "coverage": 0.7,
+          "extract_ms": 245
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "1TTTII",
+            "22": "GEO21N",
+            "23": "2M",
+            "24": "NRCW",
+            "25": "SAS1B1"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 3317
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 19,
+      "template": "uz_mcq",
+      "anchor_score": 0.9688,
+      "dx": -9,
+      "dy": 4,
+      "render_ms": 379,
+      "detect_ms": 174,
+      "sections": {
+        "mcq": {
+          "status": "rejected",
+          "answers": {
+            "1": "BL",
+            "2": "BL",
+            "3": "C",
+            "4": "C",
+            "5": "BL",
+            "6": "C",
+            "7": "BL",
+            "8": "BL",
+            "9": "BL",
+            "10": "BL",
+            "11": "BL",
+            "12": "A",
+            "13": "BL",
+            "14": "D",
+            "15": "D",
+            "16": "D",
+            "17": "B",
+            "18": "C",
+            "19": "E",
+            "20": "E"
+          },
+          "coverage": 0.55,
+          "extract_ms": 175
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 20,
+      "template": "uz_mcq",
+      "anchor_score": 0.9805,
+      "dx": -13,
+      "dy": -22,
+      "render_ms": 351,
+      "detect_ms": 184,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "C",
+            "3": "C",
+            "4": "C",
+            "5": "C",
+            "6": "C",
+            "7": "C",
+            "8": "D",
+            "9": "BL",
+            "10": "C",
+            "11": "B",
+            "12": "B",
+            "13": "C",
+            "14": "A",
+            "15": "C",
+            "16": "C",
+            "17": "B",
+            "18": "D",
+            "19": "C",
+            "20": "C"
+          },
+          "coverage": 0.9,
+          "extract_ms": 182
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 21,
+      "template": "uz_mcq",
+      "anchor_score": 0.9675,
+      "dx": -57,
+      "dy": 8,
+      "render_ms": 359,
+      "detect_ms": 176,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "BL",
+            "3": "BL",
+            "4": "C",
+            "5": "C",
+            "6": "C",
+            "7": "BL",
+            "8": "BL",
+            "9": "BL",
+            "10": "BL",
+            "11": "BL",
+            "12": "E",
+            "13": "B",
+            "14": "B",
+            "15": "A",
+            "16": "D",
+            "17": "E",
+            "18": "C",
+            "19": "A",
+            "20": "D"
+          },
+          "coverage": 0.6,
+          "extract_ms": 179
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 22,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9963,
+      "dx": -13,
+      "dy": -18,
+      "render_ms": 334,
+      "detect_ms": 257,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "B",
+            "3": "D",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "C",
+            "8": "D",
+            "9": "C",
+            "10": "B",
+            "11": "C",
+            "12": "D",
+            "13": "BL",
+            "14": "E",
+            "15": "B",
+            "16": "BL",
+            "17": "E",
+            "18": "BL",
+            "19": "D",
+            "20": "A"
+          },
+          "coverage": 0.8,
+          "extract_ms": 271
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "WTTT",
+            "22": "4W0TB11",
+            "23": "1M",
+            "24": "A",
+            "25": "A4"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2110
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 23,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.9839,
+      "dx": -7,
+      "dy": 20,
+      "render_ms": 335,
+      "detect_ms": 255,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "C",
+            "3": "B",
+            "4": "B",
+            "5": "D",
+            "6": "C",
+            "7": "C",
+            "8": "D",
+            "9": "B",
+            "10": "D",
+            "11": "D",
+            "12": "E",
+            "13": "E",
+            "14": "BL",
+            "15": "BL",
+            "16": "E",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "E"
+          },
+          "coverage": 0.7,
+          "extract_ms": 270
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "ATT11T",
+            "22": "2AAT1NO",
+            "23": "",
+            "24": "J",
+            "25": "3OOO11"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2775
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 24,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9864,
+      "dx": -14,
+      "dy": -12,
+      "render_ms": 333,
+      "detect_ms": 256,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "BL",
+            "3": "D",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "D",
+            "8": "D",
+            "9": "C",
+            "10": "B",
+            "11": "D",
+            "12": "D",
+            "13": "C",
+            "14": "B",
+            "15": "D",
+            "16": "E",
+            "17": "D",
+            "18": "BL",
+            "19": "BL",
+            "20": "C"
+          },
+          "coverage": 0.85,
+          "extract_ms": 262
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "WB1SIT",
+            "22": "I7TBTTT",
+            "23": "MBMOT",
+            "24": "5",
+            "25": "W"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2891
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 25,
+      "template": "uz_mcq",
+      "anchor_score": 0.9676,
+      "dx": 5,
+      "dy": -13,
+      "render_ms": 323,
+      "detect_ms": 177,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "BL",
+            "2": "C",
+            "3": "C",
+            "4": "C",
+            "5": "C",
+            "6": "C",
+            "7": "C",
+            "8": "C",
+            "9": "BL",
+            "10": "BL",
+            "11": "D",
+            "12": "C",
+            "13": "D",
+            "14": "E",
+            "15": "E",
+            "16": "D",
+            "17": "B",
+            "18": "A",
+            "19": "E",
+            "20": "A"
+          },
+          "coverage": 0.85,
+          "extract_ms": 180
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 26,
+      "template": "uz_mcq",
+      "anchor_score": 0.9618,
+      "dx": 32,
+      "dy": -36,
+      "render_ms": 314,
+      "detect_ms": 145,
+      "sections": {
+        "mcq": {
+          "status": "rejected",
+          "answers": {
+            "1": "B",
+            "2": "B",
+            "3": "BL",
+            "4": "BL",
+            "5": "BL",
+            "6": "C",
+            "7": "C",
+            "8": "C",
+            "9": "BL",
+            "10": "B",
+            "11": "B",
+            "12": "BL",
+            "13": "BL",
+            "14": "BL",
+            "15": "BL",
+            "16": "BL",
+            "17": "B",
+            "18": "C",
+            "19": "A",
+            "20": "B"
+          },
+          "coverage": 0.55,
+          "extract_ms": 150
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 27,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.9951,
+      "dx": -14,
+      "dy": 15,
+      "render_ms": 320,
+      "detect_ms": 209,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "B",
+            "2": "C",
+            "3": "D",
+            "4": "E",
+            "5": "D",
+            "6": "E",
+            "7": "E",
+            "8": "C",
+            "9": "E",
+            "10": "A",
+            "11": "D",
+            "12": "C",
+            "13": "B",
+            "14": "BL",
+            "15": "D",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "D",
+            "20": "BL"
+          },
+          "coverage": 0.75,
+          "extract_ms": 217
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "1TTT1",
+            "22": "2T0",
+            "23": "E",
+            "24": "H",
+            "25": "AEOL111"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2471
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 28,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9916,
+      "dx": 9,
+      "dy": 18,
+      "render_ms": 284,
+      "detect_ms": 227,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "D",
+            "4": "C",
+            "5": "D",
+            "6": "C",
+            "7": "A",
+            "8": "D",
+            "9": "C",
+            "10": "D",
+            "11": "A",
+            "12": "B",
+            "13": "D",
+            "14": "B",
+            "15": "BL",
+            "16": "BL",
+            "17": "BL",
+            "18": "E",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.75,
+          "extract_ms": 228
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "TTTTTTL",
+            "22": "ITTT1TT",
+            "23": "Q",
+            "24": "I3WU",
+            "25": "LO"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2884
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 29,
+      "template": "seamo_2025_e",
+      "anchor_score": 1.0,
+      "dx": 0,
+      "dy": 0,
+      "render_ms": 324,
+      "detect_ms": 238,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "E",
+            "4": "E",
+            "5": "E",
+            "6": "E",
+            "7": "E",
+            "8": "C",
+            "9": "BL",
+            "10": "C",
+            "11": "B",
+            "12": "D",
+            "13": "C",
+            "14": "E",
+            "15": "C",
+            "16": "A",
+            "17": "E",
+            "18": "B",
+            "19": "C",
+            "20": "E"
+          },
+          "coverage": 0.95,
+          "extract_ms": 244
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "C1",
+            "22": "0T",
+            "23": "S55GT",
+            "24": "2TTTT",
+            "25": "FTBT11I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2859
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 30,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.9896,
+      "dx": 5,
+      "dy": 4,
+      "render_ms": 319,
+      "detect_ms": 225,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "C",
+            "2": "C",
+            "3": "C",
+            "4": "B",
+            "5": "C",
+            "6": "C",
+            "7": "A",
+            "8": "B",
+            "9": "A",
+            "10": "D",
+            "11": "D",
+            "12": "E",
+            "13": "B",
+            "14": "C",
+            "15": "BL",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "A"
+          },
+          "coverage": 0.75,
+          "extract_ms": 224
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "1TTTT",
+            "22": "AORI1",
+            "23": "M",
+            "24": "HL",
+            "25": "SMIO1B1B"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2837
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 31,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.9902,
+      "dx": -9,
+      "dy": -3,
+      "render_ms": 322,
+      "detect_ms": 230,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "B",
+            "2": "C",
+            "3": "C",
+            "4": "B",
+            "5": "C",
+            "6": "E",
+            "7": "A",
+            "8": "D",
+            "9": "E",
+            "10": "C",
+            "11": "D",
+            "12": "E",
+            "13": "C",
+            "14": "BL",
+            "15": "B",
+            "16": "BL",
+            "17": "BL",
+            "18": "B",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.75,
+          "extract_ms": 242
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "TT1TTT1",
+            "22": "1L",
+            "23": "CI",
+            "24": "HOF",
+            "25": "API1B11"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 3077
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 32,
+      "template": "seamo_2025_c",
+      "anchor_score": 0.9819,
+      "dx": 13,
+      "dy": -27,
+      "render_ms": 332,
+      "detect_ms": 219,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "D",
+            "4": "C",
+            "5": "A",
+            "6": "C",
+            "7": "D",
+            "8": "D",
+            "9": "C",
+            "10": "E",
+            "11": "C",
+            "12": "A",
+            "13": "A",
+            "14": "C",
+            "15": "D",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.75,
+          "extract_ms": 223
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "ITN9T5B",
+            "22": "72BT1T",
+            "23": "ASYO",
+            "24": "IAMO",
+            "25": "2N"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 3128
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 33,
+      "template": null,
+      "status": "no_match"
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 34,
+      "template": "seamo_2025_d",
+      "anchor_score": 0.9945,
+      "dx": -12,
+      "dy": -1,
+      "render_ms": 320,
+      "detect_ms": 227,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "B",
+            "2": "C",
+            "3": "C",
+            "4": "E",
+            "5": "D",
+            "6": "E",
+            "7": "E",
+            "8": "D",
+            "9": "A",
+            "10": "B",
+            "11": "D",
+            "12": "E",
+            "13": "A",
+            "14": "BL",
+            "15": "D",
+            "16": "BL",
+            "17": "BL",
+            "18": "BL",
+            "19": "BL",
+            "20": "BL"
+          },
+          "coverage": 0.7,
+          "extract_ms": 234
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "ATTITTT",
+            "22": "B1",
+            "23": "",
+            "24": "",
+            "25": "OSS1B11"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2132
+        }
+      }
+    },
+    {
+      "pdf": "UZ1-35",
+      "page": 35,
+      "template": "seamo_2025_e",
+      "anchor_score": 0.9873,
+      "dx": 37,
+      "dy": 13,
+      "render_ms": 344,
+      "detect_ms": 274,
+      "sections": {
+        "mcq": {
+          "status": "ok",
+          "answers": {
+            "1": "E",
+            "2": "E",
+            "3": "E",
+            "4": "E",
+            "5": "E",
+            "6": "E",
+            "7": "E",
+            "8": "E",
+            "9": "B",
+            "10": "E",
+            "11": "A",
+            "12": "B",
+            "13": "A",
+            "14": "A",
+            "15": "C",
+            "16": "D",
+            "17": "A",
+            "18": "B",
+            "19": "E",
+            "20": "C"
+          },
+          "coverage": 1.0,
+          "extract_ms": 276
+        },
+        "numeric_grid_q21_25": {
+          "type": "numeric_grid",
+          "answers": {
+            "21": "ET",
+            "22": "2UPTTT",
+            "23": "1ET",
+            "24": "NET1T1T",
+            "25": "IOTR1I1"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 3420
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 1,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 1.0,
+      "dx": 0,
+      "dy": 0,
+      "render_ms": 148,
+      "detect_ms": 1862,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ik.J.IAViilfiikluuc uibtoThyLUuildilfovveld",
+            "2": "Qluesgionz 7 V",
+            "3": "",
+            "4": "Qubestj-ongs",
+            "5": "La",
+            "6": "n.e AnswerSheet",
+            "7": "Qf.lesrtion 7",
+            "8": "BOEEEE",
+            "9": "tfuestion 10",
+            "10": "o -",
+            "11": "PrAsanodlom144",
+            "12": "Qiuestion 12",
+            "13": "leeszon LR",
+            "14": "Q/iesfijon CS",
+            "15": "-"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2381
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 2,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9968,
+      "dx": -12,
+      "dy": -8,
+      "render_ms": 216,
+      "detect_ms": 1836,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Q/tiestion 2",
+            "2": "A.T.--A.Q-A- -",
+            "3": "A",
+            "4": "Question5",
+            "5": "",
+            "6": "fze Ftio lnlsll 77 I 7 l",
+            "7": "A",
+            "8": "QM",
+            "9": "",
+            "10": "Qiestlon 13",
+            "11": "Ciestion 5",
+            "12": "elTTTTT",
+            "13": "Qfestion 18",
+            "14": "question 19",
+            "15": "Sl"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2328
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 3,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9954,
+      "dx": -12,
+      "dy": -10,
+      "render_ms": 136,
+      "detect_ms": 1730,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "thQthfion 2 7",
+            "2": "A. -.ti.iA.- -",
+            "3": "7",
+            "4": "Question5",
+            "5": "L",
+            "6": "Question8",
+            "7": "AL",
+            "8": "QW",
+            "9": "",
+            "10": "Question13",
+            "11": "",
+            "12": "",
+            "13": "Quelstion 18",
+            "14": "Question19",
+            "15": "I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2166
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 4,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9791,
+      "dx": -10,
+      "dy": -8,
+      "render_ms": 131,
+      "detect_ms": 1746,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "tffestion 2",
+            "2": "A./ ./  a0oa",
+            "3": "",
+            "4": "IIIII",
+            "5": "L",
+            "6": "Ciesticlnis",
+            "7": "",
+            "8": "QW",
+            "9": "",
+            "10": "ggestion 13",
+            "11": "Qg/estion 15",
+            "12": "A/Ai. o -iy- e",
+            "13": "QJestgion 18",
+            "14": "Quesjjon 19 S",
+            "15": "A2"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2269
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 5,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9838,
+      "dx": -12,
+      "dy": -9,
+      "render_ms": 195,
+      "detect_ms": 1727,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Questionzq",
+            "2": "HEEEERRE",
+            "3": "0",
+            "4": "III",
+            "5": "",
+            "6": "Question8 ii",
+            "7": "N",
+            "8": "QM -",
+            "9": "Qfgfiin 11  1",
+            "10": "Question13 -",
+            "11": "Question15 -",
+            "12": "EEENENGE",
+            "13": "Question18 h",
+            "14": "Question13 /",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2190
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 6,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.959,
+      "dx": -14,
+      "dy": -1,
+      "render_ms": 132,
+      "detect_ms": 1758,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Qtfesticrn 2",
+            "2": "",
+            "3": "6f3335",
+            "4": "IIIII",
+            "5": "L",
+            "6": "Question8",
+            "7": "P",
+            "8": "QM",
+            "9": "",
+            "10": "iesgion 13",
+            "11": "QerizioT 5",
+            "12": "FITTT111",
+            "13": "QuesZiorI 8",
+            "14": "Question19",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2208
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 7,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9844,
+      "dx": -11,
+      "dy": -7,
+      "render_ms": 208,
+      "detect_ms": 1773,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "l..--LE/A.. a",
+            "3": "o",
+            "4": "IIIII",
+            "5": "",
+            "6": "",
+            "7": "A",
+            "8": "",
+            "9": "",
+            "10": "QZesrion 13",
+            "11": "Qluestion15",
+            "12": "",
+            "13": "QtJestion 18",
+            "14": "Qi.lKeSijon 19",
+            "15": "HEREEEEEE"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2171
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 8,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9832,
+      "dx": -9,
+      "dy": -1,
+      "render_ms": 199,
+      "detect_ms": 1723,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "6uestion 2",
+            "2": "",
+            "3": "o",
+            "4": "Question5",
+            "5": "",
+            "6": "Q/uesfrionIB",
+            "7": "2",
+            "8": "QM",
+            "9": "Queftoi1 ZL",
+            "10": "Question13",
+            "11": "Question15",
+            "12": "Alfy- 74-",
+            "13": "Question18",
+            "14": "QCestion 19",
+            "15": "I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2204
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 9,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9978,
+      "dx": -9,
+      "dy": -6,
+      "render_ms": 197,
+      "detect_ms": 1789,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Q7estion 2",
+            "2": "KCiNEEEEN",
+            "3": "627415",
+            "4": "Question5",
+            "5": "",
+            "6": "Question8",
+            "7": "QD",
+            "8": "",
+            "9": "",
+            "10": "Qiestion 13",
+            "11": "Qzestion 15",
+            "12": "CT1111",
+            "13": "Qu/estion 18",
+            "14": "Question19",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2160
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 10,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9931,
+      "dx": -11,
+      "dy": -7,
+      "render_ms": 218,
+      "detect_ms": 1760,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Question2 .",
+            "2": "a0oa q.",
+            "3": "A",
+            "4": "Question5",
+            "5": "I-LI",
+            "6": "MJ",
+            "7": "AU",
+            "8": "QM y",
+            "9": "Qliestlon 11",
+            "10": "Question13 q",
+            "11": "Question15 /",
+            "12": "",
+            "13": "Question18 I",
+            "14": "Question19 -",
+            "15": "HEERIP"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2274
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 11,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9947,
+      "dx": -5,
+      "dy": 8,
+      "render_ms": 203,
+      "detect_ms": 1850,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Qqestion 2",
+            "2": "NENNEEEN",
+            "3": "",
+            "4": "IIIII",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "",
+            "9": "Quesgizn 12 F.q.",
+            "10": "Qiesion 13",
+            "11": "Q/jeStion 15",
+            "12": "A./.--is-m p",
+            "13": "leest.ion 18",
+            "14": "question 19",
+            "15": "RO"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2270
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 12,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9086,
+      "dx": -2,
+      "dy": 1923,
+      "render_ms": 133,
+      "detect_ms": 1831,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "",
+            "6": "o",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "B",
+            "12": "",
+            "13": "",
+            "14": "",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [
+            "Q2: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q3: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q4: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q5: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q7: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q8: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q9: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q10: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q12: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q13: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q14: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q15: (1, 'Image too large: (43200, 60) Error during processing.')"
+          ],
+          "extract_ms": 2314
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 13,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9946,
+      "dx": -4,
+      "dy": 16,
+      "render_ms": 131,
+      "detect_ms": 1738,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ZiLvigLILLuuc UHEHLSITEyUMTdliovves",
+            "2": "QQestio nz T",
+            "3": "QESIIOTI 4",
+            "4": "QZesini 4",
+            "5": "pa",
+            "6": "n.e AnswerSheet",
+            "7": "QEstion 7",
+            "8": "IIII",
+            "9": "QL-.estion 10",
+            "10": ".- .",
+            "11": "fsemedeimm14",
+            "12": "Qiileszon 12",
+            "13": "QUEiZIOH 19",
+            "14": "tizestion 15",
+            "15": "-"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2360
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 14,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9969,
+      "dx": -1,
+      "dy": 14,
+      "render_ms": 195,
+      "detect_ms": 1732,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "IUNL.J.IAViiILIFI.LLUUC UHHLSTTEyUUldlosvved",
+            "2": "QluesEionoz o",
+            "3": "",
+            "4": "QLestfon 5",
+            "5": "oa",
+            "6": "n.. AnswerSheet",
+            "7": "guestion 7",
+            "8": "TelATTT",
+            "9": "inestion 10",
+            "10": "o - --",
+            "11": "Yrsmebimen11",
+            "12": "guesijonjz m",
+            "13": "",
+            "14": "QZuestion 15",
+            "15": "- o . - S"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2313
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 15,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9977,
+      "dx": -12,
+      "dy": 4,
+      "render_ms": 196,
+      "detect_ms": 1860,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ikj.figLiLLUUC UililoIHEyuulaltlsvvel",
+            "2": "eresfion 2 l",
+            "3": "IIIII",
+            "4": "tiuesgggg g",
+            "5": "o",
+            "6": "n.e AnswerSheet",
+            "7": "szestion 7",
+            "8": "IIII",
+            "9": "Qthestion 10",
+            "10": "T T S S",
+            "11": "Nirnetbimm11",
+            "12": "anesgon 12",
+            "13": "QEIESfIOH 19",
+            "14": "QTmstion 15",
+            "15": "o o T vr/w R"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2404
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 16,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9648,
+      "dx": -4,
+      "dy": 2,
+      "render_ms": 130,
+      "detect_ms": 1719,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ij.jiiliik.r.lut GHILS1HEyUULalblavvel",
+            "2": "lejesigon 2 . -",
+            "3": "BTTTTT",
+            "4": "ijestgiori 4",
+            "5": "Ba",
+            "6": "n.b AnswerSheet",
+            "7": "Questionl l7",
+            "8": "Illl",
+            "9": "Qciestion 10",
+            "10": "",
+            "11": "fYssmaecdiomsn14",
+            "12": "ngxesiion 12",
+            "13": "Qgesiuon 15",
+            "14": "QQuestion 15",
+            "15": "o -6mSTEEEREREeEEemmee"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2441
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 17,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.972,
+      "dx": -1,
+      "dy": -3,
+      "render_ms": 208,
+      "detect_ms": 1755,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "iL.J.InViiILlI.LLUUC HLSTTEyJUallovveld",
+            "2": "Qulestzm 2  MHV",
+            "3": "WYUCSLIUNo5",
+            "4": "Question5",
+            "5": "8a",
+            "6": "n.e AnswerSheet",
+            "7": "Qzesiifn 7",
+            "8": "EIII",
+            "9": "CQuestion 10",
+            "10": "",
+            "11": "hssmecdbiome11",
+            "12": "Question12",
+            "13": "guesuion1o",
+            "14": "tguestion 15",
+            "15": "T T T"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2367
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 18,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9795,
+      "dx": 2,
+      "dy": 4,
+      "render_ms": 130,
+      "detect_ms": 1790,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Ziljaviilfiik.iuuc ETRLSHEyUUEdllovved",
+            "2": "Question2 - l t",
+            "3": "III",
+            "4": "Question5 - i",
+            "5": "Ba",
+            "6": "n.e AnswerSheet",
+            "7": "Question7 T",
+            "8": "l",
+            "9": "Question10 - qx",
+            "10": "/T B o7 co5r",
+            "11": "A1smedimes1414",
+            "12": "Question12 r/N",
+            "13": "uestion1o - q",
+            "14": "Question15 - l",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2265
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 19,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.997,
+      "dx": -4,
+      "dy": 13,
+      "render_ms": 140,
+      "detect_ms": 1569,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Lrik.J.lISViQr.IZLLUUC WHoTTEyUULallovvel",
+            "2": "QTEesfioIZ VVM",
+            "3": "",
+            "4": "QI.I esfivo n5 L I",
+            "5": "Pa",
+            "6": "n.b AnswerSheet",
+            "7": "Qiiestion 7",
+            "8": "",
+            "9": "Qtjtestion 10",
+            "10": "o R e",
+            "11": "YoTIPySaa",
+            "12": "Quesiion 12",
+            "13": "WUCESLIon1o",
+            "14": "Q/u/estion 15",
+            "15": "J"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2290
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 20,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.955,
+      "dx": -7,
+      "dy": -5,
+      "render_ms": 198,
+      "detect_ms": 1473,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "1..1-.-.. o",
+            "2": "",
+            "3": "K7",
+            "4": "-",
+            "5": "",
+            "6": "x--ii.v. -",
+            "7": "37",
+            "8": "132 i",
+            "9": "",
+            "10": "",
+            "11": "1....r..7..v.. b",
+            "12": "171",
+            "13": "-",
+            "14": "N l",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2129
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 21,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9983,
+      "dx": -23,
+      "dy": 7,
+      "render_ms": 127,
+      "detect_ms": 1486,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "BeShadinddiddlB 1 /",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "gz",
+            "6": "heSenhadedbdid ffC/",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "heGathadadiddlS",
+            "12": "i----------- Zf -",
+            "13": "l- 7",
+            "14": "",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2156
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 22,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9394,
+      "dx": -5,
+      "dy": 22,
+      "render_ms": 133,
+      "detect_ms": 1554,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "heShaadhndediddedili .4//1",
+            "2": "e",
+            "3": "-7O",
+            "4": "",
+            "5": "",
+            "6": "",
+            "7": "1CA",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "o V",
+            "14": "",
+            "15": "l 4 f"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2117
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 23,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9607,
+      "dx": -16,
+      "dy": 9,
+      "render_ms": 132,
+      "detect_ms": 1502,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "v------g",
+            "2": "b/",
+            "3": "57",
+            "4": "",
+            "5": "r7e",
+            "6": "x--zgoi -",
+            "7": "N 4",
+            "8": "e",
+            "9": "y",
+            "10": "",
+            "11": "",
+            "12": "1",
+            "13": "-",
+            "14": "l 00we. l",
+            "15": "o"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2107
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 24,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9891,
+      "dx": -13,
+      "dy": 4,
+      "render_ms": 122,
+      "detect_ms": 1496,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "lj O",
+            "3": "",
+            "4": "I",
+            "5": "I",
+            "6": "Rl",
+            "7": "",
+            "8": "Cht",
+            "9": "-",
+            "10": "-",
+            "11": "",
+            "12": "D",
+            "13": "-",
+            "14": "-",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2178
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 25,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.967,
+      "dx": -13,
+      "dy": -1,
+      "render_ms": 121,
+      "detect_ms": 1746,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "",
+            "6": "",
+            "7": "/ I",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "A0",
+            "14": "",
+            "15": "/"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2093
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 26,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9884,
+      "dx": -17,
+      "dy": 4,
+      "render_ms": 118,
+      "detect_ms": 1516,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "160",
+            "4": "Dcvo",
+            "5": "7/1",
+            "6": "",
+            "7": "",
+            "8": "ESI",
+            "9": "",
+            "10": "i70 i",
+            "11": "",
+            "12": "W",
+            "13": "79",
+            "14": "",
+            "15": "s"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2084
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 27,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9607,
+      "dx": -15,
+      "dy": 14,
+      "render_ms": 122,
+      "detect_ms": 1348,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "lwmu . I",
+            "2": "i /7-",
+            "3": "B g",
+            "4": "l 1980",
+            "5": "B",
+            "6": "u- 22uv-- -v",
+            "7": "1152 -",
+            "8": "",
+            "9": "",
+            "10": "//OQ/L",
+            "11": "",
+            "12": "",
+            "13": "s",
+            "14": "",
+            "15": "s"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2165
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 28,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9456,
+      "dx": -11,
+      "dy": 1,
+      "render_ms": 189,
+      "detect_ms": 1524,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "WH.-..-.. -",
+            "2": "",
+            "3": "c",
+            "4": "",
+            "5": "",
+            "6": "-.-1.8-2.--1-- -",
+            "7": "",
+            "8": "-  2 -",
+            "9": "",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "",
+            "14": "",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2105
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 29,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9873,
+      "dx": -19,
+      "dy": 6,
+      "render_ms": 195,
+      "detect_ms": 1778,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "M",
+            "3": "70",
+            "4": "I",
+            "5": "N",
+            "6": "",
+            "7": "94",
+            "8": "U l",
+            "9": "Ny",
+            "10": "734",
+            "11": "",
+            "12": "20 B",
+            "13": "o 1",
+            "14": "BoO l",
+            "15": "s i"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2131
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 30,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9897,
+      "dx": -13,
+      "dy": -3,
+      "render_ms": 197,
+      "detect_ms": 1773,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "xuuatlyyfl- .",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "",
+            "6": "qu--ivr7-- -",
+            "7": "- Y",
+            "8": "l ks -14  t",
+            "9": "",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "l C i",
+            "14": "",
+            "15": "R"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2107
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 31,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9619,
+      "dx": -12,
+      "dy": -4,
+      "render_ms": 120,
+      "detect_ms": 1521,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "",
+            "4": "e",
+            "5": "",
+            "6": "",
+            "7": "5 2 l",
+            "8": "",
+            "9": "lWO",
+            "10": "274 l",
+            "11": "",
+            "12": "e",
+            "13": "09",
+            "14": "l 400 I",
+            "15": "e"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2060
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 32,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9826,
+      "dx": -30,
+      "dy": 3,
+      "render_ms": 200,
+      "detect_ms": 1857,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "0",
+            "4": "1e",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "4",
+            "9": "",
+            "10": "T",
+            "11": ".i..w..v..r h a",
+            "12": "T l",
+            "13": "",
+            "14": "a",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2059
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 33,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9043,
+      "dx": -25,
+      "dy": 3,
+      "render_ms": 128,
+      "detect_ms": 1752,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "i VYMO/",
+            "4": "",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "heShandddiedddL I",
+            "12": "",
+            "13": "",
+            "14": "",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2063
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 34,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9536,
+      "dx": -28,
+      "dy": 1,
+      "render_ms": 193,
+      "detect_ms": 1483,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "i----.-..gij fj 48",
+            "2": "6",
+            "3": "i O",
+            "4": "R",
+            "5": "",
+            "6": "TemmEmmEEE -5",
+            "7": "g OO0",
+            "8": "4 1",
+            "9": "e",
+            "10": "o",
+            "11": "",
+            "12": "- 271",
+            "13": "-",
+            "14": "-",
+            "15": "-"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2195
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 35,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.958,
+      "dx": -16,
+      "dy": -2,
+      "render_ms": 184,
+      "detect_ms": 1715,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "e Y",
+            "2": "P",
+            "3": "O",
+            "4": "",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "O",
+            "9": "",
+            "10": "o",
+            "11": "ha.Shutiasdenfidii K/",
+            "12": "",
+            "13": "",
+            "14": "T",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2085
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 36,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.967,
+      "dx": -21,
+      "dy": 4,
+      "render_ms": 196,
+      "detect_ms": 1540,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "3",
+            "3": "10",
+            "4": "g",
+            "5": "I",
+            "6": "",
+            "7": "b ct. 703 N QQL",
+            "8": "f 1",
+            "9": "-z",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "O55 I",
+            "14": "",
+            "15": "25"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2106
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 37,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9332,
+      "dx": -30,
+      "dy": 5,
+      "render_ms": 194,
+      "detect_ms": 1740,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "W",
+            "3": "10",
+            "4": "",
+            "5": "wGEJ",
+            "6": ".v.-..lag.. i",
+            "7": "T",
+            "8": "W",
+            "9": "",
+            "10": "",
+            "11": "j.jlljuylvl .F",
+            "12": "FEYR",
+            "13": "",
+            "14": "",
+            "15": "hwg"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2143
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 38,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9485,
+      "dx": -17,
+      "dy": 9,
+      "render_ms": 134,
+      "detect_ms": 1437,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "-",
+            "3": "O",
+            "4": "2",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "Ty 1",
+            "9": "lle l",
+            "10": "X 1",
+            "11": "",
+            "12": "i  L2",
+            "13": "",
+            "14": "",
+            "15": "1 j Y f"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2059
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 39,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9405,
+      "dx": -19,
+      "dy": 18,
+      "render_ms": 194,
+      "detect_ms": 1746,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "i F",
+            "3": "w 10",
+            "4": "7267",
+            "5": "i 65",
+            "6": "",
+            "7": "Yo",
+            "8": "l Kool",
+            "9": "l -z",
+            "10": "11",
+            "11": "",
+            "12": "l  274",
+            "13": "w 05",
+            "14": "5",
+            "15": "1243"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2048
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 40,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9853,
+      "dx": -16,
+      "dy": -5,
+      "render_ms": 221,
+      "detect_ms": 1715,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Question2",
+            "2": "",
+            "3": "0",
+            "4": "Question5",
+            "5": "L",
+            "6": "Question8",
+            "7": "N",
+            "8": "QM",
+            "9": "Question11",
+            "10": "Question13",
+            "11": "Question15",
+            "12": "",
+            "13": "Question18",
+            "14": "Question19",
+            "15": "I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2128
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 41,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9957,
+      "dx": -3,
+      "dy": 4,
+      "render_ms": 205,
+      "detect_ms": 1801,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ikljlijigliik.lduuc uitho1HEyUUTdtlavvel",
+            "2": "Question2 I 1 i",
+            "3": "III",
+            "4": "Question5 I i -",
+            "5": "o",
+            "6": "n.e AnswerSheet",
+            "7": "Question7 f",
+            "8": "Illl",
+            "9": "Question10",
+            "10": "-",
+            "11": "fh11nedimm11",
+            "12": "Question12 .q",
+            "13": "IIIE",
+            "14": "Question15 N",
+            "15": "SoTTEomeeEmeeEEeEEemmemmmeeEeEETemmeemeeTmaEeeeTemememem"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2323
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 42,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9875,
+      "dx": -4,
+      "dy": 3,
+      "render_ms": 197,
+      "detect_ms": 1758,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ikjltljigglk.r.luc dibtoHHEYyUUEdilovveld",
+            "2": "Quetsgjon.z 4",
+            "3": "IIIII",
+            "4": "ngsfioh 5",
+            "5": "La",
+            "6": "n.e AnswerSheet",
+            "7": "Q ue st ion 7",
+            "8": "",
+            "9": "Questuon  10",
+            "10": "- -/ .",
+            "11": "PAt1nebiomnr11",
+            "12": "Que stion 12",
+            "13": "",
+            "14": "Questiog1 15 D",
+            "15": "S7 o St . o -"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2298
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 43,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9784,
+      "dx": 2,
+      "dy": 2,
+      "render_ms": 207,
+      "detect_ms": 1732,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "iL.J.ji IAIl.I.Ll1UUC UHHLHEyQUlallavved",
+            "2": "Q uestiQm 2",
+            "3": "IIIII",
+            "4": "Question5",
+            "5": "o",
+            "6": "n.- AnswerSheet",
+            "7": "tLQ-Eestion  7",
+            "8": "Questiono",
+            "9": "Jtyijestion 10",
+            "10": "ohAemammEEemesee - ewsFv0sTTrSEmmeamem",
+            "11": "YoYLa3",
+            "12": "Qtiesfion 12",
+            "13": "Question1s",
+            "14": "QA-uesgionK15 -",
+            "15": "emomorrseReEmeTTEeeTETReSeEEarvEeeERaeTe1"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2419
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 44,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9945,
+      "dx": -5,
+      "dy": 5,
+      "render_ms": 200,
+      "detect_ms": 1485,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "iL.J.LVigAIiLLUUC ulitsHEyuularlsovved",
+            "2": "lfuesigionv 2 m",
+            "3": "wueostiiono",
+            "4": "Qluegionls lj",
+            "5": "La",
+            "6": "n.r AnswerSheet",
+            "7": "Qi-estion 7",
+            "8": "BRI",
+            "9": "Question10",
+            "10": "7 A - A o -",
+            "11": "Ll11nebimm11",
+            "12": "Qiesiigm 12",
+            "13": "WWUEsSLion15",
+            "14": "Queiiona 5",
+            "15": "o"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2324
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 45,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9843,
+      "dx": 4,
+      "dy": 12,
+      "render_ms": 132,
+      "detect_ms": 1735,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ikiijlijnlzk.lquut UhwshyLulaltlsvvel",
+            "2": "Qtlesfo nJZ i",
+            "3": "IIIII",
+            "4": "QLests/on g -",
+            "5": "Felcy",
+            "6": "n.- AnswerSheet",
+            "7": "thEestion 7",
+            "8": "T",
+            "9": "QLestiion 10",
+            "10": "CToTTRTmEEETmTAARemmammmmmsTmmmRammmmmmeEemmEmmamAmnemmmeAeymmmeemem",
+            "11": "PNtamamdlomne41A4",
+            "12": "Qu/esryigion 12",
+            "13": "QFeszon 15",
+            "14": "Qiestion 15",
+            "15": "TmETheeTmIETmEERRREETOATanmenBTemmenesTeTmmemEEEammemEmEmAEmEETeemmTRTmaTmemymem"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2505
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 46,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9536,
+      "dx": -9,
+      "dy": 1890,
+      "render_ms": 204,
+      "detect_ms": 1740,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": ".",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "",
+            "6": "e",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "",
+            "14": "",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [
+            "Q2: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q3: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q4: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q5: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q7: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q8: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q9: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q10: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q12: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q13: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q14: (1, 'Image too large: (43200, 60) Error during processing.')",
+            "Q15: (1, 'Image too large: (43200, 60) Error during processing.')"
+          ],
+          "extract_ms": 2316
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 47,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9915,
+      "dx": 0,
+      "dy": 19,
+      "render_ms": 132,
+      "detect_ms": 1802,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "LriL.JltlchiiltilriLluuC uhiho1HEyUIadtlovvild",
+            "2": "Quesxtionz C/Vd ji",
+            "3": "III",
+            "4": "Question5 L 1",
+            "5": "Pa",
+            "6": "n.. AnswerSheet",
+            "7": "Question7 bb iq",
+            "8": "IHM",
+            "9": "Question10",
+            "10": "-F rewo. - - e",
+            "11": "fh1medlmee414",
+            "12": "Question12 j 2",
+            "13": "T1TTT4E",
+            "14": "Question15 j",
+            "15": "v 7"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2253
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 48,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9983,
+      "dx": 6,
+      "dy": 7,
+      "render_ms": 124,
+      "detect_ms": 1734,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ik.J.fljiiLlequut UTHLSHTyRUEdliavvel",
+            "2": "QFJJestigonz T",
+            "3": "IIIII",
+            "4": "Cjuejiongs 3",
+            "5": "Ba",
+            "6": "n.- AnswerSheet",
+            "7": "Qrestion 7",
+            "8": "IIII",
+            "9": "tiestion 10",
+            "10": ".",
+            "11": "Ysnecdimem14",
+            "12": "QjLesEon 12",
+            "13": "IIIII",
+            "14": "Qviestl onlil 5",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2365
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 49,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9682,
+      "dx": 0,
+      "dy": 6,
+      "render_ms": 196,
+      "detect_ms": 1750,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "2",
+            "4": "",
+            "5": "",
+            "6": ".. -1 .-5 .",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "xuuatuvl.l L",
+            "12": "- -i-yny--v o -V- /.-",
+            "13": "",
+            "14": "PR l",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2084
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 50,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9913,
+      "dx": 5,
+      "dy": 23,
+      "render_ms": 212,
+      "detect_ms": 1730,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ijuljiilgik.LUUC HEILTEyUUEaltlovveld",
+            "2": "tiilesforjz JV",
+            "3": "IIIII",
+            "4": "ties/tfongs -",
+            "5": "Pa",
+            "6": "n.. AnswerSheet",
+            "7": "titllestion 7",
+            "8": "IIII",
+            "9": "tiestion 10",
+            "10": "",
+            "11": "r11ncetbimm11",
+            "12": "quesjion 12",
+            "13": "LiEIESIOH LE-J",
+            "14": "JuesimiSor -",
+            "15": "-"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2366
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 51,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9827,
+      "dx": 11,
+      "dy": -29,
+      "render_ms": 197,
+      "detect_ms": 1749,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "ikllljiilfil.iLrJuC HoHHEyUUDatlovvtl",
+            "2": "Qluesrtlionzj J u",
+            "3": "",
+            "4": "QLLestion 5",
+            "5": "e",
+            "6": "me AnswerSheet",
+            "7": "QiegtionF - .. j",
+            "8": "EEEEEEEE",
+            "9": "gtistjori V1IOC j igf Lh 4-ah",
+            "10": "T",
+            "11": "MYesnetiomre11",
+            "12": "quesiioanz t r / //wA -",
+            "13": "..",
+            "14": "Qtiestinlfs",
+            "15": "T o0 o A --7-"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2438
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 52,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9789,
+      "dx": -16,
+      "dy": 13,
+      "render_ms": 194,
+      "detect_ms": 1434,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "EV",
+            "4": "w 1010",
+            "5": "I",
+            "6": "",
+            "7": "Bx",
+            "8": "lg 1",
+            "9": "lqe",
+            "10": "",
+            "11": "",
+            "12": "- qu",
+            "13": "I",
+            "14": "iwa",
+            "15": "I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2084
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 53,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9916,
+      "dx": -1,
+      "dy": 17,
+      "render_ms": 130,
+      "detect_ms": 1565,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "T",
+            "4": "l 1950",
+            "5": "",
+            "6": "xubJEl-vl .-",
+            "7": "5H",
+            "8": "",
+            "9": "HYeon .",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "",
+            "14": "30 i",
+            "15": "o"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2044
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 54,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9967,
+      "dx": -1,
+      "dy": 12,
+      "render_ms": 129,
+      "detect_ms": 1819,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "xuu---vzi -",
+            "2": "l 1.",
+            "3": "",
+            "4": "",
+            "5": "-",
+            "6": "xuu-gvg -",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "-",
+            "11": "",
+            "12": "I",
+            "13": "T",
+            "14": "",
+            "15": "2Y"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2097
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 55,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9982,
+      "dx": -15,
+      "dy": 2,
+      "render_ms": 135,
+      "detect_ms": 1447,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "e",
+            "4": "1ed",
+            "5": "",
+            "6": "emEmEEEEEE p",
+            "7": "lgldg Wwviigxgc 4ac",
+            "8": "",
+            "9": "6",
+            "10": "",
+            "11": "gTTeMREERE flri",
+            "12": "",
+            "13": "o",
+            "14": "",
+            "15": "I 15 I"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2233
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 56,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9829,
+      "dx": -18,
+      "dy": -10,
+      "render_ms": 204,
+      "detect_ms": 1432,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "SemmEE .111",
+            "2": "",
+            "3": "l 10",
+            "4": "",
+            "5": "",
+            "6": "Sttt 4 /Z/",
+            "7": "",
+            "8": "",
+            "9": "",
+            "10": "",
+            "11": "emmEmmmmmneT -",
+            "12": "l",
+            "13": "",
+            "14": "-",
+            "15": "e"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2125
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 57,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9978,
+      "dx": -10,
+      "dy": -4,
+      "render_ms": 120,
+      "detect_ms": 1503,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "T",
+            "4": "1 CLRO",
+            "5": "AN",
+            "6": "he.Shaaddieadiadihiidd",
+            "7": "",
+            "8": "QsW 2-Wo",
+            "9": "l 2l",
+            "10": "-",
+            "11": "",
+            "12": ". l",
+            "13": "I",
+            "14": "",
+            "15": "-"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2124
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 58,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.996,
+      "dx": -7,
+      "dy": 1,
+      "render_ms": 195,
+      "detect_ms": 1498,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "e /J - 3",
+            "2": "",
+            "3": "",
+            "4": "",
+            "5": "",
+            "6": "",
+            "7": "ool",
+            "8": "",
+            "9": "I",
+            "10": "6 l",
+            "11": "",
+            "12": "W el",
+            "13": "T",
+            "14": "g",
+            "15": "l W467"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2090
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 59,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9533,
+      "dx": -20,
+      "dy": 4,
+      "render_ms": 200,
+      "detect_ms": 1503,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "",
+            "4": "l QLF 9",
+            "5": "",
+            "6": "",
+            "7": "D",
+            "8": "7 AD/",
+            "9": "IRCES",
+            "10": "A",
+            "11": "heSasiiesegidddA",
+            "12": "o l",
+            "13": "",
+            "14": "5",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2060
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 60,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9969,
+      "dx": 9,
+      "dy": -4,
+      "render_ms": 207,
+      "detect_ms": 1788,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "",
+            "2": "",
+            "3": "TOcoci",
+            "4": "",
+            "5": "-",
+            "6": "TWieaRTEEW",
+            "7": "I7  L/ CW - . I Xx",
+            "8": "",
+            "9": "56 l",
+            "10": "",
+            "11": "",
+            "12": "",
+            "13": "T",
+            "14": "a",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2106
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 61,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9637,
+      "dx": -19,
+      "dy": -11,
+      "render_ms": 217,
+      "detect_ms": 1701,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Q/uestjonz -",
+            "2": "",
+            "3": "",
+            "4": "IIIII",
+            "5": ".",
+            "6": "Question8 7",
+            "7": "A",
+            "8": "",
+            "9": "Qflftifn 11",
+            "10": "Question13",
+            "11": "Quesfion 15",
+            "12": "",
+            "13": "Question-18 y",
+            "14": "Question19",
+            "15": "EEEEEEES"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2143
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 62,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.997,
+      "dx": -3,
+      "dy": -3,
+      "render_ms": 122,
+      "detect_ms": 1753,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "fjestion 2",
+            "2": "",
+            "3": "",
+            "4": "IIIII",
+            "5": ".",
+            "6": "C/zAuestion/8",
+            "7": "N",
+            "8": "QW",
+            "9": "",
+            "10": "quesjilon 13",
+            "11": "Qtfes/tgilon 15",
+            "12": "A./.-ng-k g",
+            "13": "Qtjestinon 18",
+            "14": "g2e550n 19",
+            "15": "A"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2327
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 63,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9928,
+      "dx": -11,
+      "dy": -1,
+      "render_ms": 130,
+      "detect_ms": 1797,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Queston2",
+            "2": "A././y--A.z-.. -",
+            "3": "",
+            "4": "lllll",
+            "5": "L",
+            "6": "ijes.fiori 78",
+            "7": "A",
+            "8": "QW",
+            "9": "",
+            "10": "QZesion 1Ax3",
+            "11": "guestion 15",
+            "12": "T",
+            "13": "tglesti/on 18",
+            "14": "IIIII",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2261
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 64,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9715,
+      "dx": -14,
+      "dy": -8,
+      "render_ms": 199,
+      "detect_ms": 1491,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "IQTuegFir-W",
+            "2": "nij.AinA.li-.. a",
+            "3": "o",
+            "4": "Illll",
+            "5": "",
+            "6": "",
+            "7": "N2",
+            "8": "QM",
+            "9": "Question11",
+            "10": "Question13",
+            "11": "quesjion 15",
+            "12": "rjii--sz.- aeap",
+            "13": "lestion 18",
+            "14": "IIIII",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2254
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 65,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9881,
+      "dx": -15,
+      "dy": -15,
+      "render_ms": 132,
+      "detect_ms": 1791,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "tgtestion 2",
+            "2": "",
+            "3": "",
+            "4": "IIIII",
+            "5": "10O",
+            "6": "",
+            "7": "AU",
+            "8": "",
+            "9": "",
+            "10": "QiesZon 13",
+            "11": "Qljestimm s",
+            "12": "lefelTTTTT",
+            "13": "Qzaestion 18",
+            "14": "II",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2215
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 66,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9872,
+      "dx": -10,
+      "dy": -10,
+      "render_ms": 196,
+      "detect_ms": 1759,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "QLILJestion 2 -",
+            "2": "HINEEEEE",
+            "3": "o",
+            "4": "IIIII",
+            "5": "",
+            "6": "",
+            "7": "A",
+            "8": "Qm",
+            "9": "-Qnim ej cin ZH -q .",
+            "10": "Q/I/Jestion 13",
+            "11": "Qrestion15 o",
+            "12": "SNEEEEEN",
+            "13": "tzuezt/ion 18",
+            "14": "",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2320
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 67,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9974,
+      "dx": -6,
+      "dy": -9,
+      "render_ms": 205,
+      "detect_ms": 1790,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Quzastionz S",
+            "2": "A..vi-..z-.. a",
+            "3": "",
+            "4": "IIIII",
+            "5": "",
+            "6": "",
+            "7": "",
+            "8": "QM",
+            "9": "Qfljztic.m7 11",
+            "10": "Qulstlm 13",
+            "11": "Qliestion15 -",
+            "12": "Yy jif.f -l.gllj 2",
+            "13": "Qusstion 18",
+            "14": "Qu7estiorj ji9",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2352
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 68,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9893,
+      "dx": -16,
+      "dy": -13,
+      "render_ms": 198,
+      "detect_ms": 1760,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "Qzuestion 2",
+            "2": "",
+            "3": "",
+            "4": "Q-estin S5",
+            "5": "wn",
+            "6": "Qj.lestion f",
+            "7": "AU",
+            "8": "",
+            "9": "QseszZZZl C 4j Y",
+            "10": "Quesflon 13",
+            "11": "gjfstion 15",
+            "12": "ILT.--LZA.  A-",
+            "13": "Q/ugestiorif18  i.i-",
+            "14": "QuesTfon 19",
+            "15": ""
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2361
+        }
+      }
+    },
+    {
+      "pdf": "ZONE_Z",
+      "page": 69,
+      "template": "seamo_x_2026_d",
+      "anchor_score": 0.9958,
+      "dx": -8,
+      "dy": 3,
+      "render_ms": 144,
+      "detect_ms": 1799,
+      "sections": {
+        "open_response_q1_15": {
+          "type": "open_response",
+          "answers": {
+            "1": "lelestion 2",
+            "2": "",
+            "3": "",
+            "4": "Qu estion 5",
+            "5": "Ll",
+            "6": "Qeesfionls",
+            "7": "5",
+            "8": "QM",
+            "9": "Question11",
+            "10": "IIIII",
+            "11": "Qtfestion 15",
+            "12": "",
+            "13": "Question18",
+            "14": "-II",
+            "15": "HENEEEER"
+          },
+          "diagrams": [],
+          "errors": [],
+          "extract_ms": 2213
+        }
+      }
+    }
+  ]
+}

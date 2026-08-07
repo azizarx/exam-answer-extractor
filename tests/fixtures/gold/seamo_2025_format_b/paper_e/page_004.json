@@ -1,0 +1,80 @@
+{
+  "page_id": "paper_e/page_004",
+  "template_id": "seamo_2025_e_fb",
+  "source": {
+    "pdf": "backend/examples/seamo-2025-format-b-split/seamo-2025-format-b-paper-e.pdf",
+    "page_index": 11,
+    "full_pdf_page_1based": 175
+  },
+  "header": {
+    "candidate_name": "WARREN VOSS KHOMAN",
+    "candidate_number": "CAN991821604",
+    "country": "INDONESIA",
+    "school": "SUTOMO 1",
+    "level": "Grade 10",
+    "date": "18-10-2025 09:00 AM"
+  },
+  "answers": {
+    "1": "E",
+    "2": "C",
+    "3": "A",
+    "4": "E",
+    "5": "B",
+    "6": "B",
+    "7": "A",
+    "8": "E",
+    "9": "A",
+    "10": "C",
+    "11": "B",
+    "12": "C",
+    "13": "C",
+    "14": "E",
+    "15": "D",
+    "16": "D",
+    "17": "A",
+    "18": "B",
+    "19": "D",
+    "20": "D",
+    "21": "18",
+    "22": "5",
+    "23": "2024",
+    "24": "30",
+    "25": "2"
+  },
+  "notes": "lowest raw anchor score among the 13 pages. metrics: mean=229.4 std=59.7 lap=131.7 skew_est=0.000 raw_anchor=0.3362 raw_dx=-82 raw_dy=38 warn=anchor_match_low | AUTO-EXTRACT DRAFT — correct answers/header by hand; do not trust blindly.",
+  "extraction_draft": {
+    "mcq_warning": null,
+    "needs_review_questions": [],
+    "extraction_flags": [
+      "llm_header_failed"
+    ],
+    "deskew_degrees": null,
+    "answer_trust": {
+      "1": "trusted",
+      "2": "trusted",
+      "3": "trusted",
+      "4": "trusted",
+      "5": "trusted",
+      "6": "trusted",
+      "7": "trusted",
+      "8": "trusted",
+      "9": "trusted",
+      "10": "trusted",
+      "11": "trusted",
+      "12": "trusted",
+      "13": "trusted",
+      "14": "trusted",
+      "15": "trusted",
+      "16": "trusted",
+      "17": "trusted",
+      "18": "trusted",
+      "19": "trusted",
+      "20": "trusted",
+      "21": "trusted",
+      "22": "trusted",
+      "23": "trusted",
+      "24": "trusted",
+      "25": "trusted"
+    }
+  }
+}

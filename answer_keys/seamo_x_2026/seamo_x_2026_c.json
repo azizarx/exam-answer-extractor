@@ -1,0 +1,30 @@
+{
+  "template_id": "seamo_x_2026_c",
+  "version": 1,
+  "source": {
+    "filename": "seamo_x_2026/Paper C key.pdf",
+    "sha256": "788758ce9c08d0fb79fb4a8ff3a71cf5f8c11cb6375e95a0f53cd476c8e8c44c"
+  },
+  "reconciliation": {
+    "additional_source": {"filename": "seamo_x_2026/Paper C portal.pdf", "sha256": "59ec1e346de259d4a403cf31d274901a1d8098113a050ba8de382e413d4cca40"},
+    "decision": "Use Q1=4 from the newer 2026-01-28 key; retain the portal's equivalent forms for Q5 and Q9."
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "numeric", "accepted_answers": ["4"], "marks": 6, "normalizer": "integer"},
+    {"number": 2, "type": "numeric", "accepted_answers": ["15"], "marks": 6, "normalizer": "integer"},
+    {"number": 3, "type": "numeric", "accepted_answers": ["50"], "marks": 6, "normalizer": "integer"},
+    {"number": 4, "type": "numeric", "accepted_answers": ["1980"], "marks": 6, "normalizer": "integer"},
+    {"number": 5, "type": "free_response", "accepted_answers": ["7/2", "3 1/2", "3.5"], "marks": 6, "normalizer": "text"},
+    {"number": 6, "type": "numeric", "accepted_answers": ["32"], "marks": 6, "normalizer": "integer"},
+    {"number": 7, "type": "numeric", "accepted_answers": ["52"], "marks": 6, "normalizer": "integer"},
+    {"number": 8, "type": "numeric", "accepted_answers": ["30"], "marks": 6, "normalizer": "integer"},
+    {"number": 9, "type": "free_response", "accepted_answers": ["100/3", "33 1/3", "33.3̇"], "marks": 6, "normalizer": "text"},
+    {"number": 10, "type": "numeric", "accepted_answers": ["70"], "marks": 6, "normalizer": "integer"},
+    {"number": 11, "type": "free_response", "accepted_answers": ["1/2054364"], "marks": 8, "normalizer": "text"},
+    {"number": 12, "type": "numeric", "accepted_answers": ["25"], "marks": 8, "normalizer": "integer"},
+    {"number": 13, "type": "numeric", "accepted_answers": ["34"], "marks": 8, "normalizer": "integer"},
+    {"number": 14, "type": "numeric", "accepted_answers": ["250"], "marks": 8, "normalizer": "integer"},
+    {"number": 15, "type": "free_response", "accepted_answers": ["3√3"], "marks": 8, "normalizer": "text"}
+  ]
+}

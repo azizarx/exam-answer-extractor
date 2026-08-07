@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [{"source": "uz1_35_document", "target": "uz1_35_document", "relation": "semantically_similar_to", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "storage/uploads/20260314124129_2fdd526f_UZ1-35.pdf", "source_location": null, "weight": 1.0}], "hyperedges": []}

@@ -1,0 +1,127 @@
+"""
+Application configuration management
+"""
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+from typing import Optional
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables"""
+    
+    # Local storage
+    storage_root: str = "./storage"
+    
+    # Google Gemini
+    gemini_api_key: str = ""
+    # Primary model to use for extraction.
+    gemini_model: str = "gemini-2.5-flash"
+    # Ordered fallback list used when the primary model is unavailable.
+    gemini_fallback_models: str = "gemini-flash-latest"
+    gemini_auto_fallback: bool = True
+    
+    # Database
+    database_url: str = ""
+    
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+    
+    # Application
+    app_env: str = "development"
+    debug: bool = True
+    log_level: str = "INFO"
+
+    # Comma-separated browser origins allowed by CORS. Use "*" for any origin
+    # (server-to-server callers ignore CORS). Example:
+    # CORS_ORIGINS=https://my-tool.example.com,http://localhost:3000
+    cors_origins: str = "*"
+
+    # Optional shared secret for server-to-server access. When non-empty,
+    # callers must send X-API-Key (or Authorization: Bearer). Leave blank
+    # for open local/dev use.
+    api_key: str = ""
+    
+    # File Upload
+    max_file_size_mb: int = 50
+    allowed_extensions: str = ".pdf"
+    
+    # PDF Processing
+    poppler_path: Optional[str] = None  # Optional: Path to Poppler binaries
+    
+    # Per-page parallelism inside one submission. Pure I/O parallelism (each
+    # worker holds the GIL while waiting on Gemini), but each worker also
+    # carries a PIL image, so don't crank this up too high — 10 workers per
+    # backend × 5 parallel backends OOM'd a 27GB host in the May 2026 bench.
+    # 6 is the sweet spot for one backend: roughly halves wall-clock vs 3,
+    # peak working set ~150MB.
+    max_extraction_workers: int = 6
+
+    # Parallel PDF page renders (each worker opens its own PyMuPDF handle).
+    max_pdf_render_workers: int = 4
+    # Answer sheets are monochrome; grayscale PNGs preserve CV/handwriting
+    # detail while cutting render CPU, temporary storage, and decode memory.
+    pdf_render_grayscale: bool = True
+
+    # Parallel layout classification (footer OCR; Gemini fallback only on misses).
+    max_classify_workers: int = 8
+
+    # Parallel FR-equivalence Gemini judge calls during marking.
+    max_fr_judge_workers: int = 6
+
+    # Output format
+    minimal_output: bool = False  # Keep full candidate metadata in generated JSON by default
+
+    # Image preprocessing (improves contrast/clarity before extraction)
+    enable_image_preprocessing: bool = True
+    preprocessing_mode: str = "balanced"  # balanced | aggressive
+
+    # Mathpix /v3/pdf — required when a chosen template flags any question as
+    # type=diagram. We submit the PDF once, poll, then regex CDN URLs out of
+    # the returned .mmd and assign them by question label.
+    mathpix_app_id: str = ""
+    mathpix_app_key: str = ""
+    mathpix_poll_interval_seconds: float = 3.0
+    mathpix_max_wait_seconds: float = 600.0
+
+    # Process-wide token bucket for Gemini calls (sliding 60s window). The
+    # default 4 is conservative for free-tier Flash/Pro caps. Paid Tier 1
+    # handles 60+ comfortably; bump this in .env if you're on Tier 1+.
+    gemini_max_rpm: float = 4.0
+
+    # CV-owns-MCQ pipeline: deskew before anchor match; LLM MCQ only as
+    # last resort when CV coverage/anchor quality is poor.
+    enable_page_deskew: bool = True
+    mcq_llm_last_resort: bool = False
+    # Hard per-attempt deadline and total retry count for Gemini.  All retry
+    # ownership lives in run_logger.llm_call; callers must not wrap it again.
+    gemini_request_timeout_seconds: float = 60.0
+    gemini_transient_retries: int = 2
+    # Legacy name retained for existing deployments; no longer read by the
+    # extraction loop now that retries are centralized.
+    llm_deadline_retries: int = 2
+
+    # NOTE: Gemini calls intentionally do NOT pass max_output_tokens. With
+    # Gemini 2.5 models, reasoning tokens are billed from the same budget; a
+    # 1024 cap (the old default) caused finish_reason=MAX_TOKENS on every
+    # call and starved the visible JSON. The model's default cap (~64k) is
+    # what we want.
+
+    # DigitalOcean Spaces
+    spaces_endpoint: Optional[str] = None
+    spaces_bucket: Optional[str] = None
+    spaces_region: Optional[str] = None
+    spaces_key: Optional[str] = None
+    spaces_secret: Optional[str] = None
+    archive_images_to_spaces: bool = False
+    spaces_image_archive_folder: str = "exams-extraction-pics"
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+        extra = "ignore"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance"""
+    return Settings()

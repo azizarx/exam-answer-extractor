@@ -1,0 +1,26 @@
+{
+  "template_id": "seamo_x_2026_b",
+  "version": 2,
+  "source": {
+    "filename": "seamo_x_2026/Paper B key.pdf",
+    "sha256": "7242412fd884e275a1095726686b6cbcbf83eadee8db92da7a132138042317c9"
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "numeric", "accepted_answers": ["99990"], "marks": 6, "normalizer": "integer"},
+    {"number": 2, "type": "numeric", "accepted_answers": ["15"], "marks": 6, "normalizer": "integer"},
+    {"number": 3, "type": "numeric", "accepted_answers": ["23"], "marks": 6, "normalizer": "integer"},
+    {"number": 4, "type": "numeric", "accepted_answers": ["1351"], "marks": 6, "normalizer": "integer"},
+    {"number": 5, "type": "diagram", "accepted_answers": ["On the preprinted triangular network with fixed labels 3, 4, and 6, fill top=2, upper-left=5, bottom-middle=1", "Triangle fills: top=2, upper-left=5, bottom-middle=1", "Triangle nodes: top=2, upper-left=5, upper-right=3, bottom-left=4, bottom-middle=1, bottom-right=6", "Diagram response: top=2; left=5; bottom=1", "Diagram: top 2; left-mid 5; right-mid 3; bottom-left 4; bottom-mid 1; bottom-right 6"], "marks": 6, "normalizer": "text"},
+    {"number": 6, "type": "numeric", "accepted_answers": ["6"], "marks": 6, "normalizer": "integer"},
+    {"number": 7, "type": "numeric", "accepted_answers": ["5"], "marks": 6, "normalizer": "integer"},
+    {"number": 8, "type": "numeric", "accepted_answers": ["5040"], "marks": 6, "normalizer": "integer"},
+    {"number": 9, "type": "numeric", "accepted_answers": ["8"], "marks": 6, "normalizer": "integer"},
+    {"number": 10, "type": "numeric", "accepted_answers": ["29"], "marks": 6, "normalizer": "integer"},
+    {"number": 11, "type": "numeric", "accepted_answers": ["88"], "marks": 8, "normalizer": "integer"},
+    {"number": 12, "type": "numeric", "accepted_answers": ["53"], "marks": 8, "normalizer": "integer"},
+    {"number": 13, "type": "numeric", "accepted_answers": ["60"], "marks": 8, "normalizer": "integer"},
+    {"number": 14, "type": "numeric", "accepted_answers": ["2"], "marks": 8, "normalizer": "integer"},
+    {"number": 15, "type": "numeric", "accepted_answers": ["5050"], "marks": 8, "normalizer": "integer"}
+  ]
+}

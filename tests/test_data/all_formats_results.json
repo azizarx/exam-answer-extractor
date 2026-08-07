@@ -1,0 +1,299 @@
+{
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9
+  },
+  "tests": [
+    {
+      "template_id": "seamo_2025_k",
+      "test_type": "mcq",
+      "description": "SEAMO 2025 K \u2014 MCQ 15\u00d73, 2-col (PDF p.1)",
+      "passed": true,
+      "details": {
+        "correct": 15,
+        "total": 15,
+        "mismatches": {},
+        "status": "ok",
+        "anchor_score": 1.0
+      },
+      "filled_image": "tests/test_data/seamo_2025_k_mcq_filled.png"
+    },
+    {
+      "template_id": "seamo_2025_a",
+      "test_type": "mcq",
+      "description": "SEAMO 2025 A \u2014 MCQ 20\u00d75, 1-col (PDF p.2)",
+      "passed": true,
+      "details": {
+        "correct": 20,
+        "total": 20,
+        "mismatches": {},
+        "status": "ok",
+        "anchor_score": 1.0
+      },
+      "filled_image": "tests/test_data/seamo_2025_a_mcq_filled.png"
+    },
+    {
+      "template_id": "seamo_x_2026_k",
+      "test_type": "mcq",
+      "description": "SEAMO X 2026 K \u2014 MCQ 15\u00d73, 2-col (PDF p.1)",
+      "passed": true,
+      "details": {
+        "correct": 15,
+        "total": 15,
+        "mismatches": {},
+        "status": "ok",
+        "anchor_score": 1.0
+      },
+      "filled_image": "tests/test_data/seamo_x_2026_k_mcq_filled.png"
+    },
+    {
+      "template_id": "seamo_2025_a",
+      "test_type": "numeric_grid",
+      "description": "SEAMO 2025 A \u2014 Numeric grid Q21-25 (PDF p.2)",
+      "passed": true,
+      "details": {
+        "correct": 4,
+        "total": 5,
+        "accuracy": 0.8,
+        "mismatches": {
+          "22": {
+            "expected": "137",
+            "got": "37"
+          }
+        },
+        "extracted": {
+          "21": "42",
+          "22": "37",
+          "23": "58",
+          "24": "9",
+          "25": "264"
+        },
+        "errors": []
+      },
+      "filled_image": "tests/test_data/seamo_2025_a_numgrid_filled.png"
+    },
+    {
+      "template_id": "seamo_x_2026_a",
+      "test_type": "numeric_grid",
+      "description": "SEAMO X 2026 A \u2014 Numeric grid Q1-20 (PDF p.2, excl diagrams Q4/Q6/Q9)",
+      "passed": true,
+      "details": {
+        "correct": 10,
+        "total": 17,
+        "accuracy": 0.59,
+        "mismatches": {
+          "2": {
+            "expected": "28",
+            "got": "23"
+          },
+          "5": {
+            "expected": "100",
+            "got": "PO05"
+          },
+          "8": {
+            "expected": "42",
+            "got": "4F"
+          },
+          "10": {
+            "expected": "56",
+            "got": "Y6"
+          },
+          "12": {
+            "expected": "81",
+            "got": "3"
+          },
+          "14": {
+            "expected": "12",
+            "got": "2"
+          },
+          "19": {
+            "expected": "8",
+            "got": "3"
+          }
+        },
+        "extracted": {
+          "1": "15",
+          "2": "23",
+          "3": "7",
+          "5": "PO05",
+          "7": "33",
+          "8": "4F",
+          "10": "Y6",
+          "11": "9",
+          "12": "3",
+          "13": "24",
+          "14": "2",
+          "15": "67",
+          "16": "3",
+          "17": "45",
+          "18": "99",
+          "19": "3",
+          "20": "51",
+          "4": "DR",
+          "6": "DR",
+          "9": "DR"
+        },
+        "errors": []
+      },
+      "filled_image": "tests/test_data/seamo_x_2026_a_numgrid_filled.png"
+    },
+    {
+      "template_id": "seamo_x_2026_b",
+      "test_type": "numeric_grid",
+      "description": "SEAMO X 2026 B \u2014 Numeric grid Q1-15 (PDF p.3, excl diagram Q5)",
+      "passed": true,
+      "details": {
+        "correct": 10,
+        "total": 14,
+        "accuracy": 0.71,
+        "mismatches": {
+          "3": {
+            "expected": "8",
+            "got": "3"
+          },
+          "4": {
+            "expected": "156",
+            "got": "56"
+          },
+          "7": {
+            "expected": "31",
+            "got": "3"
+          },
+          "9": {
+            "expected": "89",
+            "got": "39"
+          }
+        },
+        "extracted": {
+          "1": "23",
+          "2": "47",
+          "3": "3",
+          "4": "56",
+          "6": "72",
+          "7": "3",
+          "8": "5",
+          "9": "39",
+          "10": "14",
+          "11": "66",
+          "12": "2",
+          "13": "103",
+          "14": "57",
+          "15": "40",
+          "5": "DR"
+        },
+        "errors": []
+      },
+      "filled_image": "tests/test_data/seamo_x_2026_b_numgrid_filled.png"
+    },
+    {
+      "template_id": "seamo_x_2026_c",
+      "test_type": "open_response",
+      "description": "SEAMO X 2026 C \u2014 Open response Q1-15 (PDF p.4)",
+      "passed": true,
+      "details": {
+        "detected": 15,
+        "total": 15,
+        "extracted": {
+          "1": "A",
+          "2": "T",
+          "3": "2",
+          "4": "s",
+          "5": "s",
+          "6": "2o",
+          "7": "o",
+          "8": "s",
+          "9": "65",
+          "10": "oo",
+          "11": "o",
+          "12": "g",
+          "13": "g",
+          "14": "E",
+          "15": "405"
+        },
+        "errors": []
+      },
+      "filled_image": "tests/test_data/seamo_x_2026_c_openresp_filled.png"
+    },
+    {
+      "template_id": "seamo_x_2026_a",
+      "test_type": "diagram",
+      "description": "SEAMO X 2026 A \u2014 Diagram detection Q4/Q6/Q9 (PDF p.2)",
+      "passed": true,
+      "details": {
+        "expected": [
+          4,
+          6,
+          9
+        ],
+        "detected": [
+          4,
+          6,
+          9
+        ],
+        "missing": [],
+        "extra": [],
+        "crops": {
+          "4": {
+            "crop_path": "tests/test_data/seamo_x_2026_a_diagram_q4.png",
+            "region": {
+              "x": 100,
+              "y": 1810,
+              "w": 715,
+              "h": 280
+            },
+            "prompt_hint": "Read the time shown on the analog clock face. Return in HH:MM format."
+          },
+          "6": {
+            "crop_path": "tests/test_data/seamo_x_2026_a_diagram_q6.png",
+            "region": {
+              "x": 100,
+              "y": 2210,
+              "w": 715,
+              "h": 280
+            },
+            "prompt_hint": "Identify the pattern or answer represented in the 2x2 grid drawing."
+          },
+          "9": {
+            "crop_path": "tests/test_data/seamo_x_2026_a_diagram_q9.png",
+            "region": {
+              "x": 883,
+              "y": 1610,
+              "w": 715,
+              "h": 280
+            },
+            "prompt_hint": "Count the number of shaded sections in the pie chart / circle diagram. Return as an integer."
+          }
+        }
+      }
+    },
+    {
+      "template_id": "seamo_x_2026_b",
+      "test_type": "diagram",
+      "description": "SEAMO X 2026 B \u2014 Diagram detection Q5 (PDF p.3)",
+      "passed": true,
+      "details": {
+        "expected": [
+          5
+        ],
+        "detected": [
+          5
+        ],
+        "missing": [],
+        "extra": [],
+        "crops": {
+          "5": {
+            "crop_path": "tests/test_data/seamo_x_2026_b_diagram_q5.png",
+            "region": {
+              "x": 100,
+              "y": 2380,
+              "w": 600,
+              "h": 420
+            },
+            "prompt_hint": "Analyze the graph/network diagram. Identify the answer represented by the node or path drawing."
+          }
+        }
+      }
+    }
+  ]
+}

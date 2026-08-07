@@ -1,0 +1,17 @@
+{
+  "id": "seamo_2026_d",
+  "name": "SEAMO 2026 Paper D - Junior",
+  "brand": "seamo",
+  "year": 2026,
+  "paper": "D",
+  "variant_of": "seamo_2025_d",
+  "detection": {
+    "filename_pattern": "SEAMO(?!\\s*X).*2026",
+    "text_markers": [
+      "SEAMO",
+      "2026",
+      "Paper D",
+      "JUNIOR"
+    ]
+  }
+}
