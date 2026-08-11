@@ -1,0 +1,26 @@
+# Ignore local env / venv / caches when building the API image
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.git/
+frontend/node_modules/
+frontend/dist/
+storage/uploads/**
+storage/results/**
+storage/pipeline_runs/**
+storage/cv_overlays/
+storage/annotations/
+storage/OCRResults/
+storage/debug/
+storage/pdfs/
+exam_db.sqlite*
+*.sqlite
+New folder/
+*.rar
+graphify-out/

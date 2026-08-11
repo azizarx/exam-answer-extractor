@@ -104,8 +104,8 @@ test.pdf
 backend/examples/**/*.pdf
 backend/examples/UZ1-35_ID3-224_merged.pdf
 
-# Answer-key source scans (structured JSON under answer_keys/ is what we ship)
-answer_keys/**/*.pdf
+# Answer-key source scans: keep JSON always; PDFs are small provenance files
+# and SHOULD be committed so Docker/startup hash checks work. Docx sources stay out.
 answer_keys/**/*.docx
 answer_keys/**/*.doc
 

@@ -253,15 +253,32 @@ def test_all_malformed_scalar_and_container_shapes_raise_domain_error(tmp_path, 
         registry.load(path)
 
 
-def test_source_hash_mismatch_is_rejected(tmp_path):
-    path, source_dir = _write_mutated_manifest(
-        tmp_path, lambda raw: raw["source"].__setitem__("sha256", "0" * 64)
-    )
+def test_missing_source_pdf_is_tolerated(tmp_path, caplog):
+    """Deployments may ship JSON keys without provenance PDFs."""
+    import logging
+
+    manifests_dir = tmp_path / "manifests"
+    manifests_dir.mkdir()
+    source = ROOT / "answer_keys/Paper A key.pdf"
+    raw = json.loads((ROOT / "answer_keys/seamo_2025/seamo_2025_a.json").read_text())
+    (manifests_dir / "key.json").write_text(json.dumps(raw))
+    # Empty source dir — PDF intentionally absent
+    source_dir = tmp_path / "empty_sources"
+    source_dir.mkdir()
     registry = ManifestRegistry(
-        path.parent, source_dir, TemplateRegistry(ROOT / "backend/templates")
+        manifests_dir, source_dir, TemplateRegistry(ROOT / "backend/templates")
     )
+    with caplog.at_level(logging.WARNING):
+        manifest = registry.load(manifests_dir / "key.json")
+    assert manifest.template_id == "seamo_2025_a"
+    assert "source PDF missing" in caplog.text
+    # Hash check still enforced when the PDF is present
+    (source_dir / source.name).write_bytes(source.read_bytes())
+    raw["source"]["sha256"] = "0" * 64
+    (manifests_dir / "bad.json").write_text(json.dumps(raw))
     with pytest.raises(ManifestValidationError, match="source hash mismatch"):
-        registry.load(path)
+        registry.load(manifests_dir / "bad.json")
+
 
 
 def test_template_question_type_mismatch_is_rejected(tmp_path):
