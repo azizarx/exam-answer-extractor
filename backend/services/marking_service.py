@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import sqlite3
 import time
@@ -16,6 +17,8 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from backend.services.template_service import ExamTemplate, TemplateRegistry
+
+logger = logging.getLogger(__name__)
 
 
 ALLOWED_TYPES = {"mcq", "numeric", "time", "free_response", "diagram"}
@@ -323,9 +326,17 @@ class ManifestRegistry:
         for question in manifest.questions:
             self._validate_question(question, expected_numbers[question.number], template)
 
+        # Source PDFs are provenance for the JSON manifests. They are optional
+        # at runtime: Docker images / slim checkouts may ship JSON only. When
+        # the PDF is present we still enforce the recorded SHA-256.
         source_path = self.source_dir / manifest.source_filename
         if not source_path.is_file():
-            raise ManifestValidationError(f"source PDF not found: {manifest.source_filename}")
+            logger.warning(
+                "answer-key source PDF missing (%s); trusting manifest JSON for %s",
+                manifest.source_filename,
+                manifest.template_id,
+            )
+            return
         if _sha256(source_path) != manifest.source_sha256:
             raise ManifestValidationError(
                 f"source hash mismatch for {manifest.source_filename}"

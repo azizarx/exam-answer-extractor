@@ -1,10 +1,9 @@
 """
 DigitalOcean Spaces Client Service
-Handles file upload/download operations with S3-compatible storage
+Handles file upload/download operations with S3-compatible storage.
+
+boto3 is imported lazily so the API boots without Spaces configured.
 """
-import boto3
-import botocore
-from botocore.exceptions import ClientError
 from typing import Optional, BinaryIO
 import logging
 from backend.config import get_settings
@@ -15,11 +14,30 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def _require_boto3():
+    try:
+        import boto3
+    except ImportError as exc:
+        raise ImportError(
+            "boto3 is required when ARCHIVE_IMAGES_TO_SPACES=true; "
+            "pip install boto3 (see requirements.txt)"
+        ) from exc
+    return boto3
+
+
+try:
+    from botocore.exceptions import ClientError
+except ImportError:  # pragma: no cover — only hit in images without boto3
+    class ClientError(Exception):
+        """Placeholder so except clauses are valid without boto3 installed."""
+
+
 class SpacesClient:
     """Client for interacting with DigitalOcean Spaces (S3-compatible)"""
     
     def __init__(self):
         settings = get_settings()
+        boto3 = _require_boto3()
         
         session = boto3.Session()
         self.client = session.client(
@@ -242,15 +260,32 @@ class SpacesClient:
             return None
 
 
-# ... existing code ...
 # Singleton instance
 _spaces_client = None
 
 
-def get_spaces_client() -> "SpacesClient":
-    """Get or create SpacesClient singleton instance"""
+class _NoOpSpacesClient:
+    """Used when ARCHIVE_IMAGES_TO_SPACES is false — archival calls are no-ops."""
+
+    def upload_image(self, image_path: str, submission_id: int, original_pdf_name: str) -> None:
+        return None
+
+
+def get_spaces_client():
+    """Return Spaces client, or a no-op when archival is disabled / unavailable."""
     global _spaces_client
-    if _spaces_client is None:
+    if _spaces_client is not None:
+        return _spaces_client
+
+    settings = get_settings()
+    if not settings.archive_images_to_spaces:
+        _spaces_client = _NoOpSpacesClient()
+        return _spaces_client
+
+    try:
         _spaces_client = SpacesClient()
+    except Exception as exc:
+        logger.warning("Spaces client unavailable (%s); using no-op", exc)
+        _spaces_client = _NoOpSpacesClient()
     return _spaces_client
 

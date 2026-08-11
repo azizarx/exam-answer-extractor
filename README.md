@@ -1,3 +1,6 @@
+**Integrators / DevOps:** see [`DEPLOY.md`](DEPLOY.md) and [`docs/API.md`](docs/API.md).
+Run the API with `uvicorn main:app --host 0.0.0.0 --port 8000` (not the frontend).
+
 # Exam Answer Sheet Extraction System
 
 A complete system for extracting answers from PDF exam sheets using AI-powered OCR and computer vision. The system automatically processes uploaded PDFs, extracts both multiple-choice and free-response answers, and stores them in a database with JSON backups in cloud storage.
