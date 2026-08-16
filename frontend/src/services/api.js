@@ -1,8 +1,12 @@
 
 import axios from 'axios';
 
-// Backend runs on port 8000 by default (see main.py)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// Prefer VITE_API_BASE_URL when set (build-time).
+// Production default: same-origin (""), so nginx can proxy /upload, /health, etc.
+// Local Vite default: http://localhost:8000
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
 // Create axios instance with default config
 const apiClient = axios.create({

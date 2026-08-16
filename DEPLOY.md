@@ -75,12 +75,33 @@ docker run --rm -p 8000:8000 --env-file .env \
 
 See `Dockerfile` in repo root.
 
-## Health check
+## Frontend (optional test UI)
+
+The React app lives in `frontend/`. It is **not** required for API consumers.
+
+### Critical: API base URL
+
+Production builds must **not** hardcode `http://localhost:8000`.
+
+1. Build with empty / unset `VITE_API_BASE_URL` (same-origin calls).
+2. Put nginx in front so API routes proxy to uvicorn (`deploy/nginx-aimarker.conf`).
 
 ```bash
-curl -s http://localhost:8000/health
-curl -s http://localhost:8000/
+cd frontend
+# do NOT set VITE_API_BASE_URL for production
+npm ci
+npm run build
+# deploy dist/ behind nginx as in deploy/nginx-aimarker.conf
 ```
+
+Local UI against local API:
+
+```bash
+echo 'VITE_API_BASE_URL=http://localhost:8000' > frontend/.env
+cd frontend && npm run dev
+```
+
+If the HTTPS site still calls `localhost:8000`, rebuild the frontend without that env var and fix nginx proxying.
 
 ## Known startup warning (harmless)
 
