@@ -14,5 +14,11 @@ services:
     env_file:
       - .env
 
+    environment:
+      DATABASE_URL: sqlite:////app/data/exam_db.sqlite
+      APP_ENV: production
+      DEBUG: "false"
+
     volumes:
       - ./storage:/app/storage
+      - ./data:/app/data

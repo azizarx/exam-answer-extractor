@@ -15,8 +15,12 @@ Base = declarative_base()
 
 # Create engine
 settings = get_settings()
-database_url = settings.database_url
-is_sqlite = database_url.strip().lower().startswith("sqlite")
+database_url = (settings.database_url or "").strip()
+if not database_url:
+    # Default local/dev SQLite. Docker Compose overrides this to
+    # sqlite:////app/data/exam_db.sqlite on the persistent ./data volume.
+    database_url = "sqlite:///./exam_db.sqlite"
+is_sqlite = database_url.lower().startswith("sqlite")
 
 engine_kwargs = {
     "pool_pre_ping": True,  # Verify connections before using

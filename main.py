@@ -121,11 +121,31 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
+    # Never enable reload in production: SQLite WAL writes under ./data (and
+    # pipeline logs under ./storage) would restart the process mid-extraction.
+    use_reload = bool(settings.debug) and (settings.app_env or "").lower() in {
+        "development",
+        "dev",
+        "local",
+    }
+    reload_kwargs = {}
+    if use_reload:
+        reload_kwargs = {
+            "reload": True,
+            "reload_excludes": [
+                "data/*",
+                "storage/*",
+                "*.sqlite",
+                "*.sqlite-*",
+                "*.log",
+            ],
+        }
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=settings.debug,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
+        **reload_kwargs,
     )

@@ -20,8 +20,12 @@ docker create --name "$CONTAINER_NAME" "$IMAGE_NAME" >/dev/null
 
 echo "==> Preparing build directory..."
 
-rm -rf "$BUILD_DIR"
+# Never delete BUILD_DIR itself: on prod it is the bindfs source for
+# /opt/aimarker/frontend/dist. rm -rf on the directory breaks the mount
+# (Transport endpoint is not connected) and nginx starts returning 500.
 mkdir -p "$BUILD_DIR"
+# Clear previous artifacts in-place (including hidden files).
+find "$BUILD_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 echo "==> Copying dist from Docker container..."
 
