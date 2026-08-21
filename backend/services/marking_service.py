@@ -471,10 +471,12 @@ class MarkingService:
 # cannot be compared as text without a lossy description round-trip.
 FR_TYPES = frozenset({"numeric", "time", "free_response"})
 DIAGRAM_TYPE = "diagram"
-# The vision judge owns every diagram outcome the deterministic pass
-# actually looked at.  "blank" is left alone (nothing was drawn) and
-# "needs_review" is left alone (extraction trust already claimed it).
-DIAGRAM_VISION_STATUSES = frozenset({"correct", "incorrect", "invalid"})
+# The vision judge owns every diagram outcome except the ones extraction
+# trust already claimed.  "blank" is deliberately included: it means the
+# extractor's TEXT read was empty, not that the page is — faint pencil on a
+# preprinted scaffold reads as "BL" to the transcription prompt, and the
+# whole point of looking at the crop is that the text read is untrusted.
+DIAGRAM_VISION_STATUSES = frozenset({"correct", "incorrect", "invalid", "blank"})
 # A valid normalized numeric/time value that differs from the accepted value is
 # conclusively incorrect.  Gemini is only needed when deterministic parsing
 # cannot establish a value at all.
@@ -526,21 +528,31 @@ def apply_fr_equivalence_judge(
     result: CandidateMarkingResult,
     manifest: AnswerKeyManifest,
     judge: Any,
+    *,
+    include_diagram: bool = False,
 ) -> CandidateMarkingResult:
-    """Merge LLM FR equivalence verdicts; never mutates input answers."""
+    """Merge LLM FR equivalence verdicts; never mutates input answers.
+
+    ``include_diagram`` is set only when the vision judge is switched off. A
+    diagram would otherwise be decided by exact string equality against the
+    key's prose, turning the documented rollback into a silent zero for every
+    non-verbatim answer.
+    """
     type_by_q = {q.number: q for q in manifest.questions}
     marks_by_q = {q.number: q.marks for q in manifest.questions}
+
+    judged_types = FR_TYPES | {DIAGRAM_TYPE} if include_diagram else FR_TYPES
 
     items: list[dict[str, Any]] = []
     for outcome in result.outcomes:
         question = type_by_q.get(outcome.question_number)
         if question is None:
             continue
-        if question.type not in FR_TYPES:
+        if question.type not in judged_types:
             continue
         fallback_statuses = (
             TEXT_FALLBACK_STATUSES
-            if question.type == "free_response"
+            if question.type in {"free_response", DIAGRAM_TYPE}
             else FALLBACK_STATUSES
         )
         if outcome.status not in fallback_statuses:
@@ -912,11 +924,12 @@ def apply_diagram_vision_judge(
             manifest.template_id, outcome.question_number
         )
         if reference_path is None:
-            forced[outcome.question_number] = _review_outcome(
-                outcome,
-                source="diagram_reference_missing",
-                reason="no reference drawing committed for this question",
-            )
+            if outcome.status != "blank":
+                forced[outcome.question_number] = _review_outcome(
+                    outcome,
+                    source="diagram_reference_missing",
+                    reason="no reference drawing committed for this question",
+                )
             continue
 
         entry = crops.get(str(outcome.question_number))
@@ -927,11 +940,14 @@ def apply_diagram_vision_judge(
             if candidate_path.is_file():
                 student_path = candidate_path
         if student_path is None:
-            forced[outcome.question_number] = _review_outcome(
-                outcome,
-                source="diagram_crop_missing",
-                reason="no diagram crop stored for this candidate",
-            )
+            # An unverifiable blank stays blank; it already scores zero, and
+            # flagging every one would bury the reviewable cases.
+            if outcome.status != "blank":
+                forced[outcome.question_number] = _review_outcome(
+                    outcome,
+                    source="diagram_crop_missing",
+                    reason="no diagram crop stored for this candidate",
+                )
             continue
 
         items.append(

@@ -32,6 +32,8 @@ from backend.api.schemas import (
 )
 from backend.services.diagram_crops import CROP_NAME_RE
 from backend.services.local_storage import diagram_crop_dir_for, get_local_storage
+import pymupdf
+
 from backend.services.pdf_to_images import get_pdf_converter
 from backend.services.template_extractor import TemplateExtractor, extract_pdf_auto
 from backend.services.json_generator import get_json_generator
@@ -1359,12 +1361,16 @@ async def extract_and_mark(
 
 
 @router.get("/submission/{submission_id}/page/{page_number}.png", tags=["Exam Processing"])
-async def get_submission_page_image(
+def get_submission_page_image(
     submission_id: int,
     page_number: int,
     db: Session = Depends(get_db),
 ):
     """Render one page of a submission's uploaded PDF for on-screen review.
+
+    Deliberately a sync def: rasterising a page is ~0.2s of CPU, and on the
+    event loop that stalls every other request for the duration. Starlette
+    runs sync endpoints in its threadpool.
 
     Page images from extraction are deleted once a run finishes, so this
     re-renders from the retained source PDF.  ``CandidateResult.page_number``
@@ -1393,8 +1399,6 @@ async def get_submission_page_image(
     settings = get_settings()
     dpi = max(72, int(getattr(settings, "page_preview_dpi", 150) or 150))
     try:
-        import pymupdf
-
         with pymupdf.open(pdf_path) as document:
             if page_number > document.page_count:
                 raise HTTPException(

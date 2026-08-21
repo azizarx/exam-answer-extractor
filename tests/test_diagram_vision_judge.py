@@ -232,19 +232,48 @@ def test_a_verdict_the_judge_omitted_needs_review(tmp_path):
     assert by_q[6].judge_reason == "missing verdict from judge response"
 
 
-def test_blank_answers_are_never_sent_to_the_judge(tmp_path):
-    """Nothing was drawn, so there is nothing to compare and no call to spend."""
+def test_a_drawing_the_extractor_read_as_blank_is_still_compared(tmp_path):
+    """"BL" means the text read was empty, not that the page was.
+
+    Faint pencil on a preprinted scaffold is exactly what the transcription
+    prompt reports as blank, and the crop is the only thing that can tell the
+    difference. Skipping these would score a correct drawing zero with no flag.
+    """
     manifest = _manifest()
     result = MarkingService(manifest).mark({"4": "BL", "6": "", "9": None})
     assert {o.status for o in result.outcomes} == {"blank"}
-    judge = FakeVisionJudge({})
+    judge = FakeVisionJudge({
+        4: {"verdict": "match", "observed": "Clock: 7:45", "reason": "hands drawn"},
+        6: {"verdict": "mismatch", "observed": "2x2 grid: empty", "reason": "nothing drawn"},
+        9: {"verdict": "mismatch", "observed": "", "reason": "no sector shaded"},
+    })
 
     merged = apply_diagram_vision_judge(
         result, manifest, judge, diagram_crops=_crops(tmp_path), crop_dir=tmp_path,
     )
 
+    assert [item["question_number"] for item in judge.calls[0]] == [4, 6, 9]
+    by_q = {o.question_number: o for o in merged.outcomes}
+    # The drawing was there all along.
+    assert (by_q[4].status, by_q[4].awarded_marks) == ("correct", 4)
+    # Genuinely empty scaffolds still score zero.
+    assert by_q[6].status == "incorrect"
+    assert by_q[9].status == "incorrect"
+
+
+def test_an_unverifiable_blank_stays_blank_rather_than_flooding_review(tmp_path):
+    """No crop and no answer is not a reviewable case; it already scores zero."""
+    manifest = _manifest()
+    result = MarkingService(manifest).mark({"4": "BL", "6": "BL", "9": "BL"})
+    judge = FakeVisionJudge({})
+
+    merged = apply_diagram_vision_judge(
+        result, manifest, judge, diagram_crops={}, crop_dir=tmp_path,
+    )
+
     assert judge.calls == []
     assert {o.status for o in merged.outcomes} == {"blank"}
+    assert merged.awarded_marks == 0
 
 
 def test_extraction_trust_still_wins_over_the_vision_judge(tmp_path):
@@ -307,4 +336,62 @@ def test_a_manifest_without_diagrams_is_left_completely_alone(tmp_path):
     )
 
     assert merged is result
+    assert judge.calls == []
+
+
+def test_switching_the_vision_judge_off_reverts_to_the_text_judge(tmp_path):
+    """DIAGRAM_VISION_ENABLED=false must be a safe rollback, not a zeroing switch.
+
+    Without routing diagrams back to the text judge, the only surviving
+    decision is exact casefolded equality against the key's prose, so any
+    non-verbatim description scores zero with no review flag — strictly worse
+    than the behaviour this feature replaced.
+    """
+    from backend.services.marking_service import apply_fr_equivalence_judge
+
+    manifest = _manifest()
+    result = MarkingService(manifest).mark(
+        {"4": "Clock: 7:45 (hands at 9 and between 7 and 8)", "6": "x", "9": "y"}
+    )
+    assert {o.question_number: o.status for o in result.outcomes}[4] == "incorrect"
+
+    class FakeTextJudge:
+        def __init__(self):
+            self.calls = []
+
+        def judge(self, items):
+            self.calls.append(items)
+            return [
+                {"question_number": i["question_number"],
+                 "verdict": "equivalent" if i["question_number"] == 4 else "not_equivalent",
+                 "reason": "same clock"}
+                for i in items
+            ]
+
+    text_judge = FakeTextJudge()
+    merged = apply_fr_equivalence_judge(
+        result, manifest, text_judge, include_diagram=True,
+    )
+
+    assert {item["type"] for item in text_judge.calls[0]} == {"diagram"}
+    by_q = {o.question_number: o for o in merged.outcomes}
+    assert (by_q[4].status, by_q[4].awarded_marks) == ("correct", 4)
+
+
+def test_diagrams_stay_out_of_the_text_judge_by_default():
+    from backend.services.marking_service import apply_fr_equivalence_judge
+
+    manifest = _manifest()
+    result = MarkingService(manifest).mark({"4": "a", "6": "b", "9": "c"})
+
+    class RecordingJudge:
+        def __init__(self):
+            self.calls = []
+
+        def judge(self, items):
+            self.calls.append(items)
+            return []
+
+    judge = RecordingJudge()
+    apply_fr_equivalence_judge(result, manifest, judge)
     assert judge.calls == []

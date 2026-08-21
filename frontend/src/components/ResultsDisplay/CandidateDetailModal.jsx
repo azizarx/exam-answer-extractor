@@ -317,7 +317,7 @@ const CandidateDetailModal = ({
                       return (
                         <li
                           key={`${outcome?.question_number ?? 'unknown'}-${outcomeIndex}`}
-                          className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[0.65fr_1.4fr_1fr_0.9fr] sm:items-center"
+                          className="grid gap-3 px-4 py-3 text-sm sm:grid-cols-[0.65fr_1.4fr_1fr_0.9fr] sm:items-start"
                           aria-label={`Question ${displayValue(outcome?.question_number)}: ${style.label}, ${displayMarks(outcome?.awarded_marks)} of ${displayMarks(outcome?.max_marks)} marks`}
                         >
                           <div>
@@ -336,19 +336,21 @@ const CandidateDetailModal = ({
                             {outcome?.judge_reason ? (
                               <p className="mt-1 text-xs text-slate-600">{outcome.judge_reason}</p>
                             ) : null}
-                            {isDiagramOutcome(outcome) && submissionId && candidate.id ? (
+                          </div>
+                          <div className="font-semibold text-slate-800 sm:text-right">
+                            <span className="mr-2 text-xs font-medium text-slate-500 sm:hidden">Marks</span>
+                            {displayMarks(outcome?.awarded_marks)} / {displayMarks(outcome?.max_marks)}
+                          </div>
+                          {isDiagramOutcome(outcome) && submissionId && candidate.id ? (
+                            <div className="sm:col-span-4">
                               <DiagramComparison
                                 submissionId={submissionId}
                                 candidateId={candidate.id}
                                 templateId={candidate.template_id}
                                 question={outcome.question_number}
                               />
-                            ) : null}
-                          </div>
-                          <div className="font-semibold text-slate-800 sm:text-right">
-                            <span className="mr-2 text-xs font-medium text-slate-500 sm:hidden">Marks</span>
-                            {displayMarks(outcome?.awarded_marks)} / {displayMarks(outcome?.max_marks)}
-                          </div>
+                            </div>
+                          ) : null}
                         </li>
                       );
                     })}

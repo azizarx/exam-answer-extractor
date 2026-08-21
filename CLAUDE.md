@@ -89,13 +89,20 @@ marking_workflow._mark_one:
   `needs_review`. Missing crop / missing reference / judge exception all become
   `needs_review`, never a silent zero. `judge_source` is `diagram_*` throughout,
   which is how the frontend spots a diagram row.
+- A `blank` diagram answer IS judged. "BL" means the extractor's *text* read was
+  empty, which is exactly how faint pencil on a preprinted scaffold reads; only
+  the crop can tell an unanswered question from a misread one. (A blank with no
+  crop at all stays blank rather than flooding the review queue.)
 - **Deterministic CV wins where it fires.** `seamo_x_2026_a` Q9 is measured by
   `diagram_cv.extract_seamo_x_a_q9` (per-sector ink density). That is more
   precise than reading a low-resolution crop — the vision judge reads that wedge
   one sector off — so extraction records `extra_fields.diagram_cv_questions` and
   the vision stage skips those questions.
-- `DIAGRAM_VISION_ENABLED=false` reverts diagram questions to the deterministic
-  text path without a redeploy.
+- `DIAGRAM_VISION_ENABLED=false` reverts diagram questions to the text
+  equivalence judge (`apply_fr_equivalence_judge(..., include_diagram=True)`)
+  without a redeploy. It must not leave them on bare string equality: the key's
+  accepted answers are prose, so every non-verbatim description would become a
+  silent zero.
 
 Three things matter to remember:
 

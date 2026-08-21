@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Minus, Plus, RotateCcw } from 'lucide-react';
 import examAPI from '../../services/api';
 
@@ -22,6 +22,7 @@ const PageViewer = ({ submissionId, pageNumber }) => {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
+  const surfaceRef = useRef(null);
 
   useEffect(() => {
     let revoked = false;
@@ -62,9 +63,19 @@ const PageViewer = ({ submissionId, pageNumber }) => {
     };
   }, [submissionId, pageNumber]);
 
-  const handleWheel = useCallback((event) => {
-    event.preventDefault();
-    setZoom((current) => clampZoom(current + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)));
+  // React registers `wheel` passively, so an onWheel handler cannot
+  // preventDefault — the zoom would apply AND the surrounding modal would
+  // scroll, sliding the image the reviewer is zooming into out of view.
+  // A non-passive listener has to be attached directly.
+  useEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) return undefined;
+    const onWheel = (event) => {
+      event.preventDefault();
+      setZoom((current) => clampZoom(current + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP)));
+    };
+    surface.addEventListener('wheel', onWheel, { passive: false });
+    return () => surface.removeEventListener('wheel', onWheel);
   }, []);
 
   const handlePointerDown = (event) => {
@@ -142,8 +153,8 @@ const PageViewer = ({ submissionId, pageNumber }) => {
       </div>
 
       <div
+        ref={surfaceRef}
         className="relative h-[60vh] touch-none overflow-hidden bg-slate-100"
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endDrag}

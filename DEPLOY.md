@@ -50,7 +50,7 @@ Copy `.env.example` → `.env` (or inject env vars in the orchestrator).
 |----------|----------|-------|
 | `GEMINI_API_KEY` | **yes** | Extraction + FR judge |
 | `MATHPIX_APP_ID` / `MATHPIX_APP_KEY` | optional | Supplies a tighter diagram crop; a template-region crop is always produced, so diagram marking works without it |
-| `DIAGRAM_VISION_ENABLED` | no (default `true`) | Kill switch reverting diagram marking to the deterministic text path |
+| `DIAGRAM_VISION_ENABLED` | no (default `true`) | Kill switch reverting diagram marking to the text equivalence judge |
 | `DIAGRAM_VISION_MODEL` | no (empty) | Inherits `GEMINI_MODEL` unless set |
 | `PAGE_PREVIEW_DPI` | no (default `150`) | Render DPI for the results UI page viewer |
 | `DATABASE_URL` | no | Blank = SQLite |

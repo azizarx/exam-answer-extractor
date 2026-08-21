@@ -51,7 +51,7 @@ const DiagramComparison = ({ submissionId, candidateId, templateId, question }) 
   }
 
   return (
-    <div className="mt-2 flex flex-wrap gap-3">
+    <div className="mt-1 flex flex-wrap items-start gap-4 rounded-lg bg-slate-50 p-3">
       {[
         { label: 'Candidate', url: studentURL },
         { label: 'Answer key', url: referenceURL },
@@ -64,7 +64,7 @@ const DiagramComparison = ({ submissionId, candidateId, templateId, question }) 
             <img
               src={url}
               alt={`${label} drawing for question ${question}`}
-              className="h-28 w-auto rounded border border-slate-200 bg-white object-contain"
+              className="h-32 w-auto rounded border border-slate-200 bg-white object-contain"
             />
           ) : (
             <div className="flex h-28 w-28 items-center justify-center rounded border border-dashed border-slate-300 text-[11px] text-slate-400">

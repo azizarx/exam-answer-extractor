@@ -22,6 +22,9 @@ storage/debug/
 storage/pdfs/
 exam_db.sqlite*
 *.sqlite
+# Docker ignore patterns do not cross '/', so the compose-persisted
+# SQLite database needs its own entry or COPY . . bakes it into the image.
+data/
 New folder/
 *.rar
 graphify-out/

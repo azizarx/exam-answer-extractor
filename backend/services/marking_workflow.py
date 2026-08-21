@@ -356,7 +356,12 @@ def mark_submission_answers(
             # and lazy-loading from worker threads raises ObjectDeletedError.
             result = marker.mark(answers or {})
             result = apply_extraction_trust(result, needs_review_questions)
-            result = apply_fr_equivalence_judge(result, manifest, judge)
+            result = apply_fr_equivalence_judge(
+                result, manifest, judge,
+                # With the vision judge off, diagrams fall back to the text
+                # judge rather than to exact string equality.
+                include_diagram=vision_judge is None,
+            )
             if vision_judge is not None:
                 result = apply_diagram_vision_judge(
                     result,
