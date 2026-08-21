@@ -1,0 +1,42 @@
+[
+  {
+    "template_id": "seamo_x_2026_a",
+    "question": 4,
+    "file": "seamo_x_2026_a_q4.png",
+    "width": 191,
+    "height": 186,
+    "source_pdf": "seamo_x_2026/Paper A key.pdf",
+    "source_sha256": "8fa4169e2e71f468785beb60914e1ad7b302d43fb2e48ef73748f904b239551b",
+    "image_sha256": "056800b99b311ebe665f3cc1d797f40816be9e71327d806d9a1e9c44dd413091"
+  },
+  {
+    "template_id": "seamo_x_2026_a",
+    "question": 6,
+    "file": "seamo_x_2026_a_q6.png",
+    "width": 176,
+    "height": 159,
+    "source_pdf": "seamo_x_2026/Paper A key.pdf",
+    "source_sha256": "8fa4169e2e71f468785beb60914e1ad7b302d43fb2e48ef73748f904b239551b",
+    "image_sha256": "8d04176df80f8ba45a639e5d6221d3f1329fcd4e65e2427056ec2365c331c641"
+  },
+  {
+    "template_id": "seamo_x_2026_a",
+    "question": 9,
+    "file": "seamo_x_2026_a_q9.png",
+    "width": 97,
+    "height": 94,
+    "source_pdf": "seamo_x_2026/Paper A key.pdf",
+    "source_sha256": "8fa4169e2e71f468785beb60914e1ad7b302d43fb2e48ef73748f904b239551b",
+    "image_sha256": "e999badda3608ec234ed317d8cefd9df7cd1f97e6be76f2ec11b739a6539f9ad"
+  },
+  {
+    "template_id": "seamo_x_2026_b",
+    "question": 5,
+    "file": "seamo_x_2026_b_q5.png",
+    "width": 207,
+    "height": 161,
+    "source_pdf": "seamo_x_2026/Paper B key.pdf",
+    "source_sha256": "7242412fd884e275a1095726686b6cbcbf83eadee8db92da7a132138042317c9",
+    "image_sha256": "4e4e434e28157d812ee9746fb372c0f50715e7b26ab59658e6e88eae78adb7ae"
+  }
+]

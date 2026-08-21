@@ -25,20 +25,22 @@ Primary integration endpoint: `POST /extract/json`
 
 ## Database / SQLite “missing file”
 
-There is **no** `exam_db.sqlite` in git. The DB file is **created on first start** at:
+There is **no** DB file in git. Defaults:
 
-```
-./exam_db.sqlite
-```
+| How you run | Where SQLite lives |
+|-------------|--------------------|
+| `python main.py` locally | `./exam_db.sqlite` (cwd) |
+| `docker compose up` | `./data/exam_db.sqlite` on the host → `/app/data/` in the container |
 
-(relative to the process working directory, usually `/app` in Docker).
+Compose **must** bind a **directory** (`./data:/app/data`), not a single `.sqlite` file — SQLite WAL mode also writes `*-wal` / `*-shm` next to the DB, and those would otherwise die with the container.
 
 | Env | Behaviour |
 |-----|-----------|
 | `DATABASE_URL` empty / unset | SQLite → `./exam_db.sqlite` |
-| `DATABASE_URL=postgresql://user:pass@host:5432/exam_db` | Postgres (recommended for production) |
+| Compose default | `sqlite:////app/data/exam_db.sqlite` (persistent) |
+| `DATABASE_URL=postgresql://user:pass@host:5432/exam_db` | Postgres (recommended for multi-replica) |
 
-Mount a volume on `/app` (or the SQLite path) if you need the SQLite file to persist across container restarts. Prefer Postgres in multi-replica deploys.
+`./data/` and `exam_db.sqlite*` are gitignored.
 
 ## Required secrets / env
 
@@ -47,7 +49,10 @@ Copy `.env.example` → `.env` (or inject env vars in the orchestrator).
 | Variable | Required | Notes |
 |----------|----------|-------|
 | `GEMINI_API_KEY` | **yes** | Extraction + FR judge |
-| `MATHPIX_APP_ID` / `MATHPIX_APP_KEY` | if diagram questions | Templates with `type=diagram` |
+| `MATHPIX_APP_ID` / `MATHPIX_APP_KEY` | optional | Supplies a tighter diagram crop; a template-region crop is always produced, so diagram marking works without it |
+| `DIAGRAM_VISION_ENABLED` | no (default `true`) | Kill switch reverting diagram marking to the deterministic text path |
+| `DIAGRAM_VISION_MODEL` | no (empty) | Inherits `GEMINI_MODEL` unless set |
+| `PAGE_PREVIEW_DPI` | no (default `150`) | Render DPI for the results UI page viewer |
 | `DATABASE_URL` | no | Blank = SQLite |
 | `API_KEY` | recommended | When set, callers send `X-API-Key` |
 | `CORS_ORIGINS` | no | Default `*`; set explicit origins for browser UIs |
@@ -109,6 +114,24 @@ FutureWarning: All support for the google.generativeai package has ended...
 ```
 
 Expected until the codebase migrates to `google.genai`. Not a crash.
+
+
+## Diagram marking notes
+
+- Diagram marking adds **one Gemini call per candidate that has diagram
+  questions**. All Gemini traffic shares a process-wide sliding-window token
+  bucket, so this costs paced wall-clock rather than 429s. At the shipped
+  `GEMINI_MAX_RPM=4` a 20-page batch gains roughly five minutes; set
+  `GEMINI_MAX_RPM` to your provider tier's real limit (60+ on paid Tier 1).
+- `storage/diagrams/` holds one small PNG per diagram question per page and is
+  deleted with its submission. It lives under `STORAGE_ROOT`, so the existing
+  `/app/storage` volume already persists it — no new mount.
+- The answer key's reference drawings are committed under
+  `answer_keys/reference_diagrams/`. `init_db()` refuses to activate a key whose
+  diagram question has no reference, so a missing file fails at startup rather
+  than silently sending every diagram to review.
+- The new image endpoints live under `/submission/...` and `/answer-keys/...`,
+  both already matched by the nginx proxy regex. No nginx change is required.
 
 ## Common failures
 

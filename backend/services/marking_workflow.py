@@ -28,10 +28,13 @@ from backend.services.marking_service import (
     AnswerKeyManifest,
     ManifestQuestion,
     MarkingService,
+    apply_diagram_vision_judge,
     apply_extraction_trust,
     apply_fr_equivalence_judge,
 )
+from backend.services.diagram_vision_judge import GeminiDiagramVisionJudge
 from backend.services.fr_equivalence_judge import GeminiFrEquivalenceJudge
+from backend.services.local_storage import get_local_storage
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,21 @@ class _LazyGeminiJudge:
             with self._lock:
                 if self._inner is None:
                     self._inner = GeminiFrEquivalenceJudge()
+        return self._inner.judge(items)
+
+
+class _LazyDiagramVisionJudge:
+    """Create the production vision judge only when a diagram is queued."""
+
+    def __init__(self) -> None:
+        self._inner: GeminiDiagramVisionJudge | None = None
+        self._lock = threading.Lock()
+
+    def judge(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if self._inner is None:
+            with self._lock:
+                if self._inner is None:
+                    self._inner = GeminiDiagramVisionJudge()
         return self._inner.judge(items)
 
 
@@ -128,6 +146,7 @@ def mark_submission_answers(
     *,
     answer_key_id: int | None = None,
     fr_judge: Any | None = None,
+    diagram_judge: Any | None = None,
 ) -> MarkingRun:
     """Create one auditable marking attempt for persisted raw candidates.
 
@@ -295,20 +314,33 @@ def mark_submission_answers(
             for candidate in group:
                 extra = candidate.extra_fields or {}
                 review_qs = list(extra.get("needs_review_questions") or [])
+                crops = extra.get("diagram_crops")
                 jobs.append(
                     (
                         candidate.id,
                         dict(candidate.answers or {}),
                         key.id,
                         review_qs,
+                        dict(crops) if isinstance(crops, dict) else {},
+                        list(extra.get("diagram_cv_questions") or []),
                     )
                 )
             prepared_groups.append((tid, marker, manifest, jobs))
 
         db.commit()
 
+        settings = get_settings()
         judge = fr_judge if fr_judge is not None else _LazyGeminiJudge()
-        fr_workers = max(1, int(getattr(get_settings(), "max_fr_judge_workers", 6) or 6))
+        fr_workers = max(1, int(getattr(settings, "max_fr_judge_workers", 6) or 6))
+        diagram_vision_enabled = bool(
+            getattr(settings, "diagram_vision_enabled", True)
+        )
+        vision_judge = (
+            diagram_judge
+            if diagram_judge is not None
+            else (_LazyDiagramVisionJudge() if diagram_vision_enabled else None)
+        )
+        crop_dir = get_local_storage().diagram_crop_dir(submission_id)
 
         def _mark_one(
             candidate_id: int,
@@ -317,12 +349,23 @@ def mark_submission_answers(
             manifest: AnswerKeyManifest,
             answer_key_id: int,
             needs_review_questions: list,
+            diagram_crops: dict,
+            cv_owned_questions: list,
         ):
             # Pass plain dicts only — ORM CandidateResult is not thread-safe
             # and lazy-loading from worker threads raises ObjectDeletedError.
             result = marker.mark(answers or {})
             result = apply_extraction_trust(result, needs_review_questions)
             result = apply_fr_equivalence_judge(result, manifest, judge)
+            if vision_judge is not None:
+                result = apply_diagram_vision_judge(
+                    result,
+                    manifest,
+                    vision_judge,
+                    diagram_crops=diagram_crops,
+                    crop_dir=crop_dir,
+                    cv_owned_questions=cv_owned_questions,
+                )
             return candidate_id, answer_key_id, result
 
         with db.begin_nested():
@@ -330,8 +373,11 @@ def mark_submission_answers(
                 workers = min(fr_workers, max(1, len(jobs)))
                 if workers == 1 or len(jobs) <= 1:
                     marked = [
-                        _mark_one(cid, answers, marker, manifest, key_id, review)
-                        for cid, answers, key_id, review in jobs
+                        _mark_one(
+                            cid, answers, marker, manifest, key_id, review,
+                            crops, cv_qs,
+                        )
+                        for cid, answers, key_id, review, crops, cv_qs in jobs
                     ]
                 else:
                     marked = []
@@ -345,8 +391,10 @@ def mark_submission_answers(
                                 manifest,
                                 key_id,
                                 review,
+                                crops,
+                                cv_qs,
                             )
-                            for cid, answers, key_id, review in jobs
+                            for cid, answers, key_id, review, crops, cv_qs in jobs
                         ]
                         for fut in as_completed(futs):
                             marked.append(fut.result())

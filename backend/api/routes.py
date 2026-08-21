@@ -2,7 +2,7 @@
 FastAPI routes for exam answer sheet processing
 """
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, BackgroundTasks, Query
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from dataclasses import asdict
 import json as _json
 from sqlalchemy.orm import Session
@@ -30,7 +30,8 @@ from backend.api.schemas import (
     ExamDetailResponse,
     GeneratedJSONResponse,
 )
-from backend.services.local_storage import get_local_storage
+from backend.services.diagram_crops import CROP_NAME_RE
+from backend.services.local_storage import diagram_crop_dir_for, get_local_storage
 from backend.services.pdf_to_images import get_pdf_converter
 from backend.services.template_extractor import TemplateExtractor, extract_pdf_auto
 from backend.services.json_generator import get_json_generator
@@ -500,6 +501,7 @@ def process_pdf_extraction(
         )
 
         extraction_started = time.perf_counter()
+        diagram_crop_dir = diagram_crop_dir_for(submission_id)
         if template_id:
             extractor = TemplateExtractor(template_id)
             extraction_result = extractor.extract_pdf(
@@ -509,12 +511,14 @@ def process_pdf_extraction(
                 db=db,
                 max_workers=settings.max_extraction_workers,
                 filename=str(getattr(sub, "filename", "")),
+                diagram_crop_dir=diagram_crop_dir,
             )
         else:
             extraction_result = extract_pdf_auto(
                 pdf_path,
                 image_paths,
                 max_workers=settings.max_extraction_workers,
+                diagram_crop_dir=diagram_crop_dir,
             )
         extraction_seconds = time.perf_counter() - extraction_started
 
@@ -921,11 +925,16 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
 
         # Merge extra_fields into display: use candidate_no/candidate_id as candidate_number if empty
         raw_extra = getattr(cr, 'extra_fields') or {}
-        # Filter out internal keys and convert all values to strings for schema compatibility
+        # Preserve nested JSON (answer_trust, needs_review_questions, …).
+        # str()-ifying lists/dicts used to turn [] into "[]" and crash the UI.
         clean_extra = {}
         excluded_extra_keys = {'extra_fields', 'confidence', 'is_blank'}
         for k, v in raw_extra.items():
-            if k not in excluded_extra_keys and v is not None and v != {}:
+            if k in excluded_extra_keys or v is None or v == {}:
+                continue
+            if isinstance(v, (dict, list, bool, int, float)):
+                clean_extra[k] = v
+            else:
                 clean_extra[k] = str(v)
 
         cand_name = str(getattr(cr, 'candidate_name') or '') or raw_extra.get('name', '') or raw_extra.get('student_name', '')
@@ -933,6 +942,7 @@ async def get_submission(submission_id: int, db: Session = Depends(get_db)):
 
         candidates.append(CandidateResultSchema(
             id=int(getattr(cr, 'id')),
+            page_number=getattr(cr, 'page_number', None),
             candidate_name=cand_name,
             candidate_number=cand_number,
             country=str(getattr(cr, 'country') or ''),
@@ -1094,6 +1104,7 @@ async def delete_submission(submission_id: int, db: Session = Depends(get_db)):
     
     storage = get_local_storage()
     storage.delete_file(getattr(submission, 'original_pdf_key', None))
+    storage.delete_diagram_crops(submission_id)
     if getattr(submission, 'result_json_key', None):
         storage.delete_file(getattr(submission, 'result_json_key'))
     
@@ -1345,3 +1356,103 @@ async def extract_and_mark(
     except Exception as e:
         logger.error(f"Extract & mark failed: {e}")
         raise HTTPException(status_code=500, detail=f"Extraction failed: {e}")
+
+
+@router.get("/submission/{submission_id}/page/{page_number}.png", tags=["Exam Processing"])
+async def get_submission_page_image(
+    submission_id: int,
+    page_number: int,
+    db: Session = Depends(get_db),
+):
+    """Render one page of a submission's uploaded PDF for on-screen review.
+
+    Page images from extraction are deleted once a run finishes, so this
+    re-renders from the retained source PDF.  ``CandidateResult.page_number``
+    indexes the PDF's pages directly, which makes candidate -> page exact.
+    """
+    submission = db.query(ExamSubmission).filter(
+        ExamSubmission.id == submission_id
+    ).first()
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    pages_count = getattr(submission, "pages_count", None)
+    if page_number < 1 or (pages_count and page_number > int(pages_count)):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Page {page_number} is outside this submission",
+        )
+
+    storage = get_local_storage()
+    pdf_path = storage.resolve_within(str(getattr(submission, "original_pdf_key", "") or ""))
+    if pdf_path is None or not pdf_path.is_file():
+        raise HTTPException(
+            status_code=410, detail="The uploaded PDF for this submission is no longer stored"
+        )
+
+    settings = get_settings()
+    dpi = max(72, int(getattr(settings, "page_preview_dpi", 150) or 150))
+    try:
+        import pymupdf
+
+        with pymupdf.open(pdf_path) as document:
+            if page_number > document.page_count:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Page {page_number} is outside this submission",
+                )
+            pixmap = document[page_number - 1].get_pixmap(dpi=dpi)
+            png_bytes = pixmap.tobytes("png")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Page render failed for submission %s page %s: %s: %s",
+            submission_id, page_number, type(exc).__name__, exc,
+        )
+        raise HTTPException(status_code=500, detail="Could not render that page")
+
+    return Response(
+        content=png_bytes,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@router.get(
+    "/submission/{submission_id}/candidates/{candidate_id}/diagram/{question}.png",
+    tags=["Exam Processing"],
+)
+async def get_candidate_diagram_crop(
+    submission_id: int,
+    candidate_id: int,
+    question: int,
+    db: Session = Depends(get_db),
+):
+    """The candidate's drawing for one diagram question, as the judge saw it."""
+    candidate = db.query(CandidateResult).filter(
+        CandidateResult.id == candidate_id,
+        CandidateResult.submission_id == submission_id,
+    ).first()
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    extra = getattr(candidate, "extra_fields", None) or {}
+    entry = (extra.get("diagram_crops") or {}).get(str(question))
+    name = entry.get("file") if isinstance(entry, dict) else None
+    # Only ever a name this service generated; never a path from the payload.
+    if not name or not CROP_NAME_RE.match(str(name)):
+        raise HTTPException(
+            status_code=404, detail="No diagram crop stored for that question"
+        )
+
+    path = get_local_storage().diagram_crop_dir(submission_id) / str(name)
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404, detail="No diagram crop stored for that question"
+        )
+    return FileResponse(
+        str(path),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )

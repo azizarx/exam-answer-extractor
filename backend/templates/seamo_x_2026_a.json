@@ -137,7 +137,13 @@
             "w": 715,
             "h": 280
           },
-          "prompt_hint": "Read the drawn hands on the analog clock. Return exactly 'Clock: HH:MM' when unambiguous; otherwise state both hand endpoints."
+          "prompt_hint": "Read the drawn hands on the analog clock. Return exactly 'Clock: HH:MM' when unambiguous; otherwise state both hand endpoints.",
+          "diagram_search_region": {
+            "x": 40,
+            "y": 1790,
+            "w": 470,
+            "h": 530
+          }
         },
         "6": {
           "type": "diagram",
@@ -147,7 +153,13 @@
             "w": 715,
             "h": 280
           },
-          "prompt_hint": "Return exactly '2x2 grid: TL=<state>, TR=<state>, BL=<state>, BR=<state>'; use O, crossed O, or BL (blank) for each state."
+          "prompt_hint": "Return exactly '2x2 grid: TL=<state>, TR=<state>, BL=<state>, BR=<state>'; use O, crossed O, or BL (blank) for each state.",
+          "diagram_search_region": {
+            "x": 25,
+            "y": 2410,
+            "w": 445,
+            "h": 500
+          }
         },
         "9": {
           "type": "diagram",
@@ -157,7 +169,13 @@
             "w": 715,
             "h": 280
           },
-          "prompt_hint": "The circle has 12 fixed sectors. Identify every shaded sector by its exact clock-face interval, for example 'Pie chart: shaded sector 4-5 o'clock'; never use a vague direction such as lower-right."
+          "prompt_hint": "The circle has 12 fixed sectors. Identify every shaded sector by its exact clock-face interval, for example 'Pie chart: shaded sector 4-5 o'clock'; never use a vague direction such as lower-right.",
+          "diagram_search_region": {
+            "x": 820,
+            "y": 1590,
+            "w": 475,
+            "h": 530
+          }
         }
       }
     }

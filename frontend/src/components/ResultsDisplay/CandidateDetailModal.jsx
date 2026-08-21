@@ -4,12 +4,15 @@ import {
   Check,
   CircleSlash2,
   Download,
+  FileText,
   Globe,
   Hash,
   HelpCircle,
   X,
 } from 'lucide-react';
 import examAPI from '../../services/api';
+import DiagramComparison from './DiagramComparison';
+import PageViewer from './PageViewer';
 
 const OUTCOME_STYLES = {
   correct: {
@@ -38,6 +41,11 @@ const OUTCOME_STYLES = {
     classes: 'border-amber-200 bg-amber-50 text-amber-900',
   },
 };
+
+// Every judge_source the diagram stage writes starts with this prefix, so the
+// UI can spot a diagram row without being told the template's question types.
+const isDiagramOutcome = (outcome) =>
+  String(outcome?.judge_source || '').startsWith('diagram_');
 
 const displayValue = (value) => {
   if (value === null || value === undefined || value === '') return '—';
@@ -70,7 +78,19 @@ const CandidateDetailModal = ({
   const marking = candidate.marking;
   const outcomes = Array.isArray(marking?.outcomes) ? marking.outcomes : [];
   const reviewQs = useMemo(
-    () => (candidate.extra_fields?.needs_review_questions || []).map(String),
+    () => {
+      const raw = candidate.extra_fields?.needs_review_questions;
+      if (Array.isArray(raw)) return raw.map(String);
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed.map(String);
+        } catch {
+          /* ignore legacy str()-ified payloads */
+        }
+      }
+      return [];
+    },
     [candidate.extra_fields],
   );
   const [drafts, setDrafts] = useState(() => {
@@ -82,6 +102,9 @@ const CandidateDetailModal = ({
   });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showPaper, setShowPaper] = useState(false);
+  const pageNumber = candidate.page_number;
+  const canViewPaper = Boolean(submissionId) && Number.isFinite(Number(pageNumber));
 
   useEffect(() => {
     const previouslyFocused = document.activeElement;
@@ -169,6 +192,26 @@ const CandidateDetailModal = ({
             </div>
           </div>
           <div className="flex flex-none items-center gap-1">
+            {canViewPaper && (
+              <button
+                type="button"
+                onClick={() => setShowPaper((visible) => !visible)}
+                aria-pressed={showPaper}
+                className={`rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  showPaper
+                    ? 'bg-blue-50 text-blue-800'
+                    : 'text-blue-700 hover:bg-blue-50'
+                }`}
+                aria-label={
+                  showPaper
+                    ? 'Hide the scanned exam paper'
+                    : `View the scanned exam paper, page ${pageNumber}`
+                }
+                title={showPaper ? 'Hide exam paper' : 'View exam paper'}
+              >
+                <FileText className="h-5 w-5" aria-hidden="true" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onExport(candidate, index)}
@@ -190,6 +233,12 @@ const CandidateDetailModal = ({
         </header>
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+          {showPaper && canViewPaper && (
+            <div className="mb-6">
+              <PageViewer submissionId={submissionId} pageNumber={Number(pageNumber)} />
+            </div>
+          )}
+
           {reviewQs.length > 0 && submissionId && (
             <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <h4 className="font-semibold text-amber-950">
@@ -287,6 +336,14 @@ const CandidateDetailModal = ({
                             {outcome?.judge_reason ? (
                               <p className="mt-1 text-xs text-slate-600">{outcome.judge_reason}</p>
                             ) : null}
+                            {isDiagramOutcome(outcome) && submissionId && candidate.id ? (
+                              <DiagramComparison
+                                submissionId={submissionId}
+                                candidateId={candidate.id}
+                                templateId={candidate.template_id}
+                                question={outcome.question_number}
+                              />
+                            ) : null}
                           </div>
                           <div className="font-semibold text-slate-800 sm:text-right">
                             <span className="mr-2 text-xs font-medium text-slate-500 sm:hidden">Marks</span>
@@ -316,7 +373,7 @@ const CandidateDetailModal = ({
             <div className="mt-6">
               <h4 className="mb-3 font-semibold text-slate-800">Extracted responses</h4>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 md:grid-cols-8">
-                {Object.entries(candidate.answers).sort(sortQuestions).map(([question, answer]) => (
+                {Object.entries(candidate.answers || {}).sort(sortQuestions).map(([question, answer]) => (
                   <div
                     key={question}
                     className={`rounded-lg border p-2 text-center ${
@@ -337,7 +394,7 @@ const CandidateDetailModal = ({
             <div className="mt-6">
               <h4 className="mb-3 font-semibold text-slate-800">Drawing / free response</h4>
               <div className="space-y-3">
-                {Object.entries(candidate.drawing_questions).sort(sortQuestions).map(([question, answer]) => (
+                {Object.entries(candidate.drawing_questions || {}).sort(sortQuestions).map(([question, answer]) => (
                   <div key={question} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold text-slate-500">Question {question}</p>
                     <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-800">

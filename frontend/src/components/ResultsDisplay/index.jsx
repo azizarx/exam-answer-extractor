@@ -34,6 +34,34 @@ const displayMarks = (value) => {
   return Number.isFinite(number) ? number.toLocaleString() : '—';
 };
 
+const asQuestionList = (value) => {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      /* legacy str()-ified values like "[]" */
+    }
+    return [];
+  }
+  return [];
+};
+
+const formatExtraValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
 const FORBIDDEN_DISPLAY_KEYS = new Set([
   'accepted_answers',
   'question_spec',
@@ -41,6 +69,15 @@ const FORBIDDEN_DISPLAY_KEYS = new Set([
   'correct_answers',
   'expected_answer',
   'answer_key',
+  // Nested trust metadata — shown in detail modal, not as card chips
+  'answer_trust',
+  'needs_review_questions',
+  // Diagram plumbing — surfaced as images in the modal, never as raw chips
+  'diagram_crops',
+  'diagram_sources',
+  'diagram_cv',
+  'diagram_cv_questions',
+  'extraction_flags',
 ]);
 
 const safeExtraEntries = (extraFields) =>
@@ -80,7 +117,7 @@ const ResultsDisplay = ({
   const reviewCount = useMemo(
     () =>
       candidates.reduce(
-        (sum, c) => sum + (c.extra_fields?.needs_review_questions || []).length,
+        (sum, c) => sum + asQuestionList(c.extra_fields?.needs_review_questions).length,
         0
       ),
     [candidates]
@@ -400,7 +437,7 @@ const ResultsDisplay = ({
                 <div className="flex flex-wrap gap-1 mb-2">
                   {extraEntries.map(([k, v]) => (
                     <span key={k} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                      {k}: {v}
+                      {k}: {formatExtraValue(v)}
                     </span>
                   ))}
                 </div>

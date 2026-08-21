@@ -108,7 +108,13 @@ def test_llm_equivalent_promotes_invalid_time_to_correct():
     assert merged.awarded_marks == 3 + 6 + 3
 
 
-def test_text_and_diagram_nonexact_responses_are_judged():
+def test_free_response_is_judged_and_diagram_is_left_to_the_vision_judge():
+    """Diagram questions must not reach the text judge.
+
+    A drawing cannot be compared as a string, so a diagram is decided by
+    comparing images in ``apply_diagram_vision_judge``. Routing one here would
+    hand the judge a description of a drawing and let it award marks on that.
+    """
     manifest = _text_manifest()
     result = MarkingService(manifest).mark(
         {
@@ -117,22 +123,17 @@ def test_text_and_diagram_nonexact_responses_are_judged():
         }
     )
     assert {outcome.status for outcome in result.outcomes} == {"incorrect"}
-    judge = FakeJudge(
-        {
-            1: ("equivalent", "algebraic expansion"),
-            2: ("equivalent", "same crossed-circle placement"),
-        }
-    )
+    judge = FakeJudge({1: ("equivalent", "algebraic expansion")})
 
     merged = apply_fr_equivalence_judge(result, manifest, judge)
 
     assert len(judge.calls) == 1
-    assert {item["type"] for item in judge.calls[0]} == {
-        "free_response",
-        "diagram",
-    }
-    assert all(outcome.status == "correct" for outcome in merged.outcomes)
-    assert merged.awarded_marks == 12
+    assert {item["type"] for item in judge.calls[0]} == {"free_response"}
+    by_q = {outcome.question_number: outcome for outcome in merged.outcomes}
+    assert by_q[1].status == "correct"
+    # Untouched here — the vision stage decides it next.
+    assert by_q[2].status == "incorrect"
+    assert by_q[2].judge_source == "deterministic"
 
 
 def test_prompt_treats_preprinted_diagram_scaffolds_as_context():

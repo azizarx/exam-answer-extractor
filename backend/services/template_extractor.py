@@ -5,7 +5,10 @@ Happy path (CV-owns-MCQ):
   * CV MCQ overlay   — bubble grid via OpenCV (deskew + anchor match).
   * LLM header/FR    — Gemini on cropped header + free-response regions only
                        (parallel with CV). MCQ is NOT asked of the LLM.
-  * Mathpix overlay  — diagram CDN URLs when the template flags diagram qs.
+  * Diagram crops    — the drawing inside each diagram question's scaffold is
+                       cropped from the page and saved for the marking-time
+                       vision judge.  Mathpix, when configured, supplies a
+                       tighter crop for the same question.
 
 Last resort: if CV reports low_coverage / bad anchor / huge_dy and
 ``mcq_llm_last_resort`` is enabled, Gemini may read an MCQ grid crop.
@@ -27,11 +30,13 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import cv2
 import google.generativeai as genai
+import requests
 import numpy as np
 from PIL import Image
 
 from backend.config import get_settings
 from backend.services import mathpix_client
+from backend.services.diagram_crops import crop_filename, extract_diagram_crops
 from backend.services.diagram_cv import extract_seamo_x_a_q9
 from backend.services.gemini_client import create_gemini_model
 from backend.services.image_preprocessor import ImagePreprocessor
@@ -132,6 +137,7 @@ class TemplateExtractor:
         db=None,
         max_workers: int = 3,
         filename: str = "",
+        diagram_crop_dir: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """Extract all candidates with this forced single template."""
         detections = [
@@ -148,6 +154,7 @@ class TemplateExtractor:
             detections,
             max_workers=max_workers,
             shared_extractors={self.template_id: self},
+            diagram_crop_dir=diagram_crop_dir,
         )
 
     # ----- per-page -----------------------------------------------------
@@ -157,6 +164,7 @@ class TemplateExtractor:
         image_path: str,
         page_num: int,
         run_cv_mcq: bool,
+        diagram_crop_dir: Optional[Path] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
         settings = get_settings()
@@ -308,6 +316,11 @@ class TemplateExtractor:
         )
         if deskew_deg:
             candidate.setdefault("extra_fields", {})["deskew_degrees"] = round(deskew_deg, 2)
+        diagram_crops = extract_diagram_crops(
+            bgr, page_template, page_num, diagram_crop_dir,
+        )
+        if diagram_crops:
+            candidate.setdefault("extra_fields", {})["diagram_crops"] = diagram_crops
         if diagram_cv_result is not None:
             candidate.setdefault("extra_fields", {})["diagram_cv"] = {
                 "9": {
@@ -319,6 +332,12 @@ class TemplateExtractor:
             }
             if diagram_cv_result.status in {"ok", "blank"}:
                 candidate["diagram_cv_questions"] = [9]
+            if diagram_cv_result.status == "ok":
+                # A calibrated per-sector density measurement beats eyeballing a
+                # low-resolution crop: the vision judge reads this wedge one
+                # sector off.  Record CV ownership so marking keeps the
+                # deterministic answer for this question.
+                candidate.setdefault("extra_fields", {})["diagram_cv_questions"] = [9]
 
         logger.info(
             "PAGE[%d] DONE answers=%d review=%d flags=%s t=%.2fs",
@@ -587,6 +606,7 @@ def extract_pages(
     *,
     max_workers: int = 3,
     shared_extractors: Optional[Dict[str, TemplateExtractor]] = None,
+    diagram_crop_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Extract pages where each page may use a different detected template.
 
@@ -687,6 +707,7 @@ def extract_pages(
         extractor = _get_extractor(det.template_id)
         cand = extractor._extract_one_page(
             path, page_num, extractor.template.has_mcq,
+            diagram_crop_dir=diagram_crop_dir,
         )
         cand["template_id"] = det.template_id
         cand["detection"] = det.to_dict()
@@ -722,6 +743,7 @@ def extract_pages(
                     app_key=mathpix_app_key,
                 )
                 _apply_diagram_urls(candidates, mmd)
+                _download_diagram_crops(candidates, diagram_crop_dir)
             else:
                 logger.warning(
                     "MATHPIX status=%s; skipping diagram overlay (info=%s)",
@@ -763,6 +785,7 @@ def extract_pdf_auto(
     image_paths: List[str],
     *,
     max_workers: int = 3,
+    diagram_crop_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Classify each page via footer OCR (Gemini header fallback), then extract."""
     settings = get_settings()
@@ -872,7 +895,13 @@ def extract_pdf_auto(
         n, workers, time.perf_counter() - t_cls,
     )
 
-    return extract_pages(pdf_path, image_paths, resolved, max_workers=max_workers)
+    return extract_pages(
+        pdf_path,
+        image_paths,
+        resolved,
+        max_workers=max_workers,
+        diagram_crop_dir=diagram_crop_dir,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1473,7 +1502,10 @@ def _apply_diagram_urls(
     markdown_text: str,
     diagram_qs: Optional[List[int]] = None,
 ) -> None:
-    """Overlay diagram URLs without allowing a missed figure to shift pages.
+    """Record diagram figure URLs without allowing a missed figure to shift pages.
+
+    URLs land in ``extra_fields.diagram_sources`` and are downloaded into the
+    submission's crop directory afterwards.  They are never used as answers.
 
     Mathpix URLs normally carry the one-based source-page number, which is the
     authoritative association. Alternate URL forms without that suffix retain
@@ -1526,8 +1558,13 @@ def _apply_diagram_urls(
                     candidates[target_i], active_q, url,
                 )
             ):
-                answers = candidates[target_i].setdefault("answers", {})
-                answers[str(active_q)] = url
+                # The answer stays the LLM's description of the drawing.  A
+                # CDN URL written here would be text-normalized against the
+                # key's prose accepted answers and could never match, silently
+                # scoring every diagram question zero.  The URL is provenance
+                # for the crop download, not an answer.
+                extra = candidates[target_i].setdefault("extra_fields", {})
+                extra.setdefault("diagram_sources", {})[str(active_q)] = url
                 filled_per_page[target_i].add(active_q)
                 urls_applied += 1
             active_q = None
@@ -1557,3 +1594,66 @@ def _apply_diagram_urls(
             for i in range(pages) if filled_per_page[i] != per_page[i]
         ]
         logger.warning("MATHPIX missing diagram URLs per page: %s", missing[:10])
+
+
+_DIAGRAM_FETCH_TIMEOUT_SECONDS = 20.0
+
+
+def _download_diagram_crops(
+    candidates: List[Dict[str, Any]],
+    crop_dir: Optional[Path],
+) -> None:
+    """Fetch each recorded figure URL into the submission's crop directory.
+
+    Mathpix CDN URLs decay — jobs a few months old already return HTTP 500 —
+    while marking is re-runnable indefinitely, so the bytes are stored now
+    rather than the link.  A failure here is not fatal: the page worker has
+    already written a template-region crop for the same question.
+    """
+    if crop_dir is None or not candidates:
+        return
+
+    downloaded = 0
+    failed = 0
+    for cand in candidates:
+        if not isinstance(cand, dict):
+            continue
+        extra = cand.get("extra_fields")
+        if not isinstance(extra, dict):
+            continue
+        sources = extra.get("diagram_sources") or {}
+        if not sources:
+            continue
+        page_num = cand.get("page_number")
+        if page_num is None:
+            continue
+        crops = extra.setdefault("diagram_crops", {})
+        for question, url in sources.items():
+            name = crop_filename(int(page_num), int(question))
+            try:
+                response = requests.get(
+                    str(url).replace(r"\&", "&"),
+                    timeout=_DIAGRAM_FETCH_TIMEOUT_SECONDS,
+                )
+                response.raise_for_status()
+                image = cv2.imdecode(
+                    np.frombuffer(response.content, np.uint8), cv2.IMREAD_COLOR,
+                )
+                if image is None:
+                    raise ValueError("response was not a decodable image")
+                crop_dir.mkdir(parents=True, exist_ok=True)
+                if not cv2.imwrite(str(crop_dir / name), image):
+                    raise OSError("cv2.imwrite returned False")
+            except Exception as exc:
+                failed += 1
+                logger.warning(
+                    "DIAGRAM[%s/q%s] figure download failed (%s: %s); keeping region crop",
+                    page_num, question, type(exc).__name__, exc,
+                )
+                continue
+            crops[str(question)] = {"file": name, "source": "mathpix"}
+            downloaded += 1
+
+    logger.info(
+        "DIAGRAM figure download: saved=%d failed=%d", downloaded, failed,
+    )

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-Exam answer sheet extraction system: upload a PDF of bubble-sheet exams, pick the layout template, get structured JSON back. Trust-the-template architecture: the user chooses the layout at upload time, every page in the PDF uses that template. Per-page extraction runs in three parallel tracks (LLM full-page + CV MCQ overlay + optional Mathpix diagram-URL overlay), then merges. FastAPI backend + React frontend.
+Exam answer sheet extraction system: upload a PDF of bubble-sheet exams, pick the layout template, get structured JSON back. Trust-the-template architecture: the user chooses the layout at upload time, every page in the PDF uses that template. Per-page extraction runs in parallel tracks (LLM header/free-response + CV MCQ overlay + diagram crops + optional Mathpix figure overlay), then merges. Diagram answers are marked by comparing the candidate's drawing with the answer key's drawing. FastAPI backend + React frontend.
 
 > The top-level `README.md` is stale (refers to OpenAI GPT-4 Vision, PostgreSQL, and Celery). Treat this file as authoritative.
 
@@ -29,6 +29,8 @@ cd frontend && npm run lint
 ```bash
 .venv/bin/python -m pytest tests/test_template_extractor.py -v   # mocked Gemini + Mathpix; covers merge logic + diagram URL matching
 .venv/bin/python tests/test_mcq_pipeline.py                       # CV bubble extractor against synthetic filled bubbles
+.venv/bin/python -m pytest tests/test_diagram_crops.py tests/test_diagram_vision_judge.py tests/test_diagram_endpoints.py -v   # diagram cropping, vision marking, image endpoints
+.venv/bin/python scripts/extract_reference_diagrams.py --check    # answer-key reference drawings still match the key PDFs
 ```
 
 API is interactively testable at `http://localhost:8000/docs`.
@@ -52,12 +54,48 @@ process_pdf_extraction(submission_id, pdf_path, template_id):
          (b) CV MCQ : (only if run_cv_mcq) mcq_extractor.extract_page(image, template)
                       → {q→letter}
        Merge: LLM answers first; CV MCQ answers overwrite for any q it produced.
+  4b. Per page, for each diagram question: fit the printed scaffold inside
+     `question_overrides[q].diagram_search_region` and save the crop to
+     `storage/diagrams/sub<id>/p<page>_q<n>.png`.
   5. If pdf_id: mathpix_client.poll_pdf(pdf_id) → fetch_mmd → regex CDN URLs out
      of the markdown. For each diagram question, the first URL after that
-     question's `\section*{Question N}` label becomes its answer. Spurious URLs
-     after non-diagram labels are dropped.
+     question's `\section*{Question N}` label is recorded in
+     `extra_fields.diagram_sources` and the image is DOWNLOADED over the
+     template-region crop (source="mathpix"). Spurious URLs after non-diagram
+     labels are dropped. A URL is NEVER written into `answers`.
   6. Persist candidates as CandidateResult rows; save JSON to storage/results/.
 ```
+
+### Diagram marking (vision, not text)
+
+A drawing cannot survive a text round-trip, so `type=diagram` questions are
+marked by comparing images, not strings:
+
+```
+marking_workflow._mark_one:
+  mark  →  apply_extraction_trust  →  apply_fr_equivalence_judge  →  apply_diagram_vision_judge
+```
+
+- `diagram` is deliberately NOT in `FR_TYPES` (`marking_service.py`); the text
+  judge never sees a diagram.
+- `apply_diagram_vision_judge` sends one Gemini call per candidate with a
+  labelled `STUDENT` / `CORRECT` image pair per diagram question. `CORRECT` is
+  the answer key's own drawing, extracted from the key PDF into
+  `answer_keys/reference_diagrams/<template_id>_q<n>.png` by
+  `scripts/extract_reference_diagrams.py` (rerun with `--check` in CI).
+  `ManifestRegistry` refuses to load a manifest whose diagram question has no
+  committed reference.
+- Verdict → outcome: `match`→correct, `mismatch`→incorrect, anything else →
+  `needs_review`. Missing crop / missing reference / judge exception all become
+  `needs_review`, never a silent zero. `judge_source` is `diagram_*` throughout,
+  which is how the frontend spots a diagram row.
+- **Deterministic CV wins where it fires.** `seamo_x_2026_a` Q9 is measured by
+  `diagram_cv.extract_seamo_x_a_q9` (per-sector ink density). That is more
+  precise than reading a low-resolution crop — the vision judge reads that wedge
+  one sector off — so extraction records `extra_fields.diagram_cv_questions` and
+  the vision stage skips those questions.
+- `DIAGRAM_VISION_ENABLED=false` reverts diagram questions to the deterministic
+  text path without a redeploy.
 
 Three things matter to remember:
 
@@ -72,6 +110,7 @@ Three things matter to remember:
 - Pixel coords at reference DPI 300; `ExamTemplate.at_dpi()` scales to actual scan DPI.
 - `*_anchor.png` files are template-matching anchors (overwritten in-memory by anchor priming on each new submission).
 - Diagram questions are encoded via `sections[*].question_overrides[q].type == "diagram"` (e.g. `seamo_x_2026_a` flags Q4/Q6/Q9; `seamo_x_2026_b` flags Q5).
+- A diagram override also carries `diagram_search_region`: a generous band searched for the printed scaffold when cropping. It is deliberately separate from `region`, which still means "crop exactly this box" to `_fr_question_crop_specs`, and may extend outside the section.
 
 ### Mathpix /v3/pdf flow
 - `mathpix_client.submit_pdf` (multipart POST with `options_json={"conversion_formats":{"md":True}, ...}`). `.mmd` is always generated by default (do NOT list it in conversion_formats — Mathpix rejects that).
@@ -102,7 +141,9 @@ All config via env vars (`.env`), managed by `backend/config.py`. Notable settin
 - `DATABASE_URL` — empty → SQLite at `./exam_db.sqlite`
 - `ENABLE_IMAGE_PREPROCESSING` / `PREPROCESSING_MODE` (`balanced` | `aggressive`)
 - `MAX_EXTRACTION_WORKERS` (default 3; the OOM ceiling on a 40GB host with 5 backends in parallel was 10. Stay at 3.)
-- `MATHPIX_APP_ID` / `MATHPIX_APP_KEY` — required if any chosen template flags any question as type=diagram
+- `MATHPIX_APP_ID` / `MATHPIX_APP_KEY` — optional. Mathpix supplies a tighter diagram crop when configured; a template-region crop is always produced regardless, so diagram marking works without it.
+- `DIAGRAM_VISION_ENABLED` (default true) / `DIAGRAM_VISION_MODEL` (empty inherits `GEMINI_MODEL`)
+- `PAGE_PREVIEW_DPI` (default 150) — render DPI for the results UI's page viewer
 - `MATHPIX_POLL_INTERVAL_SECONDS` (default 3.0) / `MATHPIX_MAX_WAIT_SECONDS` (default 600.0)
 - `SPACES_*` / `ARCHIVE_IMAGES_TO_SPACES` — optional DO Spaces archival
 

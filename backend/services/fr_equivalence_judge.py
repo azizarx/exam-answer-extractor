@@ -4,20 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from typing import Any, Protocol
 
 import google.generativeai as genai
 
 from backend.services.gemini_client import create_gemini_model
+from backend.services.judge_json import loads_lenient
 from backend.services.run_logger import llm_call
 
 logger = logging.getLogger(__name__)
-
-_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
-_INVALID_JSON_ESCAPE_RE = re.compile(
-    r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})'
-)
 
 
 class FrEquivalenceJudge(Protocol):
@@ -63,27 +58,7 @@ def build_judge_prompt(items: list[dict[str, Any]]) -> str:
 
 
 def parse_judge_response(text: str) -> list[dict[str, Any]]:
-    if not text or not str(text).strip():
-        raise ValueError("empty judge response")
-    raw = str(text).strip()
-    fence = _FENCE_RE.search(raw)
-    if fence:
-        raw = fence.group(1).strip()
-    if not raw.startswith("{"):
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if match:
-            raw = match.group(0)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        # Gemini occasionally emits otherwise-valid JSON with unescaped
-        # LaTeX-like text such as ``\sqrt`` or ``\(`` inside a reason. Repair
-        # only backslashes that cannot begin a valid JSON escape; all other
-        # syntax errors remain failures and are conservatively reviewed.
-        repaired = _INVALID_JSON_ESCAPE_RE.sub(r"\\\\", raw)
-        if repaired == raw:
-            raise
-        data = json.loads(repaired)
+    data = loads_lenient(text)
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list):
         raise ValueError("judge response missing items list")

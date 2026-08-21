@@ -16,10 +16,14 @@ from typing import Any, Mapping, Optional, Protocol, Sequence
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from backend.services.diagram_crops import CROP_NAME_RE
+from backend.services.diagram_vision_judge import reference_diagram_path
 from backend.services.template_service import ExamTemplate, TemplateRegistry
 
 logger = logging.getLogger(__name__)
 
+
+REFERENCE_DIR_NAME = "reference_diagrams"
 
 ALLOWED_TYPES = {"mcq", "numeric", "time", "free_response", "diagram"}
 TYPE_NORMALIZERS = {
@@ -217,6 +221,8 @@ class ManifestRegistry:
         versions: set[tuple[str, int]] = set()
         active: dict[str, AnswerKeyManifest] = {}
         for path in sorted(self.manifests_dir.rglob("*.json")):
+            if REFERENCE_DIR_NAME in path.parts:
+                continue  # committed key assets, not manifests
             manifest = self.load(path)
             identity = (manifest.template_id, manifest.version)
             if identity in versions:
@@ -325,6 +331,16 @@ class ManifestRegistry:
 
         for question in manifest.questions:
             self._validate_question(question, expected_numbers[question.number], template)
+            if question.type == "diagram" and reference_diagram_path(
+                manifest.template_id, question.number
+            ) is None:
+                # Diagram marking compares drawings; without the key's own
+                # drawing every such question would silently need review.
+                raise ManifestValidationError(
+                    f"question {question.number} is a diagram but no reference "
+                    f"drawing is committed for {manifest.template_id}; run "
+                    "scripts/extract_reference_diagrams.py"
+                )
 
         # Source PDFs are provenance for the JSON manifests. They are optional
         # at runtime: Docker images / slim checkouts may ship JSON only. When
@@ -451,7 +467,14 @@ class MarkingService:
         )
 
 
-FR_TYPES = frozenset({"numeric", "time", "free_response", "diagram"})
+# Diagram questions are decided by the vision judge instead — a drawing
+# cannot be compared as text without a lossy description round-trip.
+FR_TYPES = frozenset({"numeric", "time", "free_response"})
+DIAGRAM_TYPE = "diagram"
+# The vision judge owns every diagram outcome the deterministic pass
+# actually looked at.  "blank" is left alone (nothing was drawn) and
+# "needs_review" is left alone (extraction trust already claimed it).
+DIAGRAM_VISION_STATUSES = frozenset({"correct", "incorrect", "invalid"})
 # A valid normalized numeric/time value that differs from the accepted value is
 # conclusively incorrect.  Gemini is only needed when deterministic parsing
 # cannot establish a value at all.
@@ -517,7 +540,7 @@ def apply_fr_equivalence_judge(
             continue
         fallback_statuses = (
             TEXT_FALLBACK_STATUSES
-            if question.type in {"free_response", "diagram"}
+            if question.type == "free_response"
             else FALLBACK_STATUSES
         )
         if outcome.status not in fallback_statuses:
@@ -798,3 +821,203 @@ def _template_options(template: ExamTemplate, number: int) -> set[str]:
         if section.question_start <= number <= section.question_end:
             return set(section.grid.options if section.grid else ())
     return set()
+
+
+def _review_outcome(
+    outcome: QuestionOutcome,
+    *,
+    source: str,
+    reason: str,
+    response: Optional[str] = None,
+) -> QuestionOutcome:
+    """Same question, forced to needs_review with 0 marks and an explanation."""
+    return QuestionOutcome(
+        question_number=outcome.question_number,
+        status="needs_review",
+        response=outcome.response if response is None else response,
+        awarded_marks=0,
+        max_marks=outcome.max_marks,
+        normalizer=outcome.normalizer,
+        judge_source=source,
+        judge_verdict="uncertain",
+        judge_reason=reason,
+    )
+
+
+def _rebuild(
+    result: CandidateMarkingResult, outcomes: Sequence[QuestionOutcome]
+) -> CandidateMarkingResult:
+    awarded = sum(outcome.awarded_marks for outcome in outcomes)
+    max_marks = result.max_marks
+    return CandidateMarkingResult(
+        outcomes=tuple(outcomes),
+        awarded_marks=awarded,
+        max_marks=max_marks,
+        percentage=awarded * 100.0 / max_marks if max_marks else 0.0,
+    )
+
+
+def apply_diagram_vision_judge(
+    result: CandidateMarkingResult,
+    manifest: AnswerKeyManifest,
+    judge: Any,
+    *,
+    diagram_crops: Mapping[str, Any] | None,
+    crop_dir: Optional[Path],
+    cv_owned_questions: Sequence[Any] | None = None,
+) -> CandidateMarkingResult:
+    """Decide diagram marks by comparing the drawing with the key's drawing.
+
+    Runs after the deterministic pass and the extraction-trust override, and
+    overwrites the diagram outcomes those produced.  Anything that cannot be
+    compared — no crop stored, no committed reference, an unusable judge
+    response — becomes ``needs_review`` rather than a silent zero.
+    """
+    diagram_questions = {
+        q.number: q for q in manifest.questions if q.type == DIAGRAM_TYPE
+    }
+    if not diagram_questions:
+        return result
+
+    crops = diagram_crops if isinstance(diagram_crops, Mapping) else {}
+    # Questions answered by a calibrated deterministic measurement during
+    # extraction keep that answer: it is more precise than reading a
+    # low-resolution crop, which is why the CV path exists at all.
+    cv_owned = {int(q) for q in (cv_owned_questions or [])}
+    items: list[dict[str, Any]] = []
+    forced: dict[int, QuestionOutcome] = {}
+
+    for outcome in result.outcomes:
+        question = diagram_questions.get(outcome.question_number)
+        if question is None or outcome.status not in DIAGRAM_VISION_STATUSES:
+            continue
+        if outcome.question_number in cv_owned:
+            # Keep the deterministic mark, but record that this is a diagram
+            # decided by CV rather than an ordinary text match — the results UI
+            # keys the drawing comparison off the diagram_* prefix.
+            forced[outcome.question_number] = QuestionOutcome(
+                question_number=outcome.question_number,
+                status=outcome.status,
+                response=outcome.response,
+                awarded_marks=outcome.awarded_marks,
+                max_marks=outcome.max_marks,
+                normalizer=outcome.normalizer,
+                judge_source="diagram_cv",
+                judge_verdict=outcome.judge_verdict,
+                judge_reason=outcome.judge_reason,
+            )
+            continue
+
+        reference_path = reference_diagram_path(
+            manifest.template_id, outcome.question_number
+        )
+        if reference_path is None:
+            forced[outcome.question_number] = _review_outcome(
+                outcome,
+                source="diagram_reference_missing",
+                reason="no reference drawing committed for this question",
+            )
+            continue
+
+        entry = crops.get(str(outcome.question_number))
+        name = entry.get("file") if isinstance(entry, Mapping) else None
+        student_path = None
+        if name and CROP_NAME_RE.match(str(name)) and crop_dir is not None:
+            candidate_path = crop_dir / str(name)
+            if candidate_path.is_file():
+                student_path = candidate_path
+        if student_path is None:
+            forced[outcome.question_number] = _review_outcome(
+                outcome,
+                source="diagram_crop_missing",
+                reason="no diagram crop stored for this candidate",
+            )
+            continue
+
+        items.append(
+            {
+                "question_number": outcome.question_number,
+                "marks": question.marks,
+                "accepted_answers": list(question.accepted_answers),
+                "student_path": student_path,
+                "reference_path": reference_path,
+            }
+        )
+
+    if not items:
+        if not forced:
+            return result
+        return _rebuild(
+            result,
+            [forced.get(o.question_number, o) for o in result.outcomes],
+        )
+
+    try:
+        verdicts = judge.judge(items)
+    except Exception as exc:
+        reason = f"diagram judge failed: {type(exc).__name__}: {exc}"
+        judged_qs = {item["question_number"] for item in items}
+        return _rebuild(
+            result,
+            [
+                _review_outcome(o, source="diagram_vision_error", reason=reason)
+                if o.question_number in judged_qs
+                else forced.get(o.question_number, o)
+                for o in result.outcomes
+            ],
+        )
+
+    by_question = {
+        int(v["question_number"]): v
+        for v in (verdicts or [])
+        if isinstance(v, Mapping) and "question_number" in v
+    }
+    judged_qs = {item["question_number"] for item in items}
+    marks_by_q = {q.number: q.marks for q in manifest.questions}
+
+    new_outcomes: list[QuestionOutcome] = []
+    for outcome in result.outcomes:
+        if outcome.question_number not in judged_qs:
+            new_outcomes.append(forced.get(outcome.question_number, outcome))
+            continue
+
+        raw = by_question.get(outcome.question_number)
+        if raw is None:
+            new_outcomes.append(
+                _review_outcome(
+                    outcome,
+                    source="diagram_vision",
+                    reason="missing verdict from judge response",
+                )
+            )
+            continue
+
+        verdict = str(raw.get("verdict") or "uncertain").strip().lower()
+        observed = str(raw.get("observed") or "").strip()
+        reason = str(raw.get("reason") or "").strip() or None
+        # What the judge saw is a better record of the answer than the
+        # extractor's description, which no longer decides the mark.
+        response = observed or outcome.response
+
+        if verdict == "match":
+            status, awarded = "correct", marks_by_q[outcome.question_number]
+        elif verdict == "mismatch":
+            status, awarded = "incorrect", 0
+        else:
+            status, awarded = "needs_review", 0
+
+        new_outcomes.append(
+            QuestionOutcome(
+                question_number=outcome.question_number,
+                status=status,
+                response=response,
+                awarded_marks=awarded,
+                max_marks=outcome.max_marks,
+                normalizer=outcome.normalizer,
+                judge_source="diagram_vision",
+                judge_verdict=verdict,
+                judge_reason=reason,
+            )
+        )
+
+    return _rebuild(result, new_outcomes)

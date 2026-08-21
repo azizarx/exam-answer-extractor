@@ -50,6 +50,8 @@ Thumbs.db
 *.sqlite-shm
 *.sqlite-wal
 exam_db.sqlite*
+/data/*
+!/data/.gitkeep
 
 # Logs / caches
 *.log
@@ -81,6 +83,7 @@ storage/results/*
 !storage/results/.gitkeep
 storage/pipeline_runs/*
 !storage/pipeline_runs/.gitkeep
+storage/diagrams/
 storage/cv_overlays/
 storage/annotations/
 storage/OCRResults/

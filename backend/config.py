@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     api_key: str = ""
     
     # File Upload
-    max_file_size_mb: int = 50
+    max_file_size_mb: int = 1024
     allowed_extensions: str = ".pdf"
     
     # PDF Processing
@@ -105,6 +105,19 @@ class Settings(BaseSettings):
     # 1024 cap (the old default) caused finish_reason=MAX_TOKENS on every
     # call and starved the visible JSON. The model's default cap (~64k) is
     # what we want.
+
+    # Diagram marking. A drawing is marked by comparing the candidate's crop
+    # with the answer key's reference drawing, not by matching a description
+    # against prose. Disabling this reverts diagram questions to the text
+    # equivalence judge without a redeploy.
+    diagram_vision_enabled: bool = True
+    # Empty inherits GEMINI_MODEL; set to run the comparison on another model.
+    diagram_vision_model: str = ""
+
+    # Render DPI for the candidate page image served to the results UI. Lower
+    # than the 300 DPI extraction render because it is only viewed, not read
+    # by CV.
+    page_preview_dpi: int = 150
 
     # DigitalOcean Spaces
     spaces_endpoint: Optional[str] = None

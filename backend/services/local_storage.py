@@ -13,6 +13,8 @@ from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+DIAGRAM_DIR_NAME = "diagrams"
+
 
 class LocalStorage:
     """Simple local filesystem storage with upload/result directories."""
@@ -88,6 +90,40 @@ class LocalStorage:
                 logger.error("Failed to delete %s: %s", path, exc)
         return False
 
+    def resolve_within(self, *parts: str) -> Optional[Path]:
+        """Resolve a path under the storage root, refusing anything outside it.
+
+        ``get_absolute_path`` joins without a containment check, so callers that
+        build a path from request data must use this instead.
+        """
+        try:
+            candidate = self.base_path.joinpath(*parts).resolve()
+        except (OSError, ValueError):
+            return None
+        try:
+            candidate.relative_to(self.base_path)
+        except ValueError:
+            logger.warning("Refused path outside storage root: %s", candidate)
+            return None
+        return candidate
+
+    def diagram_crop_dir(self, submission_id: int) -> Path:
+        """Directory holding one submission's per-question diagram crops."""
+        return self.base_path / DIAGRAM_DIR_NAME / f"sub{int(submission_id)}"
+
+    def delete_diagram_crops(self, submission_id: int) -> bool:
+        """Remove a submission's crop directory; returns True when one existed."""
+        directory = self.diagram_crop_dir(submission_id)
+        if not directory.is_dir():
+            return False
+        try:
+            shutil.rmtree(directory)
+            logger.info("Deleted diagram crops %s", directory)
+            return True
+        except OSError as exc:
+            logger.error("Failed to delete %s: %s", directory, exc)
+            return False
+
     def get_absolute_path(self, relative_path: Optional[str]) -> Optional[Path]:
         if not relative_path:
             return None
@@ -107,3 +143,8 @@ def get_local_storage() -> LocalStorage:
     if _local_storage is None:
         _local_storage = LocalStorage()
     return _local_storage
+
+
+def diagram_crop_dir_for(submission_id: int) -> Path:
+    """Where this submission's diagram crops live."""
+    return get_local_storage().diagram_crop_dir(submission_id)

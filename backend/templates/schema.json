@@ -3,7 +3,15 @@
   "title": "Exam Layout Template",
   "description": "Defines the physical layout of an exam answer sheet for CV-based extraction. All coordinates are in pixels at the reference DPI. The runtime scales proportionally if the actual scan DPI differs.",
   "type": "object",
-  "required": ["id", "name", "reference_dpi", "page_size", "anchor", "header", "sections"],
+  "required": [
+    "id",
+    "name",
+    "reference_dpi",
+    "page_size",
+    "anchor",
+    "header",
+    "sections"
+  ],
   "properties": {
     "id": {
       "type": "string",
@@ -44,22 +52,46 @@
     "page_size": {
       "type": "object",
       "description": "Expected page dimensions at reference DPI. Used for sanity checking and scale detection.",
-      "required": ["width", "height"],
+      "required": [
+        "width",
+        "height"
+      ],
       "properties": {
-        "width": { "type": "integer" },
-        "height": { "type": "integer" }
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        }
       }
     },
-
     "anchor": {
       "type": "object",
       "description": "A visually distinctive region used for template-matching alignment. Cropped from the reference image and matched via cv2.matchTemplate on each scanned page to compute dx/dy offset. Pick a region that is: (1) unique to this layout, (2) high-contrast, (3) stable across print runs.",
-      "required": ["x", "y", "w", "h", "min_match_score"],
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h",
+        "min_match_score"
+      ],
       "properties": {
-        "x": { "type": "integer", "description": "Left edge of anchor region" },
-        "y": { "type": "integer", "description": "Top edge of anchor region" },
-        "w": { "type": "integer", "description": "Width of anchor region" },
-        "h": { "type": "integer", "description": "Height of anchor region" },
+        "x": {
+          "type": "integer",
+          "description": "Left edge of anchor region"
+        },
+        "y": {
+          "type": "integer",
+          "description": "Top edge of anchor region"
+        },
+        "w": {
+          "type": "integer",
+          "description": "Width of anchor region"
+        },
+        "h": {
+          "type": "integer",
+          "description": "Height of anchor region"
+        },
         "min_match_score": {
           "type": "number",
           "description": "Minimum cv2.matchTemplate correlation (TM_CCOEFF_NORMED) to accept a match. Below this, the page is rejected as not matching this layout.",
@@ -69,7 +101,6 @@
         }
       }
     },
-
     "detection": {
       "type": "object",
       "description": "Optional hints for auto-detecting which template to use, checked before the expensive anchor template-match. All fields are optional; more fields = faster rejection of non-matching pages.",
@@ -81,35 +112,60 @@
         "text_markers": {
           "type": "array",
           "description": "Strings expected to appear in OCR text of the page header region. All must match. e.g. ['SEAMO X', '2026', 'Paper K']",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "logo_anchor": {
           "type": "object",
           "description": "A secondary anchor specifically for the logo/brand region, used for quick brand detection before full anchor matching.",
           "properties": {
-            "x": { "type": "integer" },
-            "y": { "type": "integer" },
-            "w": { "type": "integer" },
-            "h": { "type": "integer" }
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            },
+            "w": {
+              "type": "integer"
+            },
+            "h": {
+              "type": "integer"
+            }
           }
         }
       }
     },
-
     "header": {
       "type": "object",
       "description": "Header region containing candidate info. Extracted via OCR or LLM.",
-      "required": ["region", "fields"],
+      "required": [
+        "region",
+        "fields"
+      ],
       "properties": {
         "region": {
           "type": "object",
           "description": "Bounding box of the entire header area (relative to anchor-aligned coordinates).",
-          "required": ["x", "y", "w", "h"],
+          "required": [
+            "x",
+            "y",
+            "w",
+            "h"
+          ],
           "properties": {
-            "x": { "type": "integer" },
-            "y": { "type": "integer" },
-            "w": { "type": "integer" },
-            "h": { "type": "integer" }
+            "x": {
+              "type": "integer"
+            },
+            "y": {
+              "type": "integer"
+            },
+            "w": {
+              "type": "integer"
+            },
+            "h": {
+              "type": "integer"
+            }
           }
         },
         "fields": {
@@ -117,7 +173,11 @@
           "description": "Header fields to extract, in order.",
           "items": {
             "type": "object",
-            "required": ["key", "label", "type"],
+            "required": [
+              "key",
+              "label",
+              "type"
+            ],
             "properties": {
               "key": {
                 "type": "string",
@@ -129,17 +189,29 @@
               },
               "type": {
                 "type": "string",
-                "enum": ["text_line", "grid_boxes", "qr_code"],
+                "enum": [
+                  "text_line",
+                  "grid_boxes",
+                  "qr_code"
+                ],
                 "description": "text_line: handwritten on a line. grid_boxes: one char per printed box (like CAN___). qr_code: scan a QR code."
               },
               "region": {
                 "type": "object",
                 "description": "Optional sub-region for this specific field. If omitted, the whole header region is sent to LLM.",
                 "properties": {
-                  "x": { "type": "integer" },
-                  "y": { "type": "integer" },
-                  "w": { "type": "integer" },
-                  "h": { "type": "integer" }
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "w": {
+                    "type": "integer"
+                  },
+                  "h": {
+                    "type": "integer"
+                  }
                 }
               },
               "prefix": {
@@ -155,45 +227,75 @@
         }
       }
     },
-
     "sections": {
       "type": "array",
       "description": "Answer sections in reading order (top-to-bottom, left-to-right). Each section is an independent extraction unit with its own strategy.",
       "items": {
         "type": "object",
-        "required": ["type", "questions", "region"],
+        "required": [
+          "type",
+          "questions",
+          "region"
+        ],
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["mcq_grid", "numeric_grid", "open_response", "diagram"],
+            "enum": [
+              "mcq_grid",
+              "numeric_grid",
+              "open_response",
+              "diagram"
+            ],
             "description": "mcq_grid: shade-one-bubble MCQ. numeric_grid: one-char-per-cell written answers. open_response: free-form handwritten box. diagram: drawing/visual answer."
           },
           "questions": {
             "type": "object",
             "description": "Question range covered by this section.",
-            "required": ["start", "end"],
+            "required": [
+              "start",
+              "end"
+            ],
             "properties": {
-              "start": { "type": "integer" },
-              "end": { "type": "integer" }
+              "start": {
+                "type": "integer"
+              },
+              "end": {
+                "type": "integer"
+              }
             }
           },
           "region": {
             "type": "object",
             "description": "Bounding box of the entire section (for cropping before extraction).",
-            "required": ["x", "y", "w", "h"],
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ],
             "properties": {
-              "x": { "type": "integer" },
-              "y": { "type": "integer" },
-              "w": { "type": "integer" },
-              "h": { "type": "integer" }
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "w": {
+                "type": "integer"
+              },
+              "h": {
+                "type": "integer"
+              }
             }
           },
-
           "grid": {
             "type": "object",
             "description": "Grid geometry. Required for mcq_grid and numeric_grid types.",
             "properties": {
-              "rows": { "type": "integer", "description": "Number of question rows in this section." },
+              "rows": {
+                "type": "integer",
+                "description": "Number of question rows in this section."
+              },
               "cols": {
                 "type": "integer",
                 "description": "Number of visual columns of questions. e.g. 2 for a 10+5 split layout, 1 for a single column of 20."
@@ -201,12 +303,16 @@
               "questions_per_col": {
                 "type": "array",
                 "description": "How many questions per visual column. e.g. [10, 5] for a 15-question 2-column layout. Sum must equal total questions.",
-                "items": { "type": "integer" }
+                "items": {
+                  "type": "integer"
+                }
               },
               "options": {
                 "type": "array",
                 "description": "Option labels in order. e.g. ['A','B','C'] or ['A','B','C','D','E'].",
-                "items": { "type": "string" }
+                "items": {
+                  "type": "string"
+                }
               },
               "cells_per_question": {
                 "type": "integer",
@@ -215,12 +321,16 @@
               "row_positions": {
                 "type": "array",
                 "description": "Y-coordinate of each question row (relative to section region top). If omitted, computed from row_pitch.",
-                "items": { "type": "integer" }
+                "items": {
+                  "type": "integer"
+                }
               },
               "col_positions": {
                 "type": "array",
                 "description": "X-coordinate of each option column (for mcq_grid) or each cell (for numeric_grid), relative to section region left.",
-                "items": { "type": "integer" }
+                "items": {
+                  "type": "integer"
+                }
               },
               "row_pitch": {
                 "type": "number",
@@ -230,8 +340,14 @@
                 "type": "number",
                 "description": "Horizontal spacing between option/cell centers. Used if col_positions is omitted."
               },
-              "cell_width": { "type": "integer", "description": "Width of one bubble/cell in pixels." },
-              "cell_height": { "type": "integer", "description": "Height of one bubble/cell in pixels." },
+              "cell_width": {
+                "type": "integer",
+                "description": "Width of one bubble/cell in pixels."
+              },
+              "cell_height": {
+                "type": "integer",
+                "description": "Height of one bubble/cell in pixels."
+              },
               "bubble_height": {
                 "type": "integer",
                 "description": "For mcq_grid: the actual ink-sensitive region height within a cell (may be smaller than cell_height). Maps to current bubble_h."
@@ -242,7 +358,6 @@
               }
             }
           },
-
           "question_overrides": {
             "type": "object",
             "description": "Per-question overrides for mixed-format sections (e.g. Paper A 2026 where Q4 is a clock diagram but Q5 is a grid). Keys are question numbers as strings.",
@@ -251,34 +366,68 @@
               "properties": {
                 "type": {
                   "type": "string",
-                  "enum": ["mcq_grid", "numeric_grid", "open_response", "diagram"],
+                  "enum": [
+                    "mcq_grid",
+                    "numeric_grid",
+                    "open_response",
+                    "diagram"
+                  ],
                   "description": "Override the section type for this specific question."
                 },
                 "region": {
                   "type": "object",
                   "description": "Custom bounding box for this question (relative to page, not section).",
                   "properties": {
-                    "x": { "type": "integer" },
-                    "y": { "type": "integer" },
-                    "w": { "type": "integer" },
-                    "h": { "type": "integer" }
+                    "x": {
+                      "type": "integer"
+                    },
+                    "y": {
+                      "type": "integer"
+                    },
+                    "w": {
+                      "type": "integer"
+                    },
+                    "h": {
+                      "type": "integer"
+                    }
                   }
                 },
                 "prompt_hint": {
                   "type": "string",
                   "description": "For diagram type: hint to the LLM about what to extract. e.g. 'Read the time shown on the clock face' or 'Count the shaded sections of the pie chart'."
+                },
+                "diagram_search_region": {
+                  "type": "object",
+                  "description": "Diagram questions only: generous band searched for the printed scaffold when cropping the drawing for vision marking. Wider than the resulting crop and may extend outside the section.",
+                  "properties": {
+                    "x": {
+                      "type": "integer"
+                    },
+                    "y": {
+                      "type": "integer"
+                    },
+                    "w": {
+                      "type": "integer"
+                    },
+                    "h": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
           },
-
           "extraction_strategy": {
             "type": "string",
-            "enum": ["cv", "ocr", "llm", "cv_then_llm"],
+            "enum": [
+              "cv",
+              "ocr",
+              "llm",
+              "cv_then_llm"
+            ],
             "description": "Preferred extraction method. cv: pixel ink scoring (MCQ bubbles). ocr: Tesseract per-cell. llm: send crop to Gemini. cv_then_llm: try CV first, fall back to LLM on low confidence.",
             "default": "cv_then_llm"
           },
-
           "scoring": {
             "type": "object",
             "description": "Thresholds for CV-based MCQ extraction. Only relevant for mcq_grid type.",
@@ -301,12 +450,12 @@
               "min_page_coverage": {
                 "type": "number",
                 "description": "Minimum fraction of questions resolved to accept the page. Maps to current 0.60.",
-                "default": 0.60
+                "default": 0.6
               },
               "min_avg_ratio": {
                 "type": "number",
                 "description": "Minimum average best/second ratio across all rows. Maps to current 1.10.",
-                "default": 1.10
+                "default": 1.1
               }
             }
           }

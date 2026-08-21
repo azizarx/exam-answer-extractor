@@ -132,7 +132,13 @@
             "w": 600,
             "h": 420
           },
-          "prompt_hint": "The nodes 3, 4, and 6 are preprinted. Read the three handwritten fills and return exactly 'Triangle fills: top=<value>, upper-left=<value>, bottom-middle=<value>'."
+          "prompt_hint": "The nodes 3, 4, and 6 are preprinted. Read the three handwritten fills and return exactly 'Triangle fills: top=<value>, upper-left=<value>, bottom-middle=<value>'.",
+          "diagram_search_region": {
+            "x": 40,
+            "y": 2330,
+            "w": 545,
+            "h": 500
+          }
         }
       }
     }

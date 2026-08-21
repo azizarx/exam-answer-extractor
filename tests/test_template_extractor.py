@@ -215,8 +215,17 @@ def _make_candidates(n_pages: int):
     ]
 
 
-def test_diagram_overlay_assigns_only_diagram_questions():
-    """Every question in the Mathpix MMD has a URL; only Q4/Q6/Q9 should be filled."""
+def _sources(candidate):
+    return (candidate.get("extra_fields") or {}).get("diagram_sources", {})
+
+
+def test_diagram_overlay_records_sources_without_touching_answers():
+    """Every question in the Mathpix MMD has a URL; only Q4/Q6/Q9 are recorded.
+
+    A URL must never become the answer: it would be text-normalized against the
+    key's prose accepted answers and could never match, scoring every diagram
+    question zero.
+    """
     candidates = _make_candidates(2)
     candidates[0]["answers"]["5"] = "8"  # non-diagram LLM answer must survive
 
@@ -240,15 +249,22 @@ def test_diagram_overlay_assigns_only_diagram_questions():
 
     _apply_diagram_urls(candidates, md, diagram_qs=[4, 6, 9])
 
-    assert candidates[0]["answers"]["4"] == "https://cdn.mathpix.com/cropped/p1-q4.jpg"
-    assert candidates[0]["answers"]["6"] == "https://cdn.mathpix.com/cropped/p1-q6.jpg"
-    assert candidates[0]["answers"]["9"] == "https://cdn.mathpix.com/cropped/p1-q9.jpg"
-    assert candidates[1]["answers"]["4"] == "https://cdn.mathpix.com/cropped/p2-q4.jpg"
-    assert candidates[1]["answers"]["6"] == "https://cdn.mathpix.com/cropped/p2-q6.jpg"
-    assert candidates[1]["answers"]["9"] == "https://cdn.mathpix.com/cropped/p2-q9.jpg"
+    assert _sources(candidates[0]) == {
+        "4": "https://cdn.mathpix.com/cropped/p1-q4.jpg",
+        "6": "https://cdn.mathpix.com/cropped/p1-q6.jpg",
+        "9": "https://cdn.mathpix.com/cropped/p1-q9.jpg",
+    }
+    assert _sources(candidates[1]) == {
+        "4": "https://cdn.mathpix.com/cropped/p2-q4.jpg",
+        "6": "https://cdn.mathpix.com/cropped/p2-q6.jpg",
+        "9": "https://cdn.mathpix.com/cropped/p2-q9.jpg",
+    }
+    # No answer anywhere was replaced by a URL.
+    for candidate in candidates:
+        for value in candidate["answers"].values():
+            assert "cdn.mathpix.com" not in value
     # Non-diagram LLM value untouched
     assert candidates[0]["answers"]["5"] == "8"
-    # Non-diagram empty stays empty (URL was dropped)
     assert candidates[0]["answers"]["7"] == ""
 
 
@@ -266,12 +282,14 @@ def test_diagram_overlay_drops_spurious_url_after_non_diagram_label():
 
     _apply_diagram_urls(candidates, md, diagram_qs=[4, 6, 9])
 
-    assert candidates[0]["answers"]["4"].endswith("q4.jpg")
-    assert candidates[0]["answers"]["6"].endswith("q6.jpg")
-    assert candidates[0]["answers"]["9"].endswith("q9.jpg")
+    sources = _sources(candidates[0])
+    assert sources["4"].endswith("q4.jpg")
+    assert sources["6"].endswith("q6.jpg")
+    assert sources["9"].endswith("q9.jpg")
     # Q5 spurious URL must not have been stored anywhere
+    assert "5" not in sources
     for c in candidates:
-        for v in c["answers"].values():
+        for v in list(c["answers"].values()) + list(_sources(c).values()):
             assert "q5-spurious" not in v
 
 
@@ -291,9 +309,11 @@ def test_diagram_overlay_partial_when_mathpix_misses_a_question():
         r"\section*{Question 9}", "![](https://cdn.mathpix.com/cropped/q9.jpg)",
     ])
     _apply_diagram_urls(candidates, md, diagram_qs=[4, 6, 9])
-    assert candidates[0]["answers"]["4"].endswith("q4.jpg")
-    assert candidates[0]["answers"]["6"] == ""  # untouched
-    assert candidates[0]["answers"]["9"].endswith("q9.jpg")
+    sources = _sources(candidates[0])
+    assert sources["4"].endswith("q4.jpg")
+    assert "6" not in sources  # Q9's URL must not slide into Q6
+    assert sources["9"].endswith("q9.jpg")
+    assert candidates[0]["answers"]["6"] == ""
 
 
 def test_diagram_overlay_uses_mathpix_source_page_suffix_without_drift():
@@ -313,9 +333,9 @@ def test_diagram_overlay_uses_mathpix_source_page_suffix_without_drift():
 
     _apply_diagram_urls(candidates, markdown)
 
-    assert candidates[0]["answers"]["5"] == ""
-    assert "job-02.jpg" in candidates[1]["answers"]["5"]
-    assert "job-03.jpg" in candidates[2]["answers"]["5"]
+    assert "5" not in _sources(candidates[0])
+    assert "job-02.jpg" in _sources(candidates[1])["5"]
+    assert "job-03.jpg" in _sources(candidates[2])["5"]
 
 
 def test_diagram_overlay_rejects_same_page_non_diagram_grid_crop():
@@ -330,7 +350,7 @@ def test_diagram_overlay_rejects_same_page_non_diagram_grid_crop():
 
     _apply_diagram_urls(candidates, markdown)
 
-    assert candidates[0]["answers"]["5"] == ""
+    assert "5" not in _sources(candidates[0])
 
 
 # ---------------------------------------------------------------------------

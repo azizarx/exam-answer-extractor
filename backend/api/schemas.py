@@ -117,15 +117,22 @@ class CandidateResultSchema(BaseModel):
     candidate_number: str = Field("", description="Candidate ID / number")
     country: str = Field("", description="Country")
     paper_type: str = Field("", description="Paper type or level")
+    page_number: Optional[int] = Field(
+        None,
+        description="1-based page of the uploaded PDF this candidate was read from",
+    )
     template_id: Optional[str] = Field(
         None, description="Detected or forced layout template for this page"
     )
     detection: Optional[Dict[str, Any]] = Field(
         None, description="Layout detection metadata (method, raw_text, warning)"
     )
-    extra_fields: Optional[Dict[str, str]] = Field(
+    extra_fields: Optional[Dict[str, Any]] = Field(
         None,
-        description="Additional header fields detected during dynamic format analysis"
+        description=(
+            "Additional header / trust metadata. Values may be strings or nested "
+            "JSON (e.g. answer_trust dict, needs_review_questions list)."
+        ),
     )
     answers: Dict[str, str] = Field(
         default_factory=dict,
@@ -216,7 +223,7 @@ class MarkedCandidateExportSchema(BaseModel):
     candidate_number: str = ""
     country: str = ""
     paper_type: str = ""
-    extra_fields: Optional[Dict[str, str]] = None
+    extra_fields: Optional[Dict[str, Any]] = None
     answers: Dict[str, str] = Field(default_factory=dict)
     drawing_questions: Optional[Dict[str, str]] = None
     marking: CandidateWeightedMarkingSchema

@@ -119,6 +119,11 @@ class QuestionOverride:
     type: str  # mcq_grid | numeric_grid | open_response | diagram
     region: Optional[Region] = None
     prompt_hint: Optional[str] = None
+    # Diagram questions only: a generous band to search for the printed
+    # scaffold when cropping the drawing.  Deliberately not ``region``, which
+    # means "crop exactly this box" to the free-response crop planner — a
+    # search band is wider than its crop and may sit outside the section.
+    diagram_search_region: Optional[Region] = None
 
 
 @dataclass
@@ -150,6 +155,11 @@ class AnswerSection:
                     type=ov.type,
                     region=ov.region.scaled(factor) if ov.region else None,
                     prompt_hint=ov.prompt_hint,
+                    diagram_search_region=(
+                        ov.diagram_search_region.scaled(factor)
+                        if ov.diagram_search_region
+                        else None
+                    ),
                 )
                 for q, ov in self.question_overrides.items()
             },
@@ -327,6 +337,7 @@ def _parse_question_overrides(d: Optional[dict]) -> Dict[int, QuestionOverride]:
             type=ov["type"],
             region=_parse_region(ov.get("region")),
             prompt_hint=ov.get("prompt_hint"),
+            diagram_search_region=_parse_region(ov.get("diagram_search_region")),
         )
     return overrides
 

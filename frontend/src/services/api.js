@@ -187,6 +187,48 @@ export const examAPI = {
   },
 
   /**
+   * Fetch the candidate's scanned page as an object URL.
+   *
+   * Fetched through axios rather than set as an <img src> so the API key
+   * header still travels when API_KEY is configured; the caller must
+   * URL.revokeObjectURL the result when it is done with it.
+   * @param {number} submissionId
+   * @param {number} pageNumber - 1-based page of the uploaded PDF
+   * @returns {Promise<string>} object URL for an image/png
+   */
+  getPageImageURL: async (submissionId, pageNumber) => {
+    const response = await apiClient.get(
+      `/submission/${submissionId}/page/${pageNumber}.png`,
+      { responseType: 'blob', timeout: 60000 },
+    );
+    return URL.createObjectURL(response.data);
+  },
+
+  /**
+   * Fetch a candidate's stored crop for one diagram question.
+   * @returns {Promise<string>} object URL for an image/png
+   */
+  getDiagramCropURL: async (submissionId, candidateId, question) => {
+    const response = await apiClient.get(
+      `/submission/${submissionId}/candidates/${candidateId}/diagram/${question}.png`,
+      { responseType: 'blob', timeout: 30000 },
+    );
+    return URL.createObjectURL(response.data);
+  },
+
+  /**
+   * Fetch the answer key's reference drawing for one diagram question.
+   * @returns {Promise<string>} object URL for an image/png
+   */
+  getReferenceDiagramURL: async (templateId, question) => {
+    const response = await apiClient.get(
+      `/answer-keys/reference/${templateId}/${question}.png`,
+      { responseType: 'blob', timeout: 30000 },
+    );
+    return URL.createObjectURL(response.data);
+  },
+
+  /**
    * List all submissions with optional filtering
    * @param {Object} params - Query parameters
    * @returns {Promise} List of submissions

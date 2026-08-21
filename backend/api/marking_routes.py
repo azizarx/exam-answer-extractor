@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import (
@@ -29,6 +29,7 @@ from backend.api.schemas import (
     SubmissionMarkingDetailSchema,
 )
 from backend.db.database import get_db
+from backend.services.diagram_vision_judge import reference_diagram_path
 from backend.db.models import (
     AnswerKey,
     CandidateMarking,
@@ -63,6 +64,21 @@ def _clean_string_map(value: Any) -> dict[str, str]:
         str(key): str(item) if item is not None else ""
         for key, item in value.items()
     }
+
+
+def _clean_extra_fields(value: Any) -> dict[str, Any]:
+    """Preserve nested trust metadata; stringify only scalar leftovers."""
+    if not isinstance(value, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, item in value.items():
+        if item is None or item == {}:
+            continue
+        if isinstance(item, (dict, list, bool, int, float)):
+            out[str(key)] = item
+        else:
+            out[str(key)] = str(item)
+    return out
 
 
 def _marked_export_disposition(uploaded_filename: str) -> str:
@@ -419,7 +435,7 @@ async def get_marked_json(
                 candidate_number=candidate.candidate_number or "",
                 country=candidate.country or "",
                 paper_type=candidate.paper_type or "",
-                extra_fields=_clean_string_map(candidate.extra_fields) or None,
+                extra_fields=_clean_extra_fields(candidate.extra_fields) or None,
                 answers=_clean_string_map(candidate.answers),
                 drawing_questions=_clean_string_map(candidate.drawing_questions) or None,
                 marking=_candidate_marking(
@@ -449,4 +465,23 @@ async def get_marked_json(
             )
         },
         media_type="application/json",
+    )
+
+
+@router.get("/answer-keys/reference/{template_id}/{question}.png", tags=["Marking"])
+async def get_reference_diagram(template_id: str, question: int):
+    """The answer key's own drawing for a diagram question.
+
+    Paired with the candidate's crop in the results UI so a diagram mark can be
+    checked against exactly what the vision judge compared.
+    """
+    path = reference_diagram_path(template_id, question)
+    if path is None:
+        raise HTTPException(
+            status_code=404, detail="No reference diagram for that question"
+        )
+    return FileResponse(
+        str(path),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
     )
