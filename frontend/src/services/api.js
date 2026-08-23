@@ -8,13 +8,25 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
+// Wall-clock ceiling for one request. axios counts upload time against this,
+// so anything carrying a PDF needs room for the body to leave the browser: a
+// 100 MB scan on a 1 Mbps uplink is ~13 minutes before the server even replies.
+// nginx already allows 600s body / 1g bodies, so the client was the only wall.
+const TIMEOUT = {
+  poll: 30 * 1000,        // status polls — short so the UI stays responsive
+  standard: 2 * 60 * 1000, // ordinary JSON calls
+  transfer: 10 * 60 * 1000, // large payloads in either direction
+  marking: 15 * 60 * 1000, // synchronous marking of a whole submission
+  upload: 30 * 60 * 1000,  // multipart PDF upload
+};
+
 // Create axios instance with default config
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 60000, // 60 seconds default
+  timeout: TIMEOUT.standard,
 });
 
 const decodeFilename = (value) => {
@@ -80,7 +92,7 @@ export const examAPI = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      timeout: 120000, // 2 minutes for large PDF uploads
+      timeout: TIMEOUT.upload,
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percentCompleted = Math.round(
@@ -101,7 +113,7 @@ export const examAPI = {
    */
   getStatus: async (submissionId) => {
     const response = await apiClient.get(`/status/${submissionId}`, {
-      timeout: 15000, // tolerate DB contention while extraction writes are in progress
+      timeout: TIMEOUT.poll, // tolerate DB contention while extraction writes are in progress
     });
     return response.data;
   },
@@ -124,7 +136,7 @@ export const examAPI = {
   downloadSubmissionJSON: async (submissionId) => {
     const response = await apiClient.get(`/submission/${submissionId}/json`, {
       responseType: 'json',
-      timeout: 120000, // allow more time for large files
+      timeout: TIMEOUT.transfer, // allow more time for large files
     });
     return response.data;
   },
@@ -148,7 +160,9 @@ export const examAPI = {
   markSubmission: async (submissionId, answerKeyId = null) => {
     const body = answerKeyId == null ? {} : { answer_key_id: answerKeyId };
     const response = await apiClient.post(`/submission/${submissionId}/mark`, body, {
-      timeout: 120000,
+      // Marking is synchronous in the request and now spends one extra vision
+      // call per candidate that has diagram questions.
+      timeout: TIMEOUT.marking,
     });
     return response.data;
   },
@@ -161,7 +175,7 @@ export const examAPI = {
     const response = await apiClient.post(
       `/submission/${submissionId}/candidates/${candidateId}/confirm-review`,
       payload,
-      { timeout: 60000 },
+      { timeout: TIMEOUT.standard },
     );
     return response.data;
   },
@@ -175,7 +189,7 @@ export const examAPI = {
   getMarkedJSONDownload: async (submissionId, fallbackName = 'results.marked.json') => {
     const response = await apiClient.get(`/submission/${submissionId}/marked-json`, {
       responseType: 'blob',
-      timeout: 120000,
+      timeout: TIMEOUT.transfer,
     });
     return {
       blob: response.data,
@@ -199,7 +213,7 @@ export const examAPI = {
   getPageImageURL: async (submissionId, pageNumber) => {
     const response = await apiClient.get(
       `/submission/${submissionId}/page/${pageNumber}.png`,
-      { responseType: 'blob', timeout: 60000 },
+      { responseType: 'blob', timeout: TIMEOUT.transfer },
     );
     return URL.createObjectURL(response.data);
   },
@@ -211,7 +225,7 @@ export const examAPI = {
   getDiagramCropURL: async (submissionId, candidateId, question) => {
     const response = await apiClient.get(
       `/submission/${submissionId}/candidates/${candidateId}/diagram/${question}.png`,
-      { responseType: 'blob', timeout: 30000 },
+      { responseType: 'blob', timeout: TIMEOUT.standard },
     );
     return URL.createObjectURL(response.data);
   },
@@ -223,7 +237,7 @@ export const examAPI = {
   getReferenceDiagramURL: async (templateId, question) => {
     const response = await apiClient.get(
       `/answer-keys/reference/${templateId}/${question}.png`,
-      { responseType: 'blob', timeout: 30000 },
+      { responseType: 'blob', timeout: TIMEOUT.standard },
     );
     return URL.createObjectURL(response.data);
   },
@@ -256,7 +270,7 @@ export const examAPI = {
   getSubmissionLogs: async (submissionId, limit = 50) => {
     const response = await apiClient.get(`/submission/${submissionId}/logs`, {
       params: { limit },
-      timeout: 15000,
+      timeout: TIMEOUT.poll,
     });
     return response.data;
   },
