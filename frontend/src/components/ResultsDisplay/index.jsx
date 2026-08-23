@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Calendar,
   Download,
   FileCheck2,
@@ -62,6 +63,17 @@ const formatExtraValue = (value) => {
   }
 };
 
+// How many questions on this candidate a human still has to look at.
+const reviewQuestionCount = (candidate) => {
+  const flagged = new Set(
+    asQuestionList(candidate?.extra_fields?.needs_review_questions).map(String),
+  );
+  for (const outcome of candidate?.marking?.outcomes || []) {
+    if (outcome?.status === 'needs_review') flagged.add(String(outcome.question_number));
+  }
+  return flagged.size;
+};
+
 const FORBIDDEN_DISPLAY_KEYS = new Set([
   'accepted_answers',
   'question_spec',
@@ -78,6 +90,9 @@ const FORBIDDEN_DISPLAY_KEYS = new Set([
   'diagram_cv',
   'diagram_cv_questions',
   'extraction_flags',
+  // Edit history — surfaced as an "edited" badge and per-answer markers,
+  // never as a raw JSON chip.
+  'manual_edits',
 ]);
 
 const safeExtraEntries = (extraFields) =>
@@ -110,16 +125,15 @@ const ResultsDisplay = ({
     candidates.reduce((sum, c) => sum + Object.keys(c.answers || {}).length, 0),
     [candidates]
   );
-  const totalDrawing = useMemo(() =>
-    candidates.reduce((sum, c) => sum + Object.keys(c.drawing_questions || {}).length, 0),
+  // Two independent sources: the extractor distrusting its own read, and the
+  // marker being unable to decide. The tile counted only the first, so a
+  // question the judge gave up on was invisible from the results page.
+  const reviewCount = useMemo(
+    () => candidates.reduce((sum, c) => sum + reviewQuestionCount(c), 0),
     [candidates]
   );
-  const reviewCount = useMemo(
-    () =>
-      candidates.reduce(
-        (sum, c) => sum + asQuestionList(c.extra_fields?.needs_review_questions).length,
-        0
-      ),
+  const reviewCandidateCount = useMemo(
+    () => candidates.filter((c) => reviewQuestionCount(c) > 0).length,
     [candidates]
   );
 
@@ -297,8 +311,8 @@ const ResultsDisplay = ({
             <p className="text-3xl font-bold text-green-700">{totalAnswers}</p>
           </div>
           <div className="bg-purple-50 rounded-lg p-4">
-            <p className="text-xs text-purple-600 mb-1">Drawing / FR</p>
-            <p className="text-3xl font-bold text-purple-700">{totalDrawing}</p>
+            <p className="text-xs text-purple-600 mb-1">Candidates to review</p>
+            <p className="text-3xl font-bold text-purple-700">{reviewCandidateCount}</p>
           </div>
           <div className="bg-amber-50 rounded-lg p-4">
             <p className="text-xs text-amber-600 mb-1">Avg Answers</p>
@@ -375,6 +389,8 @@ const ResultsDisplay = ({
           const displayNumber = candidate.candidate_number || '';
           const extraEntries = safeExtraEntries(candidate.extra_fields);
           const candidateMarking = candidate.marking;
+          const toReview = reviewQuestionCount(candidate);
+          const wasEdited = (candidate.extra_fields?.manual_edits || []).length > 0;
           const hasValidPercentage =
             Number(candidateMarking?.max_marks) > 0 &&
             Number.isFinite(Number(candidateMarking?.percentage));
@@ -384,8 +400,12 @@ const ResultsDisplay = ({
               type="button"
               key={candidate.id ?? `${index}-${displayNumber}`}
               onClick={() => setSelectedCandidate({ candidate, index })}
-              className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:border-blue-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              aria-label={`View details for ${displayName}${candidateMarking ? `, score ${displayMarks(candidateMarking.awarded_marks)} of ${displayMarks(candidateMarking.max_marks)}` : ', not marked'}`}
+              className={`w-full rounded-xl border p-4 text-left shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:shadow-md ${
+                toReview > 0
+                  ? 'border-amber-300 bg-amber-50/60 hover:border-amber-400'
+                  : 'border-slate-200 bg-white hover:border-blue-300'
+              }`}
+              aria-label={`View details for ${displayName}${candidateMarking ? `, score ${displayMarks(candidateMarking.awarded_marks)} of ${displayMarks(candidateMarking.max_marks)}` : ', not marked'}${toReview > 0 ? `, ${toReview} question${toReview === 1 ? '' : 's'} need review` : ''}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0">
@@ -394,9 +414,23 @@ const ResultsDisplay = ({
                     <p className="text-xs text-slate-500 font-mono">{displayNumber}</p>
                   )}
                 </div>
-                <Badge variant="info" className="ml-2 flex-shrink-0">
-                  #{index + 1}
-                </Badge>
+                <div className="ml-2 flex flex-shrink-0 items-center gap-1.5">
+                  {toReview > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                      {toReview} to review
+                    </span>
+                  )}
+                  {wasEdited && (
+                    <span
+                      className="inline-flex items-center rounded-full border border-sky-300 bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-900"
+                      title="A human corrected this candidate"
+                    >
+                      edited
+                    </span>
+                  )}
+                  <Badge variant="info">#{index + 1}</Badge>
+                </div>
               </div>
 
               {candidateMarking ? (

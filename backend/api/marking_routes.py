@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
+from datetime import datetime
 from typing import Any, Optional
 from urllib.parse import quote
 
@@ -43,6 +45,8 @@ from backend.services.marking_workflow import (
     recover_stale_marking_runs,
 )
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -283,9 +287,15 @@ async def confirm_candidate_review(
     body: ConfirmReviewRequest,
     db: Session = Depends(get_db),
 ):
-    """Apply human-confirmed answers and clear needs_review flags for those Qs.
+    """Apply a human correction to a candidate and clear its review flags.
 
-    Does not re-mark automatically — call POST .../mark after confirming.
+    Handles both the review queue (answers flagged during extraction) and a
+    free-form edit of any answer or identity field. Every change is appended to
+    ``extra_fields.manual_edits`` with the value the extractor originally
+    produced, so a mark can still be defended against what the scan said.
+
+    Re-marking is opt-in via ``remark`` so existing callers keep the old
+    behaviour of leaving scores untouched.
     """
     submission = db.get(ExamSubmission, submission_id)
     if submission is None:
@@ -294,10 +304,39 @@ async def confirm_candidate_review(
     if candidate is None or candidate.submission_id != submission_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
+    edited_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    edits: list[dict[str, Any]] = []
+
     answers = dict(candidate.answers or {})
     for q, value in (body.answers or {}).items():
-        answers[str(q)] = "" if value is None else str(value)
+        new_value = "" if value is None else str(value)
+        previous = answers.get(str(q))
+        if previous != new_value:
+            edits.append({
+                "target": f"answers.{q}",
+                "from": previous,
+                "to": new_value,
+                "at": edited_at,
+                "by": body.edited_by,
+            })
+        answers[str(q)] = new_value
     candidate.answers = answers
+
+    for field in ("candidate_name", "candidate_number", "country", "paper_type"):
+        requested = getattr(body, field)
+        if requested is None:
+            continue  # omitted means "leave unchanged", not "clear"
+        new_value = str(requested)
+        previous = getattr(candidate, field) or ""
+        if previous != new_value:
+            edits.append({
+                "target": field,
+                "from": previous,
+                "to": new_value,
+                "at": edited_at,
+                "by": body.edited_by,
+            })
+            setattr(candidate, field, new_value)
 
     extra = dict(candidate.extra_fields or {})
     review = {str(q) for q in (extra.get("needs_review_questions") or [])}
@@ -315,13 +354,47 @@ async def confirm_candidate_review(
         review, key=lambda x: int(x) if str(x).isdigit() else str(x)
     )
     extra["answer_trust"] = trust
+    if edits:
+        history = list(extra.get("manual_edits") or [])
+        history.extend(edits)
+        extra["manual_edits"] = history
     candidate.extra_fields = extra
     db.commit()
     db.refresh(candidate)
+
+    remarked = False
+    marking_run_id: Optional[int] = None
+    remark_error: Optional[str] = None
+    if body.remark:
+        try:
+            run = mark_submission_answers(
+                db, submission_id, only_candidate_ids=[candidate.id],
+            )
+            remarked = run.status == "completed"
+            marking_run_id = run.id
+            if not remarked:
+                remark_error = _sanitize_error(run.error_message) or run.status
+        except MarkingInProgressError:
+            remark_error = "another marking run is already in progress"
+        except Exception as exc:
+            # The edit itself is committed and must not be reported as failed
+            # just because re-marking could not run.
+            logger.exception("Re-mark after edit failed for candidate %s", candidate.id)
+            remark_error = f"{type(exc).__name__}"
+        db.refresh(candidate)
+
     return ConfirmReviewResponse(
         candidate_result_id=candidate.id,
         needs_review_questions=list(extra.get("needs_review_questions") or []),
         answers=_clean_string_map(candidate.answers),
+        candidate_name=candidate.candidate_name or "",
+        candidate_number=candidate.candidate_number or "",
+        country=candidate.country or "",
+        paper_type=candidate.paper_type or "",
+        edits_recorded=len(edits),
+        remarked=remarked,
+        marking_run_id=marking_run_id,
+        remark_error=remark_error,
     )
 
 

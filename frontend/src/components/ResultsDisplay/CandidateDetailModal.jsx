@@ -8,6 +8,7 @@ import {
   Globe,
   Hash,
   HelpCircle,
+  Pencil,
   X,
 } from 'lucide-react';
 import examAPI from '../../services/api';
@@ -47,6 +48,13 @@ const OUTCOME_STYLES = {
 const isDiagramOutcome = (outcome) =>
   String(outcome?.judge_source || '').startsWith('diagram_');
 
+const IDENTITY_FIELDS = [
+  { key: 'candidate_name', label: 'Candidate name' },
+  { key: 'candidate_number', label: 'Candidate number' },
+  { key: 'country', label: 'Country' },
+  { key: 'paper_type', label: 'Paper type' },
+];
+
 const displayValue = (value) => {
   if (value === null || value === undefined || value === '') return '—';
   return String(value);
@@ -76,7 +84,10 @@ const CandidateDetailModal = ({
   const closeButtonRef = useRef(null);
   const { candidate, index } = selection;
   const marking = candidate.marking;
-  const outcomes = Array.isArray(marking?.outcomes) ? marking.outcomes : [];
+  const outcomes = useMemo(
+    () => (Array.isArray(marking?.outcomes) ? marking.outcomes : []),
+    [marking],
+  );
   const reviewQs = useMemo(
     () => {
       const raw = candidate.extra_fields?.needs_review_questions;
@@ -103,6 +114,78 @@ const CandidateDetailModal = ({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [showPaper, setShowPaper] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Questions a human still has to look at: the extractor distrusting its own
+  // read, plus anything the marker could not decide.
+  const pendingReview = useMemo(() => {
+    const flagged = new Set(reviewQs.map(String));
+    for (const outcome of outcomes) {
+      if (outcome?.status === 'needs_review') flagged.add(String(outcome.question_number));
+    }
+    return flagged;
+  }, [reviewQs, outcomes]);
+
+  const editedTargets = useMemo(() => {
+    const map = new Map();
+    for (const edit of candidate.extra_fields?.manual_edits || []) {
+      if (edit?.target) map.set(String(edit.target), edit);
+    }
+    return map;
+  }, [candidate.extra_fields]);
+
+  const startEditing = () => {
+    setEditError('');
+    setEditForm({
+      answers: Object.fromEntries(
+        Object.entries(candidate.answers || {}).map(([q, v]) => [q, v ?? '']),
+      ),
+      candidate_name: candidate.candidate_name || '',
+      candidate_number: candidate.candidate_number || '',
+      country: candidate.country || '',
+      paper_type: candidate.paper_type || '',
+    });
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!submissionId || !candidate.id || !editForm) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      // Send only what actually changed, so the audit trail records real edits
+      // and an untouched field is never rewritten.
+      const changedAnswers = {};
+      for (const [q, value] of Object.entries(editForm.answers)) {
+        if (String(candidate.answers?.[q] ?? '') !== String(value)) changedAnswers[q] = value;
+      }
+      const payload = { answers: changedAnswers, remark: true };
+      for (const { key } of IDENTITY_FIELDS) {
+        if (String(candidate[key] ?? '') !== String(editForm[key])) payload[key] = editForm[key];
+      }
+      if (!Object.keys(changedAnswers).length && Object.keys(payload).length === 2) {
+        setEditing(false);
+        return; // nothing changed; don't spend a marking run
+      }
+      const result = await examAPI.confirmCandidateReview(
+        submissionId, candidate.id, payload,
+      );
+      if (result?.remark_error) {
+        setEditError(`Saved, but re-marking failed: ${result.remark_error}`);
+        setSavingEdit(false);
+        return;
+      }
+      setEditing(false);
+      onReviewConfirmed?.();
+    } catch (err) {
+      setEditError(err?.response?.data?.detail || err?.message || 'Save failed');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
   const pageNumber = candidate.page_number;
   const canViewPaper = Boolean(submissionId) && Number.isFinite(Number(pageNumber));
 
@@ -141,6 +224,7 @@ const CandidateDetailModal = ({
     try {
       await examAPI.confirmCandidateReview(submissionId, candidate.id, {
         answers: drafts,
+        remark: true,
       });
       onReviewConfirmed?.();
     } catch (err) {
@@ -192,6 +276,17 @@ const CandidateDetailModal = ({
             </div>
           </div>
           <div className="flex flex-none items-center gap-1">
+            {submissionId && candidate.id && !editing && (
+              <button
+                type="button"
+                onClick={startEditing}
+                className="rounded-lg p-2 text-blue-700 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label={`Edit answers and details for ${candidate.candidate_name || `candidate ${index + 1}`}`}
+                title="Edit answers and details"
+              >
+                <Pencil className="h-5 w-5" aria-hidden="true" />
+              </button>
+            )}
             {canViewPaper && (
               <button
                 type="button"
@@ -233,6 +328,84 @@ const CandidateDetailModal = ({
         </header>
 
         <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+          {editing && editForm && (
+            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="font-semibold text-blue-950">Edit candidate</h4>
+                <p className="text-xs text-blue-900">
+                  Saving re-marks this candidate. The original values are kept.
+                </p>
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {IDENTITY_FIELDS.map(({ key, label }) => (
+                  <label key={key} className="text-sm">
+                    <span className="mb-1 block font-medium text-slate-700">{label}</span>
+                    <input
+                      className="w-full rounded border border-blue-300 bg-white px-2 py-1.5 font-mono text-sm"
+                      value={editForm[key]}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <h5 className="mt-4 mb-2 text-sm font-semibold text-slate-700">
+                Answers ({Object.keys(editForm.answers).length})
+              </h5>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {Object.entries(editForm.answers).sort(sortQuestions).map(([question, value]) => (
+                  <label key={question} className="flex items-center gap-2 text-sm">
+                    <span
+                      className={`w-9 flex-none font-semibold ${
+                        pendingReview.has(String(question)) ? 'text-amber-700' : 'text-slate-600'
+                      }`}
+                      title={pendingReview.has(String(question)) ? 'Needs review' : undefined}
+                    >
+                      Q{question}
+                    </span>
+                    <input
+                      className={`min-w-0 flex-1 rounded border bg-white px-2 py-1 font-mono text-sm ${
+                        pendingReview.has(String(question))
+                          ? 'border-amber-400'
+                          : 'border-slate-300'
+                      }`}
+                      value={value}
+                      onChange={(e) =>
+                        setEditForm((prev) => ({
+                          ...prev,
+                          answers: { ...prev.answers, [question]: e.target.value },
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {editError ? <p className="mt-3 text-sm text-red-700">{editError}</p> : null}
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  disabled={savingEdit}
+                  onClick={handleSaveEdit}
+                  className="rounded-lg bg-blue-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
+                >
+                  {savingEdit ? 'Saving and re-marking…' : 'Save and re-mark'}
+                </button>
+                <button
+                  type="button"
+                  disabled={savingEdit}
+                  onClick={() => { setEditing(false); setEditError(''); }}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {showPaper && canViewPaper && (
             <div className="mb-6">
               <PageViewer submissionId={submissionId} pageNumber={Number(pageNumber)} />
@@ -327,6 +500,16 @@ const CandidateDetailModal = ({
                           <div className="min-w-0">
                             <span className="mr-2 text-xs font-medium text-slate-500 sm:hidden">Response</span>
                             <span className="break-words font-mono text-slate-800">{displayValue(outcome?.response)}</span>
+                            {editedTargets.has(`answers.${outcome?.question_number}`) && (
+                              <span
+                                className="ml-2 inline-block rounded border border-sky-300 bg-sky-50 px-1.5 py-0.5 align-middle text-[11px] font-semibold text-sky-900"
+                                title={`Corrected by hand. The extractor read: ${
+                                  displayValue(editedTargets.get(`answers.${outcome.question_number}`)?.from)
+                                }`}
+                              >
+                                edited
+                              </span>
+                            )}
                           </div>
                           <div>
                             <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${style.classes}`}>

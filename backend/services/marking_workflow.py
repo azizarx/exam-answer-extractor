@@ -10,7 +10,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
@@ -140,6 +140,26 @@ def recover_stale_marking_runs(
     return stale
 
 
+def _latest_run_markings(
+    db: Session, submission_id: int
+) -> dict[int, CandidateMarking]:
+    """Per-candidate marks from the newest run, keyed by candidate id."""
+    run = (
+        db.query(MarkingRun)
+        .filter(MarkingRun.submission_id == submission_id)
+        .order_by(MarkingRun.id.desc())
+        .first()
+    )
+    if run is None:
+        return {}
+    rows = (
+        db.query(CandidateMarking)
+        .filter(CandidateMarking.marking_run_id == run.id)
+        .all()
+    )
+    return {row.candidate_result_id: row for row in rows}
+
+
 def mark_submission_answers(
     db: Session,
     submission_id: int,
@@ -147,6 +167,7 @@ def mark_submission_answers(
     answer_key_id: int | None = None,
     fr_judge: Any | None = None,
     diagram_judge: Any | None = None,
+    only_candidate_ids: Sequence[int] | None = None,
 ) -> MarkingRun:
     """Create one auditable marking attempt for persisted raw candidates.
 
@@ -156,12 +177,42 @@ def mark_submission_answers(
     therefore roll back only marking output and still record a failed run.
     Calling the function again is the manual re-mark workflow: it appends a
     new run and never updates prior marks or CandidateResult.answers.
+
+    ``only_candidate_ids`` re-marks just those candidates — used after a human
+    edits one. The run stays *complete*: every other candidate's marks are
+    carried forward from the previous run, because reads resolve a submission's
+    marks from the newest run alone and a partial run would blank the rest.
+    It is ignored when there is no previous run to carry forward from.
     """
     submission = db.get(ExamSubmission, submission_id)
     if submission is None:
         raise ValueError(f"Submission {submission_id} not found")
 
     recover_stale_marking_runs(db, submission_id=submission_id)
+
+    target_ids: set[int] | None = None
+    carry_forward: dict[int, dict[str, Any]] = {}
+    if only_candidate_ids:
+        requested = {int(cid) for cid in only_candidate_ids}
+        previous = _latest_run_markings(db, submission_id)
+        if previous:
+            target_ids = requested
+            carry_forward = {
+                cid: {
+                    "awarded_marks": row.awarded_marks,
+                    "max_marks": row.max_marks,
+                    "percentage": row.percentage,
+                    "outcomes": row.outcomes,
+                    "answer_key_id": row.answer_key_id,
+                }
+                for cid, row in previous.items()
+                if cid not in requested
+            }
+        else:
+            logger.info(
+                "MARK submission=%s scoped re-mark requested with no previous "
+                "run; marking every candidate instead", submission_id,
+            )
     active = (
         db.query(MarkingRun)
         .filter(
@@ -208,6 +259,13 @@ def mark_submission_answers(
             raise NoCandidatesError(
                 f"Submission {submission_id} has no candidate results"
             )
+        if target_ids is not None:
+            candidates = [c for c in candidates if c.id in target_ids]
+            if not candidates:
+                raise NoCandidatesError(
+                    f"Submission {submission_id} has no candidate matching "
+                    f"{sorted(target_ids)}"
+                )
 
         # Group by per-candidate template (auto mode). Fall back to submission
         # template_id for legacy rows that only have the submission-level id.
@@ -419,6 +477,19 @@ def mark_submission_answers(
                             answer_key_id=answer_key_id,
                         )
                     )
+            for candidate_id, snapshot in carry_forward.items():
+                db.add(
+                    CandidateMarking(
+                        marking_run_id=run_id,
+                        candidate_result_id=candidate_id,
+                        **snapshot,
+                    )
+                )
+            if carry_forward:
+                logger.info(
+                    "MARK submission=%s scoped re-mark: %d marked, %d carried forward",
+                    submission_id, len(candidates), len(carry_forward),
+                )
             run = db.get(MarkingRun, run_id)
             run.status = "completed"
             run.completed_at = datetime.utcnow()

@@ -77,9 +77,31 @@ class ManualRemarkResponse(BaseModel):
 
 
 class ConfirmReviewRequest(BaseModel):
-    """Human confirmation of extraction answers flagged needs_review."""
+    """Human correction of a candidate: answers and/or identity fields.
+
+    Every field is optional and defaults preserve the original
+    confirm-review behaviour, so existing API callers are unaffected.
+    """
     answers: Dict[str, str] = Field(default_factory=dict)
     clear_all_review: bool = False
+    candidate_name: Optional[str] = Field(
+        None, description="Set to correct a misread name; omit to leave unchanged"
+    )
+    candidate_number: Optional[str] = Field(
+        None, description="Set to correct a misread candidate number"
+    )
+    country: Optional[str] = None
+    paper_type: Optional[str] = None
+    remark: bool = Field(
+        False,
+        description=(
+            "Re-mark this candidate after applying the edit. The run stays "
+            "complete: other candidates' marks carry forward unchanged."
+        ),
+    )
+    edited_by: Optional[str] = Field(
+        None, description="Recorded in the edit history; free text, unauthenticated"
+    )
 
 
 class ConfirmReviewResponse(BaseModel):
@@ -87,6 +109,16 @@ class ConfirmReviewResponse(BaseModel):
     candidate_result_id: int
     needs_review_questions: List[str] = Field(default_factory=list)
     answers: Dict[str, str] = Field(default_factory=dict)
+    candidate_name: str = ""
+    candidate_number: str = ""
+    country: str = ""
+    paper_type: str = ""
+    edits_recorded: int = Field(
+        0, description="How many field/answer changes this request actually applied"
+    )
+    remarked: bool = False
+    marking_run_id: Optional[int] = None
+    remark_error: Optional[str] = None
 
 
 class AnswerKeyMetadataSchema(BaseModel):
