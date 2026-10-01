@@ -1162,7 +1162,8 @@ def test_startup_sync_is_idempotent_on_explicit_temp_database(engine):
 
     with Session(engine) as db:
         rows = db.scalars(select(AnswerKey)).all()
-        assert len(rows) == 14
+        # seamo_2025 (7) + seamo_2026 (7) + seamo_x_2026 (7)
+        assert len(rows) == 21
         assert all(row.is_active for row in rows)
 
     if before_hash is None:

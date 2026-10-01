@@ -48,6 +48,13 @@ def test_registry_loads_all_manifests_with_weighted_totals():
         "seamo_2025_e": 100,
         "seamo_2025_f": 100,
         "seamo_2025_k": 50,
+        "seamo_2026_a": 100,
+        "seamo_2026_b": 100,
+        "seamo_2026_c": 100,
+        "seamo_2026_d": 100,
+        "seamo_2026_e": 100,
+        "seamo_2026_f": 100,
+        "seamo_2026_k": 50,
         "seamo_x_2026_a": 100,
         "seamo_x_2026_b": 100,
         "seamo_x_2026_c": 100,
@@ -303,7 +310,8 @@ def test_synchronize_answer_keys_is_idempotent_and_preserves_provenance(tmp_path
         db.commit()
 
         rows = db.scalars(select(AnswerKey).order_by(AnswerKey.template_id)).all()
-        assert len(first) == len(second) == len(rows) == 14
+        # seamo_2025 (7) + seamo_2026 (7) + seamo_x_2026 (7)
+        assert len(first) == len(second) == len(rows) == 21
         versions = {row.template_id: row.version for row in rows}
         assert versions["seamo_x_2026_a"] == 2
         assert versions["seamo_x_2026_b"] == 2
@@ -395,7 +403,7 @@ def test_synchronization_retries_transient_integrity_race(tmp_path, monkeypatch)
         db.commit()
 
         assert calls >= 2
-        assert len(rows) == 14
+        assert len(rows) == 21
         assert db.scalar(select(AnswerKey).where(AnswerKey.is_active.is_(True))) is not None
 
 
@@ -461,7 +469,7 @@ def test_synchronization_retries_real_sqlite_writer_lock(tmp_path):
     assert not blocker.is_alive()
     assert blocker_errors == []
     assert lock_observed.is_set()
-    assert len(rows) == 14
+    assert len(rows) == 21
     assert persisted == 7
 
 

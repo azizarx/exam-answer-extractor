@@ -1,0 +1,36 @@
+{
+  "template_id": "seamo_2026_a",
+  "version": 1,
+  "source": {
+    "filename": "seamo_2026/S26A_Answer Key.pdf",
+    "sha256": "1abe0a4351dafa40b96e6d8550dc66e51fc3197188a4f3ed0c024ecea8c1ebd9"
+  },
+  "total_marks": 100,
+  "questions": [
+    {"number": 1, "type": "mcq", "accepted_answers": ["E"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 2, "type": "mcq", "accepted_answers": ["B"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 3, "type": "mcq", "accepted_answers": ["A"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 4, "type": "mcq", "accepted_answers": ["E"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 5, "type": "mcq", "accepted_answers": ["E"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 6, "type": "mcq", "accepted_answers": ["D"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 7, "type": "mcq", "accepted_answers": ["D"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 8, "type": "mcq", "accepted_answers": ["C"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 9, "type": "mcq", "accepted_answers": ["B"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 10, "type": "mcq", "accepted_answers": ["D"], "marks": 3, "normalizer": "uppercase"},
+    {"number": 11, "type": "mcq", "accepted_answers": ["B"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 12, "type": "mcq", "accepted_answers": ["D"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 13, "type": "mcq", "accepted_answers": ["A"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 14, "type": "mcq", "accepted_answers": ["E"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 15, "type": "mcq", "accepted_answers": ["C"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 16, "type": "mcq", "accepted_answers": ["B"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 17, "type": "mcq", "accepted_answers": ["B"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 18, "type": "mcq", "accepted_answers": ["D"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 19, "type": "mcq", "accepted_answers": ["D"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 20, "type": "mcq", "accepted_answers": ["E"], "marks": 4, "normalizer": "uppercase"},
+    {"number": 21, "type": "numeric", "accepted_answers": ["95"], "marks": 6, "normalizer": "integer"},
+    {"number": 22, "type": "numeric", "accepted_answers": ["81"], "marks": 6, "normalizer": "integer"},
+    {"number": 23, "type": "numeric", "accepted_answers": ["175"], "marks": 6, "normalizer": "integer"},
+    {"number": 24, "type": "numeric", "accepted_answers": ["5"], "marks": 6, "normalizer": "integer"},
+    {"number": 25, "type": "numeric", "accepted_answers": ["2"], "marks": 6, "normalizer": "integer"}
+  ]
+}
