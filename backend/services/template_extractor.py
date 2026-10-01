@@ -24,7 +24,8 @@ import logging
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
+from backend.services.cancellation import CancellationExecutor as ThreadPoolExecutor, check_cancelled
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
@@ -148,6 +149,7 @@ class TemplateExtractor:
             )
             for _ in image_paths
         ]
+        check_cancelled()
         return extract_pages(
             pdf_path,
             image_paths,
@@ -166,6 +168,7 @@ class TemplateExtractor:
         run_cv_mcq: bool,
         diagram_crop_dir: Optional[Path] = None,
     ) -> Dict[str, Any]:
+        check_cancelled()
         t0 = time.perf_counter()
         settings = get_settings()
         bgr = cv2.imread(image_path)
@@ -637,6 +640,7 @@ def extract_pages(
     # Prime anchors per detected template from the first page of that layout.
     primed: set[str] = set()
     for path, det in zip(image_paths, detections):
+        check_cancelled()
         tid = det.template_id
         if not tid or tid in primed:
             continue
@@ -789,7 +793,7 @@ def extract_pdf_auto(
 ) -> Dict[str, Any]:
     """Classify each page via footer OCR (Gemini header fallback), then extract."""
     settings = get_settings()
-    classify_workers = max(1, int(getattr(settings, "max_classify_workers", 8) or 8))
+    classify_workers = max(1, int(getattr(settings, "max_classify_workers", 3) or 3))
     image_preprocessor = ImagePreprocessor()
     n = len(image_paths)
     try:
@@ -838,6 +842,7 @@ def extract_pdf_auto(
         return _gemini_classify_header(image_bgr, model=layout_model)
 
     def _classify_one(i: int) -> tuple[int, PageLayoutDetection]:
+        check_cancelled()
         path = image_paths[i]
         if image_preprocessor.is_blank(path):
             return i, PageLayoutDetection(
@@ -895,6 +900,7 @@ def extract_pdf_auto(
         n, workers, time.perf_counter() - t_cls,
     )
 
+    check_cancelled()
     return extract_pages(
         pdf_path,
         image_paths,

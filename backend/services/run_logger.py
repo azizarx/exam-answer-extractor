@@ -16,6 +16,8 @@ Usage (recommended, non-CM so it fits the existing try/finally):
 """
 from __future__ import annotations
 
+from backend.services.cancellation import check_cancelled, cancellation_sleep
+
 import logging
 import re
 import threading
@@ -206,10 +208,17 @@ def _acquire_gemini_token(stage: str, logger: logging.Logger) -> None:
     `gemini_max_rpm` calls in the last `_GEMINI_WINDOW_SECONDS` seconds,
     sleep until the oldest one falls out of the window. Then record this call.
     """
+    check_cancelled()
     cap = _gemini_rpm_cap()
     if cap <= 0:
         return
+    from backend.config import get_settings
+    if get_settings().queue_enabled:
+        from backend.services.shared_rate_limit import acquire
+        acquire(cap)
+        return
     while True:
+        check_cancelled()
         with _gemini_lock:
             now = time.monotonic()
             # Drop calls outside the window
@@ -225,7 +234,7 @@ def _acquire_gemini_token(stage: str, logger: logging.Logger) -> None:
                 "LLM[%s] RATE_PACED waiting %.1fs (window has %d calls, cap %s)",
                 stage, wait, len(_gemini_calls), cap,
             )
-            time.sleep(min(wait, 5.0))  # cap individual sleeps so logs stay live
+            cancellation_sleep(min(wait, 5.0))  # cap individual sleeps so logs stay live
 
 
 def llm_call(
@@ -269,7 +278,9 @@ def llm_call(
             kwargs = {"generation_config": generation_config}
             if timeout > 0:
                 kwargs["request_options"] = {"timeout": timeout}
+            check_cancelled()
             response = model.generate_content(contents, **kwargs)
+            check_cancelled()
             break
         except Exception as exc:
             # google.api_core.exceptions.ResourceExhausted is the 429 path.
@@ -294,7 +305,7 @@ def llm_call(
                     "LLM[%s] %s; sleeping %.0fs (attempt %d/%d)",
                     stage, kind, delay, attempt, retries,
                 )
-                time.sleep(delay)
+                cancellation_sleep(delay)
                 continue
             log_llm_error(stage, t0, exc, logger)
             raise

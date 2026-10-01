@@ -23,6 +23,9 @@ import numpy as np
 import pytesseract
 
 from backend.services.template_service import get_template_registry
+from backend.services.cpu_limits import ocr_slot
+from backend.services.cancellation import check_cancelled
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -540,7 +543,12 @@ def _ocr_band(image_bgr: np.ndarray, *, band: str) -> str:
     # Light threshold helps thin footer print on scans
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     try:
-        return pytesseract.image_to_string(binary, config="--psm 6") or ""
+        with ocr_slot():
+            text = pytesseract.image_to_string(
+                binary, config="--psm 6", timeout=get_settings().ocr_timeout_seconds,
+            ) or ""
+            check_cancelled()
+            return text
     except Exception as exc:
         logger.warning("Tesseract OCR failed on %s band: %s", band, exc)
         return ""

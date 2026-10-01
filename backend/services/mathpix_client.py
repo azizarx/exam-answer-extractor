@@ -21,6 +21,7 @@ import numpy as np
 import requests
 
 from backend.config import get_settings
+from backend.services.cancellation import check_cancelled, cancellation_sleep
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +217,7 @@ def poll_pdf(
     deadline = time.monotonic() + max_wait
     logger.info("MATHPIX poll start pdf_id=%s max_wait=%.0fs", pdf_id, max_wait)
     while True:
+        check_cancelled()
         resp = requests.get(url, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
@@ -230,7 +232,7 @@ def poll_pdf(
                 f"Mathpix PDF processing did not complete within {max_wait}s "
                 f"(pdf_id={pdf_id}, last_status={status})"
             )
-        time.sleep(poll_interval)
+        cancellation_sleep(poll_interval)
 
 
 def fetch_mmd(

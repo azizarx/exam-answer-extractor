@@ -2,6 +2,7 @@
 Application configuration management
 """
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from functools import lru_cache
 from typing import Optional
 
@@ -42,7 +43,21 @@ class Settings(BaseSettings):
     api_key: str = ""
     
     # File Upload
-    max_file_size_mb: int = 1024
+    max_file_size_mb: int = 3072
+    queue_enabled: bool = False
+    queue_lease_seconds: int = 120
+    queue_max_attempts: int = 3
+    queue_batch_pages: int = 10
+    queue_sync_wait_seconds: int = 540
+    max_uploads: int = 2
+    min_free_disk_gb: float = 20
+    max_pdf_pages: int = 10000
+    max_page_pixels: int = 25000000
+    archive_enabled: bool = False
+    archive_evict_local: bool = False
+    archive_cache_hours: int = 24
+    archive_preserve_through_submission_id: int = 0
+    spaces_archive_prefix: str = "aimarker"
     allowed_extensions: str = ".pdf"
     
     # PDF Processing
@@ -57,13 +72,18 @@ class Settings(BaseSettings):
     max_extraction_workers: int = 6
 
     # Parallel PDF page renders (each worker opens its own PyMuPDF handle).
-    max_pdf_render_workers: int = 4
+    max_pdf_render_workers: int = 3
     # Answer sheets are monochrome; grayscale PNGs preserve CV/handwriting
     # detail while cutting render CPU, temporary storage, and decode memory.
     pdf_render_grayscale: bool = True
 
     # Parallel layout classification (footer OCR; Gemini fallback only on misses).
-    max_classify_workers: int = 8
+    max_classify_workers: int = 3
+    # Shared OCR capacity across submissions, not a separate budget per PDF.
+    max_ocr_workers: int = Field(default=3, ge=1)
+    opencv_threads: int = Field(default=1, ge=1)
+    # A pathological band must not stall every page worker indefinitely.
+    ocr_timeout_seconds: float = Field(default=15.0, gt=0)
 
     # Parallel FR-equivalence Gemini judge calls during marking.
     max_fr_judge_workers: int = 6

@@ -3,7 +3,8 @@ PDF to Images Conversion Service
 Converts PDF pages to PNG images for OCR processing using PyMuPDF (no external dependencies)
 """
 import pymupdf  # PyMuPDF
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
+from backend.services.cancellation import CancellationExecutor as ThreadPoolExecutor, check_cancelled, ExtractionCancelled
 from typing import List, Optional, Tuple
 from PIL import Image
 import logging
@@ -27,6 +28,7 @@ def _render_page_chunk(
     doc = pymupdf.open(pdf_path)
     try:
         for i in page_indices:
+            check_cancelled()
             render_options = {"matrix": mat, "alpha": False}
             if grayscale:
                 render_options["colorspace"] = pymupdf.csGRAY
@@ -65,7 +67,7 @@ class PDFConverter:
                     grayscale = bool(settings.pdf_render_grayscale)
             except Exception:
                 if max_workers is None:
-                    max_workers = 4
+                    max_workers = 3
                 if grayscale is None:
                     grayscale = True
         self.max_workers = max(1, int(max_workers))
@@ -117,6 +119,13 @@ class PDFConverter:
             logger.info("Successfully converted %s pages from %s", len(image_paths), pdf_path)
             return image_paths
 
+        except ExtractionCancelled:
+            for path in image_paths:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+            raise
         except Exception as e:
             logger.error("Failed to convert PDF %s: %s", pdf_path, e)
             raise Exception(f"PDF conversion failed: {str(e)}")
