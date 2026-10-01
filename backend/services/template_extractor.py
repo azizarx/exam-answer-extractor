@@ -56,6 +56,7 @@ from backend.services.page_layout_classifier import (
     classify_page_path,
     document_year_majority,
 )
+from backend.services.review_vision import recheck_flagged_mcq
 from backend.services.run_logger import llm_call
 from backend.services.template_service import (
     AnswerSection,
@@ -117,6 +118,10 @@ class TemplateExtractor:
         else:
             self.model, self.model_name = create_gemini_model()
 
+        # Built on first use: a page with nothing flagged never needs one.
+        self._review_reader = None
+        self._review_reader_lock = threading.Lock()
+
         # Mathpix is only run when needed
         self.mathpix_app_id = settings.mathpix_app_id
         self.mathpix_app_key = settings.mathpix_app_key
@@ -160,6 +165,22 @@ class TemplateExtractor:
             shared_extractors={self.template_id: self},
             diagram_crop_dir=diagram_crop_dir,
         )
+
+    def _get_review_reader(self):
+        """One reader per extractor, built on first flagged question."""
+        if self._review_reader is None:
+            with self._review_reader_lock:
+                if self._review_reader is None:
+                    from backend.services.review_vision import GeminiReviewReader
+                    preferred = (get_settings().review_vision_model or "").strip()
+                    if preferred:
+                        self._review_reader = GeminiReviewReader()
+                    else:
+                        # Reuse the page model rather than resolving another.
+                        self._review_reader = GeminiReviewReader(
+                            model=self.model, model_name=self.model_name,
+                        )
+        return self._review_reader
 
     # ----- per-page -----------------------------------------------------
 
@@ -205,6 +226,7 @@ class TemplateExtractor:
         review_qs: Set[str] = set()
         extraction_flags: List[str] = list(extraction_flags_pre)
         diagram_cv_result = None
+        review_vision_audit = None
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             f_mcq = None
@@ -309,6 +331,37 @@ class TemplateExtractor:
             else:
                 review_qs |= mcq_qs
 
+        # Second opinion on the questions CV would not commit to. The reader
+        # reports which box is filled on a crop of that one row; it is refused
+        # unless the question number printed in the crop matches the question
+        # asked, so a mis-registered page cannot turn a flag into a wrong mark.
+        if run_cv_mcq and review_qs and bool(settings.review_vision_enabled):
+            try:
+                reader = self._get_review_reader()
+                resolved, audit = recheck_flagged_mcq(
+                    bgr,
+                    page_template,
+                    review_qs,
+                    reader,
+                    cv_answers=mcq_answers,
+                    # A page-level CV warning means the grid itself is
+                    # suspect, so its crops cannot be placed reliably.
+                    geometry_trusted=mcq_warning not in MCQ_TRUST_WARNINGS,
+                    page_num=page_num,
+                    max_questions=int(settings.review_vision_max_questions),
+                )
+                for q, ans in resolved.items():
+                    mcq_answers[q] = ans
+                    review_qs.discard(str(q))
+                if resolved:
+                    extraction_flags.append(f"review_vision_resolved_{len(resolved)}")
+                if audit:
+                    review_vision_audit = audit
+            except Exception as exc:
+                # A failed second opinion leaves the first one standing.
+                logger.error("PAGE[%d] review-vision recheck failed: %s", page_num, exc)
+                extraction_flags.append("review_vision_error")
+
         candidate = _assemble_candidate(
             page_num=page_num,
             header=llm_header,
@@ -321,6 +374,8 @@ class TemplateExtractor:
         )
         if deskew_deg:
             candidate.setdefault("extra_fields", {})["deskew_degrees"] = round(deskew_deg, 2)
+        if review_vision_audit:
+            candidate.setdefault("extra_fields", {})["review_vision"] = review_vision_audit
         diagram_crops = extract_diagram_crops(
             bgr, page_template, page_num, diagram_crop_dir,
         )

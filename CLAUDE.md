@@ -154,6 +154,37 @@ Five things matter to remember:
    answer-key-blind by contract: no keys, labels or reference images may leak
    into it, or the gold acceptance test becomes meaningless.
 
+### Review-vision second opinion (`review_vision.py`)
+
+A question CV will not commit to reaches marking as `needs_review` and scores
+0 — `apply_extraction_trust` is terminal, and no judge can award it marks.
+`recheck_flagged_mcq` gives those questions one more chance at extraction time:
+it crops that single row and asks a vision model which box is filled. The model
+reports **what is marked, never whether it is right** — the deterministic marker
+still scores it, so the model never sees the key.
+
+Four refusals, each from an observed failure on real pages — do not relax them
+without new evidence:
+
+1. **Untrusted page geometry → nothing is asked.** A page-level
+   `MCQ_TRUST_WARNINGS` hit means the grid is suspect, so crops land between
+   rows. On the real Paper K page the crop showed Q9's boxes beside Q10's
+   number and the model reported seeing "9" — echoing the label it was given.
+   The same crop was refused on another run, so that guard holds only sometimes.
+2. **CV `IN` is never overturned.** `IN` is a positive multi-ink detection, and
+   in practice that is the struck-out-and-rechosen case. The model picks one of
+   the two and cannot tell which was cancelled; on page 54 it chose the
+   crossed-out box twice, costing 6 marks and the review each time.
+3. **`BLANK` is never accepted.** A crop that missed its row looks identical to
+   an empty one. Blank scores 0 either way, so accepting gains nothing and only
+   removes the human who might have awarded the mark.
+4. **The printed question number must match.** Asked as a check against
+   mis-registration; necessary but, per (1), not sufficient.
+
+The model enumerates `marked_boxes` rather than naming a winner — asking for a
+category let it choose between a struck-out box and a fresh one.
+`REVIEW_VISION_ENABLED=false` disables the stage; flags then behave as before.
+
 ### Templates (`backend/templates/`)
 - One JSON per layout/variant. Schema in `backend/templates/schema.json`.
 - Pixel coords at reference DPI 300; `ExamTemplate.at_dpi()` scales to actual scan DPI.

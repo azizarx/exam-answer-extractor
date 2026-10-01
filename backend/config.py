@@ -126,6 +126,19 @@ class Settings(BaseSettings):
     # call and starved the visible JSON. The model's default cap (~64k) is
     # what we want.
 
+    # Second opinion on MCQ questions the CV reader would not commit to. The
+    # model reports which box is filled, on a crop of that one question's row;
+    # the deterministic marker still scores it against the key, so the model
+    # never sees accepted answers. Questions it cannot resolve stay
+    # needs_review. A page whose geometry is itself distrusted is skipped,
+    # because its crops would be cut from the wrong rows.
+    review_vision_enabled: bool = True
+    # Empty inherits GEMINI_MODEL.
+    review_vision_model: str = ""
+    # Above this many flagged questions on one page, treat the flag as
+    # page-level geometry distrust rather than per-question ambiguity.
+    review_vision_max_questions: int = 25
+
     # Diagram marking. A drawing is marked by comparing the candidate's crop
     # with the answer key's reference drawing, not by matching a description
     # against prose. Disabling this reverts diagram questions to the text
