@@ -1,546 +1,137 @@
-**Integrators / DevOps:** see [`DEPLOY.md`](DEPLOY.md) and [`docs/API.md`](docs/API.md).
-Run the API with `uvicorn main:app --host 0.0.0.0 --port 8000` (not the frontend).
+# AI Marker / Exam Answer Extractor
 
-# Exam Answer Sheet Extraction System
+A FastAPI service and React application for extracting exam answer sheets from
+PDFs, marking them against stored answer keys, and reviewing uncertain answers.
 
-A complete system for extracting answers from PDF exam sheets using AI-powered OCR and computer vision. The system automatically processes uploaded PDFs, extracts both multiple-choice and free-response answers, and stores them in a database with JSON backups in cloud storage.
+## Integrating with the API
 
-## 🎯 Features
+Start with the [Integrator Guide](docs/API.md). It covers request fields,
+complete response examples, weighted scoring, human corrections, images,
+authentication, errors, cancellation, and reliable polling.
 
-- **PDF Upload & Storage**: Upload exam PDFs to DigitalOcean Spaces (S3-compatible)
-- **AI-Powered Extraction**: Uses OpenAI GPT-4 Vision API for accurate answer extraction
-- **Dual Extraction Methods**: 
-  - Traditional OCR with Tesseract (fallback/alternative)
-  - AI Vision API (primary, more accurate)
-- **Structured Data Output**: JSON format with validation
-- **Database Storage**: PostgreSQL with SQLAlchemy ORM
-- **Async Processing**: Background task queue with Celery
-- **RESTful API**: FastAPI with automatic documentation
-- **Complete Audit Trail**: Processing logs for every operation
+- [Shareable developer guide](https://aimarker.seamo-official.org/integration/)
+- [Integration pack: guide, OpenAPI, examples, Python client](https://aimarker.seamo-official.org/integration/integration-pack.zip)
+- [Live Swagger UI](https://aimarker-bk.seamo-official.org/docs)
+- [Live OpenAPI schema](https://aimarker-bk.seamo-official.org/openapi.json)
 
-## 🏗️ Architecture
+For full AI-assisted marking, use:
 
-```
-User → Upload PDF → DigitalOcean Spaces (Storage)
-            ↓
-       FastAPI Backend
-            ↓
-     Celery Task Queue
-            ↓
-AI Extractor Service (GPT-4 Vision / OCR)
-            ↓
-Generate JSON → Save to Spaces → DB Insert
+```text
+POST /upload
+  → poll GET /status/{submission_id}
+  → GET /submission/{submission_id}
+  → inspect GET /submission/{submission_id}/marking
+  → GET /submission/{submission_id}/marked-json
 ```
 
-## 📋 Tech Stack
+Automatic marking includes extraction-trust checks, free-response equivalence,
+and diagram-image judging where configured. A completed extraction can still
+have failed, unavailable, or partial marking; inspect the marking state and
+question-level `needs_review` outcomes before publishing scores.
 
-| Component | Technology |
-|-----------|-----------|
-| **Backend API** | FastAPI (Python 3.9+) |
-| **AI Extraction** | OpenAI GPT-4 Vision API |
-| **OCR (Alternative)** | Tesseract OCR + pytesseract |
-| **PDF Processing** | pdf2image + Pillow |
-| **Storage** | DigitalOcean Spaces (S3-compatible) |
-| **Database** | PostgreSQL 12+ |
-| **Task Queue** | Celery + Redis |
-| **ORM** | SQLAlchemy |
+`POST /extract/json` provides synchronous extraction. The separate
+`POST /extract/json/mark` endpoint adds deterministic marking only; it does not
+run the full AI marking workflow. See the guide's capability comparison before
+choosing an endpoint.
 
-## 🚀 Quick Start
+## Run locally
 
-### Prerequisites
+The backend uses Python 3.10+ (the container uses 3.12), PyMuPDF, Tesseract,
+OpenCV, and Gemini. The frontend uses React 18, Vite, and Tailwind CSS.
 
-1. **Python 3.9+** installed
-2. **PostgreSQL** database running
-3. **Redis** server (for Celery)
-4. **Tesseract OCR** installed:
-   - Windows: Download from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
-   - Linux: `sudo apt-get install tesseract-ocr`
-   - macOS: `brew install tesseract`
-5. **Poppler** (for pdf2image):
-   - Windows: Download from [Poppler Windows](https://github.com/oschwartz10612/poppler-windows/releases)
-   - Linux: `sudo apt-get install poppler-utils`
-   - macOS: `brew install poppler`
-6. **DigitalOcean Spaces** account with bucket created
-7. **OpenAI API** key
-
-### Installation
-
-1. **Clone or navigate to the project directory:**
-
-```powershell
-cd c:\Users\azizn\OneDrive\Desktop\Project1
-```
-
-2. **Create a virtual environment:**
-
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
-
-3. **Install dependencies:**
-
-```powershell
+```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-4. **Configure environment variables:**
-
-Copy `.env.example` to `.env` and fill in your credentials:
-
-```powershell
-Copy-Item .env.example .env
-notepad .env
-```
-
-Required configuration:
-```env
-# DigitalOcean Spaces
-SPACES_REGION=sgp1
-SPACES_ENDPOINT=https://sgp1.digitaloceanspaces.com
-SPACES_KEY=your_actual_spaces_key
-SPACES_SECRET=your_actual_spaces_secret
-SPACES_BUCKET=exam-answer-sheets
-
-# OpenAI
-OPENAI_API_KEY=your_actual_openai_key
-OPENAI_MODEL=gpt-4o
-
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/exam_db
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-```
-
-5. **Create the database:**
-
-```powershell
-# Using PostgreSQL CLI
-psql -U postgres
-CREATE DATABASE exam_db;
-\q
-```
-
-6. **Initialize database tables:**
-
-```powershell
-python -c "from backend.db.database import init_db; init_db()"
-```
-
-### Running the Application
-
-#### Option 1: Full Stack (Backend + Frontend) ⭐ RECOMMENDED
-
-Start everything with one command:
-
-```powershell
-.\start-fullstack.ps1
-```
-
-This will start:
-- Backend API at http://localhost:8000
-- Frontend App at http://localhost:3000
-
-**Then open your browser to http://localhost:3000**
-
-#### Option 2: Backend Only (API Development)
-
-Start the FastAPI server:
-
-```powershell
+cp .env.example .env
+# Set GEMINI_API_KEY and review the remaining settings in .env.
 python main.py
 ```
 
-The API will be available at `http://localhost:8000`
+Install Tesseract with English language data on the host, or use the supplied
+Docker image. The API listens on port 8000; interactive docs are at `/docs`.
+Database tables and bundled answer-key versions are initialized at startup.
+SQLite is the default local database. Local uploads and results live under
+`storage/`. The local development default runs without Redis. Production uses
+`docker compose up -d --build` to start the API, Redis, a dispatcher, one processing
+worker and a separate Spaces archive worker.
 
-- **API Documentation**: http://localhost:8000/docs
-- **Alternative Docs**: http://localhost:8000/redoc
-
-#### Option 3: Production Mode (with Celery)
-
-**Terminal 1 - Start Redis** (if not running as service):
-
-```powershell
-redis-server
-```
-
-**Terminal 2 - Start Celery Worker:**
-
-```powershell
-celery -A backend.worker worker --loglevel=info -Q exam_processing --pool=solo
-```
-
-Note: Use `--pool=solo` on Windows, or `--pool=prefork` on Linux/macOS
-
-**Terminal 3 - Start FastAPI:**
-
-```powershell
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-**Terminal 4 - Start Frontend (Optional):**
-
-```powershell
+```bash
 cd frontend
-npm run dev
+npm ci
+VITE_API_BASE_URL=http://localhost:8000 npm run dev
 ```
 
-## 🌐 Frontend Web Interface
+Open `http://localhost:3000`. Production frontend builds use the API URL in
+`frontend/.env.production` or the `VITE_API_BASE_URL` build variable.
 
-### Quick Start
+## Deployment and operation
 
-The easiest way to use the system is through the web interface:
+See [DEPLOY.md](DEPLOY.md) for Docker, persistence, environment variables,
+optional authentication, proxy configuration, and the four-vCPU deployment's
+CPU budget. Mathpix is optional; template-based diagram crops remain available
+without it. New layout templates and answer keys are provisioned by the
+operator; public answer-key endpoints expose metadata only.
 
-1. **Start the full stack:**
-```powershell
-.\start-fullstack.ps1
-```
+Production uploads are durable before acknowledgment and resume from committed
+page batches after worker restarts. Files up to 3 GiB are streamed to disk, with
+upload admission and disk reservations. `/submission/{id}/cancel` cancels work;
+`/jobs/{id}` exposes retries and results. Processed PDFs, converted pages, crops
+and result snapshots are verified in private Spaces storage. New uploads retain a 24-hour local cache after verified archival; pre-rollout
+submissions remain pinned locally.
 
-2. **Open your browser:**
-```
-http://localhost:3000
-```
+`GET /candidate-page?exam_id=31&candidate_number=000123` returns an
+authenticated PNG for the SEAMO 2026 exam series, without requiring answer keys.
+Existing paper codes remain accepted. Repeated candidate/exam matches return 409 and require a
+`submission_id` (and sometimes `page_number`) to select the intended scan.
 
-3. **Upload a PDF:**
-   - Drag and drop your exam answer sheet
-   - Or click "Browse Files"
-   - Click "Start Extraction"
+## Documentation maintenance
 
-4. **Track Progress:**
-   - Automatically redirected to tracking page
-   - Real-time status updates
-   - Results appear when complete
-
-5. **View & Export Results:**
-   - See all extracted answers
-   - Export as JSON
-   - Beautiful, responsive UI
-
-### Frontend Features
-
-✨ **Beautiful UI** - Modern design with Tailwind CSS  
-🎯 **Drag & Drop** - Intuitive file upload  
-⚡ **Real-time Updates** - Live processing status  
-📱 **Responsive** - Works on all devices  
-💾 **Export** - Download results as JSON  
-🎨 **Component-based** - Easy to maintain  
-
-See `frontend/README.md` for more details.
-
----
-
-## 📖 API Usage (Programmatic)
-
-### 1. Upload PDF for Processing
+The guide has one source, [docs/api/guide.md](docs/api/guide.md). Its examples
+are checked against real API handlers using synthetic data in
+[tests/test_api_documentation.py](tests/test_api_documentation.py).
 
 ```bash
-POST /api/v1/upload
-Content-Type: multipart/form-data
-
-file: [PDF file]
+python -m pip install -r scripts/requirements-docs.txt
+python scripts/build_api_docs.py
+python scripts/build_api_docs.py --check
+DEBUG=false .venv/bin/python -m pytest tests/test_api_documentation.py tests/test_integration_client.py -q
+cd frontend && npm run build
 ```
 
-**Example with curl:**
+The generator updates `docs/API.md`, the standalone site under
+`frontend/public/integration/`, and the downloadable ZIP. The frontend's
+`/api-docs` page embeds that same guide. Generated static files are committed,
+so building the frontend image does not require Python or a documentation
+package. Refresh `docs/api/openapi.json` from the live API when routes or
+schemas change; it is a reviewed snapshot, not a replacement for the live URL.
+
+For an intentional response-contract change, regenerate the example fixture,
+review the diff, and rebuild the guide:
 
 ```bash
-curl -X POST "http://localhost:8000/api/v1/upload" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@exam_answer_sheet.pdf"
+UPDATE_API_DOC_EXAMPLES=1 DEBUG=false .venv/bin/python -m pytest tests/test_api_documentation.py -q
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "message": "PDF uploaded successfully. Processing started.",
-  "submission_id": 1,
-  "filename": "exam_answer_sheet.pdf",
-  "spaces_key": "pdfs/exam_answer_sheet.pdf"
-}
-```
+## Code and tests
 
-### 2. Check Processing Status
+- `main.py`: service entry point and middleware.
+- `backend/api/`: HTTP routes and typed request/response models.
+- `backend/services/`: extraction, layout detection, marking, review, and storage.
+- `backend/templates/`: supported layouts and geometric regions.
+- `answer_keys/`: versioned marking manifests and reference drawings.
+- `frontend/`: upload, tracking, results/review UI, and developer documentation.
+- `tests/`: endpoint, scoring, extraction, cancellation, and CPU-budget checks.
+
+Representative checks:
 
 ```bash
-GET /api/v1/status/{submission_id}
+DEBUG=false .venv/bin/python -m pytest \
+  tests/test_api_documentation.py tests/test_marking_api.py \
+  tests/test_candidate_edit.py tests/test_marking_workflow.py \
+  tests/test_cancellation.py tests/test_cpu_limits.py -q
 ```
 
-**Example:**
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/status/1"
-```
-
-**Response:**
-```json
-{
-  "submission_id": 1,
-  "filename": "exam_answer_sheet.pdf",
-  "status": "completed",
-  "created_at": "2025-11-17T10:30:00",
-  "processed_at": "2025-11-17T10:31:45",
-  "pages_count": 3,
-  "mcq_count": 25,
-  "free_response_count": 3,
-  "error_message": null
-}
-```
-
-Status values:
-- `pending` - Upload complete, waiting for processing
-- `processing` - Currently extracting answers
-- `completed` - Extraction complete, data saved
-- `failed` - Extraction failed (see error_message)
-
-### 3. Get Extracted Answers
-
-```bash
-GET /api/v1/submission/{submission_id}
-```
-
-**Example:**
-
-```bash
-curl -X GET "http://localhost:8000/api/v1/submission/1"
-```
-
-**Response:**
-```json
-{
-  "submission_id": 1,
-  "filename": "exam_answer_sheet.pdf",
-  "status": "completed",
-  "created_at": "2025-11-17T10:30:00",
-  "processed_at": "2025-11-17T10:31:45",
-  "multiple_choice": [
-    {"question": 1, "answer": "A"},
-    {"question": 2, "answer": "C"},
-    {"question": 3, "answer": "B"}
-  ],
-  "free_response": [
-    {
-      "question": 1,
-      "response": "Photosynthesis is the process by which plants convert light energy..."
-    },
-    {
-      "question": 2,
-      "response": "The main causes of World War I included..."
-    }
-  ]
-}
-```
-
-### 4. List All Submissions
-
-```bash
-GET /api/v1/submissions?skip=0&limit=100&status=completed
-```
-
-### 5. Delete Submission
-
-```bash
-DELETE /api/v1/submission/{submission_id}
-```
-
-## 🗂️ Project Structure
-
-```
-Project1/
-├── backend/
-│   ├── __init__.py
-│   ├── config.py                 # Configuration management
-│   ├── worker.py                 # Celery background tasks
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── routes.py            # API endpoints
-│   │   └── schemas.py           # Pydantic models
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── space_client.py      # DigitalOcean Spaces client
-│   │   ├── pdf_to_images.py     # PDF conversion
-│   │   ├── ocr_engine.py        # Tesseract OCR
-│   │   ├── ai_extractor.py      # OpenAI Vision API
-│   │   └── json_generator.py    # JSON formatting
-│   └── db/
-│       ├── __init__.py
-│       ├── database.py          # DB connection
-│       └── models.py            # SQLAlchemy models
-├── main.py                      # FastAPI application
-├── requirements.txt             # Python dependencies
-├── .env.example                 # Environment template
-├── .env                         # Your configuration (create this)
-└── README.md                    # This file
-```
-
-## 🔧 Configuration Details
-
-### Database Models
-
-**ExamSubmission**: Tracks each PDF submission
-- Filename, upload timestamp, processing status
-- Links to Spaces storage keys
-- Processing metadata
-
-**MultipleChoiceAnswer**: Stores MCQ answers
-- Question number and selected option (A-E)
-
-**FreeResponseAnswer**: Stores written answers
-- Question number and response text
-- Automatic word count
-
-**ProcessingLog**: Audit trail
-- All processing actions and outcomes
-
-### Service Architecture
-
-#### 1. **SpacesClient** (`space_client.py`)
-- Upload/download PDFs and JSON files
-- S3-compatible API using boto3
-- Presigned URL generation for secure access
-
-#### 2. **PDFConverter** (`pdf_to_images.py`)
-- Converts PDF pages to high-resolution images
-- Configurable DPI (default: 300)
-- Batch processing support
-
-#### 3. **OCREngine** (`ocr_engine.py`)
-- Tesseract-based text extraction
-- Confidence score tracking
-- Pattern-based answer parsing
-
-#### 4. **AIExtractor** (`ai_extractor.py`)
-- OpenAI GPT-4 Vision API integration
-- Structured JSON extraction with prompts
-- Multi-page document support
-- Built-in validation
-
-#### 5. **JSONGenerator** (`json_generator.py`)
-- Formats extracted data into standardized JSON
-- Adds metadata and timestamps
-- Validation results inclusion
-
-## 🧪 Testing
-
-### Test with Sample PDF
-
-1. Create a simple test PDF with answers
-2. Upload using the API
-3. Monitor processing in logs
-4. Retrieve results
-
-### API Testing with Swagger
-
-Visit `http://localhost:8000/docs` for interactive API testing.
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**1. Import errors for packages**
-- Solution: Ensure virtual environment is activated and all packages installed
-```powershell
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-**2. Tesseract not found**
-- Solution: Install Tesseract and add to PATH, or set in code:
-```python
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-```
-
-**3. Poppler not found**
-- Solution: Download Poppler and add `bin/` folder to PATH
-
-**4. Database connection error**
-- Solution: Verify PostgreSQL is running and DATABASE_URL is correct
-
-**5. Redis connection error**
-- Solution: Start Redis server or update REDIS_URL
-
-**6. OpenAI API errors**
-- Solution: Check API key validity and account credits
-
-## 🔐 Security Considerations
-
-**Production Deployment:**
-
-1. **Environment Variables**: Never commit `.env` file
-2. **API Keys**: Rotate regularly, use key management service
-3. **CORS**: Configure `allow_origins` appropriately in `main.py`
-4. **Database**: Use strong passwords, enable SSL
-5. **File Upload**: Add virus scanning, size limits
-6. **Authentication**: Add JWT or OAuth2 for API access
-7. **Rate Limiting**: Implement to prevent abuse
-
-## 📊 Monitoring & Logging
-
-All operations are logged with timestamps and details:
-
-- **Application logs**: Console output with configurable level
-- **Database logs**: ProcessingLog table tracks all actions
-- **Error tracking**: Failures captured with full stack traces
-- **OCR artifacts**: `storage/OCRResults/YYYY/MM/DD/<context>/<source>/<run>/`
-  - `OCRResults.json` summary (per-page confidence + status)
-  - `pages/page_001.txt`, `page_002.txt`, ... raw OCR text per page
-
-## 🚀 Deployment
-
-### Docker Deployment (Recommended)
-
-Create `Dockerfile`:
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    poppler-utils \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-### Cloud Deployment
-
-- **AWS**: Deploy on EC2 or ECS with RDS PostgreSQL
-- **DigitalOcean**: Use App Platform or Droplets
-- **Heroku**: Use with Heroku Postgres add-on
-- **Azure**: Deploy to App Service with Azure Database
-
-## 📝 License
-
-This project is provided as-is for educational and commercial use.
-
-## 🤝 Contributing
-
-Contributions welcome! Areas for improvement:
-
-- Frontend UI for file upload
-- Batch processing of multiple PDFs
-- Answer key comparison and grading
-- Export to Excel/CSV
-- Student identification from PDFs
-- Handwriting recognition improvements
-
-## 📧 Support
-
-For issues or questions:
-- Check logs in console output
-- Review API documentation at `/docs`
-- Verify all environment variables are set
-- Ensure external services (DB, Redis, Spaces) are accessible
-
----
-
-**Built with ❤️ using FastAPI, OpenAI, and modern Python tools**
+Older session reports and design documents describe their historical context.
+Use the integrator guide for the current external contract and `CLAUDE.md`
+for implementation notes.

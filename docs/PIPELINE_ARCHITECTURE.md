@@ -1,5 +1,7 @@
 # Refactored Exam Extraction Pipeline - Architecture Document
 
+> **Historical architecture document.** The clustering and full-page OCR stack described below has been replaced. For the current external API, use [the Integrator Guide](API.md); for the implemented pipeline, use [CLAUDE.md](../CLAUDE.md).
+
 ## Executive Summary
 
 This document describes the refactored OCR + LLM pipeline for processing exam PDFs. The new architecture reduces Gemini API costs by **60-80%** through intelligent preprocessing, layout clustering, and selective LLM usage.
