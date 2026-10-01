@@ -93,3 +93,13 @@ button.full { width: 100%; margin-top: 6px; }
   margin-right: 4px;
 }
 .pill.on { background: var(--ok); color: #fff; }
+
+/* Column-block selector, shown only for multi-column sheets like Paper K. */
+.hidden { display: none; }
+#blockBar button.done { border-color: var(--ok); }
+#blockBar button.done::after { content: " ✓"; color: var(--ok); }
+code {
+  background: #2a2a2a;
+  padding: 0 4px;
+  border-radius: 3px;
+}

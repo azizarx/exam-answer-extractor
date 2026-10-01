@@ -14,6 +14,14 @@
   <input type="text" id="pathInput" placeholder="tests/fixtures/gold/.../page_001.png"/>
   <button id="loadPathBtn" class="full">Load path</button>
 
+  <h2>Layout</h2>
+  <div class="row">
+    <div><label for="optCount">options</label><input type="number" id="optCount" value="5" min="2" max="8"/></div>
+    <div><label for="qpc">questions / column</label><input type="text" id="qpc" value="20"/></div>
+  </div>
+  <p class="hint">A–E single column is <code>5</code> / <code>20</code>. Paper K is <code>3</code> / <code>10,5</code>.</p>
+  <div id="blockBar" class="row tight hidden"></div>
+
   <h2>Mode</h2>
   <div class="row">
     <button type="button" id="modeCols" class="active">COLS A–E</button>
