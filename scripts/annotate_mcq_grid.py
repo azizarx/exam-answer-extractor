@@ -75,10 +75,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/list":
             images = []
-            gold = Path(self.server.gold_root)  # type: ignore[attr-defined]
+            # Resolve first: a relative --gold yields relative matches, which
+            # relative_to(ROOT) then rejects against an absolute root.
+            gold = Path(self.server.gold_root).resolve()  # type: ignore[attr-defined]
             if gold.exists():
                 for p in sorted(gold.rglob("page_*.png")):
-                    images.append(str(p.relative_to(ROOT)))
+                    images.append(str(p.resolve().relative_to(ROOT)))
             self._json(200, {"images": images})
             return
         if parsed.path == "/api/image":
