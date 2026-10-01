@@ -1,0 +1,867 @@
+{
+  "upload": {
+    "status": "success",
+    "message": "PDF uploaded successfully. Processing started.",
+    "submission_id": 1,
+    "filename": "example-exam.pdf",
+    "storage_path": "uploads/example-exam.pdf"
+  },
+  "status_pending": {
+    "submission_id": 1,
+    "filename": "example-exam.pdf",
+    "status": "pending",
+    "created_at": "2026-09-09T12:00:00",
+    "processed_at": null,
+    "pages_count": 0,
+    "candidates_count": 0,
+    "answers_count": 0,
+    "drawing_count": 0,
+    "error_message": null,
+    "current_page": null,
+    "current_candidate_name": null,
+    "stage": null,
+    "queue_position": null,
+    "pages_completed": 0,
+    "attempt": 0,
+    "job_id": null,
+    "archive_status": null,
+    "archive_error": null
+  },
+  "not_completed": {
+    "detail": "Submission is pending, not completed"
+  },
+  "status_processing": {
+    "submission_id": 1,
+    "filename": "example-exam.pdf",
+    "status": "processing",
+    "created_at": "2026-09-09T12:00:00",
+    "processed_at": null,
+    "pages_count": 0,
+    "candidates_count": 0,
+    "answers_count": 0,
+    "drawing_count": 0,
+    "error_message": null,
+    "current_page": null,
+    "current_candidate_name": null,
+    "stage": null,
+    "queue_position": null,
+    "pages_completed": 0,
+    "attempt": 0,
+    "job_id": null,
+    "archive_status": null,
+    "archive_error": null
+  },
+  "status_completed": {
+    "submission_id": 1,
+    "filename": "example-exam.pdf",
+    "status": "completed",
+    "created_at": "2026-09-09T12:00:00",
+    "processed_at": "2026-09-09T12:00:00",
+    "pages_count": 1,
+    "candidates_count": 1,
+    "answers_count": 5,
+    "drawing_count": 0,
+    "error_message": null,
+    "current_page": null,
+    "current_candidate_name": null,
+    "stage": null,
+    "queue_position": null,
+    "pages_completed": 0,
+    "attempt": 0,
+    "job_id": null,
+    "archive_status": null,
+    "archive_error": null
+  },
+  "submission": {
+    "submission_id": 1,
+    "filename": "example-exam.pdf",
+    "status": "completed",
+    "created_at": "2026-09-09T12:00:00",
+    "processed_at": "2026-09-09T12:00:00",
+    "candidates": [
+      {
+        "id": 1,
+        "candidate_name": "Sample Student",
+        "candidate_number": "000123",
+        "country": "VN",
+        "paper_type": "A",
+        "page_number": 1,
+        "template_id": "seamo_2025_a",
+        "detection": {
+          "method": "footer_ocr",
+          "raw_text": "SEAMO 2025 Paper A",
+          "brand": "seamo",
+          "year": "2025",
+          "paper": "a"
+        },
+        "extra_fields": {
+          "answer_trust": {
+            "1": "trusted",
+            "2": "trusted",
+            "3": "trusted",
+            "4": "trusted",
+            "5": "needs_review"
+          },
+          "needs_review_questions": [
+            "5"
+          ]
+        },
+        "answers": {
+          "1": "A",
+          "2": "B",
+          "3": "BL",
+          "4": "IN",
+          "5": "D"
+        },
+        "drawing_questions": null,
+        "marking": {
+          "candidate_result_id": 1,
+          "candidate_number": "000123",
+          "awarded_marks": 2.0,
+          "max_marks": 10.0,
+          "percentage": 20.0,
+          "outcomes": [
+            {
+              "question_number": 1,
+              "status": "correct",
+              "response": "A",
+              "awarded_marks": 2.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 2,
+              "status": "incorrect",
+              "response": "B",
+              "awarded_marks": 0.0,
+              "max_marks": 3.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 3,
+              "status": "blank",
+              "response": "BL",
+              "awarded_marks": 0.0,
+              "max_marks": 1.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 4,
+              "status": "invalid",
+              "response": "IN",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 5,
+              "status": "needs_review",
+              "response": "D",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "extraction_trust",
+              "judge_verdict": "needs_review",
+              "judge_reason": "flagged during extraction"
+            }
+          ]
+        }
+      }
+    ],
+    "latest_marking": {
+      "id": 1,
+      "status": "completed",
+      "answer_key_id": 1,
+      "provenance": {
+        "answer_key_id": 1,
+        "template_id": "seamo_2025_a",
+        "version": 1,
+        "source_filename": "example-key.pdf",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "total_marks": 10
+      },
+      "error_message": null,
+      "created_at": "2026-09-09T12:00:00",
+      "started_at": "2026-09-09T12:00:00",
+      "completed_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00"
+    }
+  },
+  "marking": {
+    "submission_id": 1,
+    "latest_run": {
+      "id": 1,
+      "status": "completed",
+      "answer_key_id": 1,
+      "provenance": {
+        "answer_key_id": 1,
+        "template_id": "seamo_2025_a",
+        "version": 1,
+        "source_filename": "example-key.pdf",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "total_marks": 10
+      },
+      "error_message": null,
+      "created_at": "2026-09-09T12:00:00",
+      "started_at": "2026-09-09T12:00:00",
+      "completed_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00",
+      "candidates": [
+        {
+          "candidate_result_id": 1,
+          "candidate_number": "000123",
+          "awarded_marks": 2.0,
+          "max_marks": 10.0,
+          "percentage": 20.0,
+          "outcomes": [
+            {
+              "question_number": 1,
+              "status": "correct",
+              "response": "A",
+              "awarded_marks": 2.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 2,
+              "status": "incorrect",
+              "response": "B",
+              "awarded_marks": 0.0,
+              "max_marks": 3.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 3,
+              "status": "blank",
+              "response": "BL",
+              "awarded_marks": 0.0,
+              "max_marks": 1.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 4,
+              "status": "invalid",
+              "response": "IN",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 5,
+              "status": "needs_review",
+              "response": "D",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "extraction_trust",
+              "judge_verdict": "needs_review",
+              "judge_reason": "flagged during extraction"
+            }
+          ]
+        }
+      ]
+    },
+    "history": [
+      {
+        "id": 1,
+        "status": "completed",
+        "answer_key_id": 1,
+        "provenance": {
+          "answer_key_id": 1,
+          "template_id": "seamo_2025_a",
+          "version": 1,
+          "source_filename": "example-key.pdf",
+          "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "total_marks": 10
+        },
+        "error_message": null,
+        "created_at": "2026-09-09T12:00:00",
+        "started_at": "2026-09-09T12:00:00",
+        "completed_at": "2026-09-09T12:00:00",
+        "updated_at": "2026-09-09T12:00:00"
+      }
+    ]
+  },
+  "marked_export": {
+    "submission": {
+      "id": 1,
+      "filename": "example-exam.pdf",
+      "template_id": null,
+      "status": "completed",
+      "pages_count": 1,
+      "created_at": "2026-09-09T12:00:00",
+      "processed_at": "2026-09-09T12:00:00"
+    },
+    "marking": {
+      "id": 1,
+      "status": "completed",
+      "answer_key_id": 1,
+      "provenance": {
+        "answer_key_id": 1,
+        "template_id": "seamo_2025_a",
+        "version": 1,
+        "source_filename": "example-key.pdf",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "total_marks": 10
+      },
+      "error_message": null,
+      "created_at": "2026-09-09T12:00:00",
+      "started_at": "2026-09-09T12:00:00",
+      "completed_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00"
+    },
+    "candidates": [
+      {
+        "id": 1,
+        "page_number": 1,
+        "candidate_name": "Sample Student",
+        "candidate_number": "000123",
+        "country": "VN",
+        "paper_type": "A",
+        "extra_fields": {
+          "answer_trust": {
+            "1": "trusted",
+            "2": "trusted",
+            "3": "trusted",
+            "4": "trusted",
+            "5": "needs_review"
+          },
+          "needs_review_questions": [
+            "5"
+          ]
+        },
+        "answers": {
+          "1": "A",
+          "2": "B",
+          "3": "BL",
+          "4": "IN",
+          "5": "D"
+        },
+        "drawing_questions": null,
+        "marking": {
+          "candidate_result_id": 1,
+          "candidate_number": "000123",
+          "awarded_marks": 2.0,
+          "max_marks": 10.0,
+          "percentage": 20.0,
+          "outcomes": [
+            {
+              "question_number": 1,
+              "status": "correct",
+              "response": "A",
+              "awarded_marks": 2.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 2,
+              "status": "incorrect",
+              "response": "B",
+              "awarded_marks": 0.0,
+              "max_marks": 3.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 3,
+              "status": "blank",
+              "response": "BL",
+              "awarded_marks": 0.0,
+              "max_marks": 1.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 4,
+              "status": "invalid",
+              "response": "IN",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 5,
+              "status": "needs_review",
+              "response": "D",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "extraction_trust",
+              "judge_verdict": "needs_review",
+              "judge_reason": "flagged during extraction"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "raw_extraction": {
+    "document_information": {
+      "filename": "example-exam.pdf",
+      "extraction_timestamp": "2026-09-09T12:00:00",
+      "total_candidates": 1,
+      "pages_processed": 1,
+      "pages_with_data": 1,
+      "processing_time": 1.25
+    },
+    "candidates": [
+      {
+        "candidate_name": "Sample Student",
+        "candidate_number": "000123",
+        "country": "VN",
+        "paper_type": "A",
+        "template_id": "seamo_2025_a",
+        "detection": {
+          "method": "footer_ocr",
+          "raw_text": "SEAMO 2025 Paper A",
+          "brand": "seamo",
+          "year": "2025",
+          "paper": "a"
+        },
+        "answers": {
+          "1": "A",
+          "2": "B",
+          "3": "BL",
+          "4": "IN",
+          "5": "D"
+        },
+        "drawing_questions": null,
+        "extra_fields": {
+          "answer_trust": {
+            "1": "trusted",
+            "2": "trusted",
+            "3": "trusted",
+            "4": "trusted",
+            "5": "needs_review"
+          },
+          "needs_review_questions": [
+            "5"
+          ]
+        }
+      }
+    ]
+  },
+  "answer_keys": [
+    {
+      "id": 1,
+      "name": "Example Paper A v1",
+      "template_id": "seamo_2025_a",
+      "version": 1,
+      "source_filename": "example-key.pdf",
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "total_questions": 5,
+      "total_marks": 10,
+      "is_active": true,
+      "created_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00"
+    }
+  ],
+  "sync_extract": {
+    "document_information": {
+      "filename": "example-exam.pdf",
+      "extraction_timestamp": "2026-09-09T12:00:00",
+      "total_candidates": 1,
+      "pages_processed": 1,
+      "pages_with_data": 1,
+      "processing_time": 1.25
+    },
+    "candidates": [
+      {
+        "candidate_name": "Sample Student",
+        "candidate_number": "000123",
+        "country": "VN",
+        "paper_type": "A",
+        "template_id": "seamo_2025_a",
+        "detection": {
+          "method": "footer_ocr",
+          "raw_text": "SEAMO 2025 Paper A",
+          "brand": "seamo",
+          "year": "2025",
+          "paper": "a"
+        },
+        "answers": {
+          "1": "A",
+          "2": "B",
+          "3": "BL",
+          "4": "IN",
+          "5": "D"
+        },
+        "drawing_questions": null,
+        "extra_fields": {
+          "answer_trust": {
+            "1": "trusted",
+            "2": "trusted",
+            "3": "trusted",
+            "4": "trusted",
+            "5": "needs_review"
+          },
+          "needs_review_questions": [
+            "5"
+          ]
+        }
+      }
+    ]
+  },
+  "sync_mark": {
+    "filename": "example-exam.pdf",
+    "template_id": null,
+    "mode": "auto",
+    "total_candidates": 1,
+    "candidates": [
+      {
+        "page_number": 1,
+        "candidate_name": "Sample Student",
+        "candidate_number": "000123",
+        "country": "VN",
+        "paper_type": "A",
+        "template_id": "seamo_2025_a",
+        "detection": {
+          "method": "footer_ocr",
+          "raw_text": "SEAMO 2025 Paper A",
+          "brand": "seamo",
+          "year": "2025",
+          "paper": "a"
+        },
+        "answers": {
+          "1": "A",
+          "2": "B",
+          "3": "BL",
+          "4": "IN",
+          "5": "D"
+        },
+        "drawing_questions": {},
+        "extra_fields": {
+          "answer_trust": {
+            "1": "trusted",
+            "2": "trusted",
+            "3": "trusted",
+            "4": "trusted",
+            "5": "needs_review"
+          },
+          "needs_review_questions": [
+            "5"
+          ]
+        },
+        "marking": {
+          "awarded_marks": 4,
+          "max_marks": 10,
+          "percentage": 40.0,
+          "answer_key_id": 1,
+          "outcomes": [
+            {
+              "question_number": 1,
+              "status": "correct",
+              "response": "A",
+              "awarded_marks": 2,
+              "max_marks": 2,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 2,
+              "status": "incorrect",
+              "response": "B",
+              "awarded_marks": 0,
+              "max_marks": 3,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 3,
+              "status": "blank",
+              "response": "BL",
+              "awarded_marks": 0,
+              "max_marks": 1,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 4,
+              "status": "invalid",
+              "response": "IN",
+              "awarded_marks": 0,
+              "max_marks": 2,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 5,
+              "status": "correct",
+              "response": "D",
+              "awarded_marks": 2,
+              "max_marks": 2,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "confirm_review_request": {
+    "answers": {
+      "5": "D"
+    },
+    "remark": true,
+    "edited_by": "reviewer-42"
+  },
+  "confirm_review": {
+    "status": "success",
+    "candidate_result_id": 1,
+    "needs_review_questions": [],
+    "answers": {
+      "1": "A",
+      "2": "B",
+      "3": "BL",
+      "4": "IN",
+      "5": "D"
+    },
+    "candidate_name": "Sample Student",
+    "candidate_number": "000123",
+    "country": "VN",
+    "paper_type": "A",
+    "edits_recorded": 0,
+    "remarked": true,
+    "marking_run_id": 2,
+    "remark_error": null,
+    "remark_job_id": null
+  },
+  "remark_request": {
+    "answer_key_id": 1
+  },
+  "remark": {
+    "status": "success",
+    "submission_id": 1,
+    "total_candidates_marked": 1,
+    "run": {
+      "id": 3,
+      "status": "completed",
+      "answer_key_id": 1,
+      "provenance": {
+        "answer_key_id": 1,
+        "template_id": "seamo_2025_a",
+        "version": 1,
+        "source_filename": "example-key.pdf",
+        "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "total_marks": 10
+      },
+      "error_message": null,
+      "created_at": "2026-09-09T12:00:00",
+      "started_at": "2026-09-09T12:00:00",
+      "completed_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00",
+      "candidates": [
+        {
+          "candidate_result_id": 1,
+          "candidate_number": "000123",
+          "awarded_marks": 4.0,
+          "max_marks": 10.0,
+          "percentage": 40.0,
+          "outcomes": [
+            {
+              "question_number": 1,
+              "status": "correct",
+              "response": "A",
+              "awarded_marks": 2.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 2,
+              "status": "incorrect",
+              "response": "B",
+              "awarded_marks": 0.0,
+              "max_marks": 3.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 3,
+              "status": "blank",
+              "response": "BL",
+              "awarded_marks": 0.0,
+              "max_marks": 1.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 4,
+              "status": "invalid",
+              "response": "IN",
+              "awarded_marks": 0.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            },
+            {
+              "question_number": 5,
+              "status": "correct",
+              "response": "D",
+              "awarded_marks": 2.0,
+              "max_marks": 2.0,
+              "normalizer": "uppercase",
+              "judge_source": "deterministic",
+              "judge_verdict": null,
+              "judge_reason": null
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "cancel_conflict": {
+    "detail": "Cannot cancel a completed submission"
+  },
+  "not_found": {
+    "detail": "Submission not found"
+  },
+  "validation_error": {
+    "detail": [
+      {
+        "type": "missing",
+        "loc": [
+          "body",
+          "file"
+        ],
+        "msg": "Field required",
+        "input": null
+      }
+    ]
+  },
+  "bad_file": {
+    "detail": "Only PDF files are allowed"
+  },
+  "cancel": {
+    "submission_id": 2,
+    "status": "cancelled"
+  },
+  "status_cancelled": {
+    "submission_id": 2,
+    "filename": "example-exam.pdf",
+    "status": "cancelled",
+    "created_at": "2026-09-09T12:00:00",
+    "processed_at": "2026-09-09T12:00:00",
+    "pages_count": 0,
+    "candidates_count": 0,
+    "answers_count": 0,
+    "drawing_count": 0,
+    "error_message": null,
+    "current_page": null,
+    "current_candidate_name": null,
+    "stage": null,
+    "queue_position": null,
+    "pages_completed": 0,
+    "attempt": 0,
+    "job_id": null,
+    "archive_status": null,
+    "archive_error": null
+  },
+  "status_failed": {
+    "submission_id": 3,
+    "filename": "broken.pdf",
+    "status": "failed",
+    "created_at": "2026-09-09T12:00:00",
+    "processed_at": null,
+    "pages_count": 0,
+    "candidates_count": 0,
+    "answers_count": 0,
+    "drawing_count": 0,
+    "error_message": "Could not read PDF",
+    "current_page": null,
+    "current_candidate_name": null,
+    "stage": null,
+    "queue_position": null,
+    "pages_completed": 0,
+    "attempt": 0,
+    "job_id": null,
+    "archive_status": null,
+    "archive_error": null
+  },
+  "marking_unavailable": {
+    "submission_id": 4,
+    "latest_run": {
+      "id": 4,
+      "status": "unavailable",
+      "answer_key_id": null,
+      "provenance": null,
+      "error_message": "No active answer key is available for this submission",
+      "created_at": "2026-09-09T12:00:00",
+      "started_at": "2026-09-09T12:00:00",
+      "completed_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00",
+      "candidates": []
+    },
+    "history": [
+      {
+        "id": 4,
+        "status": "unavailable",
+        "answer_key_id": null,
+        "provenance": null,
+        "error_message": "No active answer key is available for this submission",
+        "created_at": "2026-09-09T12:00:00",
+        "started_at": "2026-09-09T12:00:00",
+        "completed_at": "2026-09-09T12:00:00",
+        "updated_at": "2026-09-09T12:00:00"
+      }
+    ]
+  },
+  "unavailable_export": {
+    "detail": "A completed marking run is required for marked JSON export"
+  },
+  "unauthorized": {
+    "detail": "Missing or invalid API key. Send X-API-Key or Authorization: Bearer."
+  }
+}

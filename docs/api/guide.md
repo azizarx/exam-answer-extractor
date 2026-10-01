@@ -121,15 +121,7 @@ The filename extension is checked at upload time; malformed PDFs can fail later 
 
 **Output — HTTP 200, `application/json`** (the current API returns 200, not 202):
 
-```json
-{
-  "status": "success",
-  "message": "PDF uploaded successfully. Processing started.",
-  "submission_id": 1,
-  "filename": "example-exam.pdf",
-  "storage_path": "uploads/example-exam.pdf"
-}
-```
+{{example:upload}}
 
 `storage_path` is a server-relative storage reference, not a public download URL. The source PDF is retained for page previews and review. A task corresponds to an `ExamSubmission`; `/track/{submission_id}` is a browser UI route, not an API endpoint.
 
@@ -149,55 +141,11 @@ No body. Returns **200** with these fields:
 
 An accepted task before work starts:
 
-```json
-{
-  "submission_id": 1,
-  "filename": "example-exam.pdf",
-  "status": "pending",
-  "created_at": "2026-09-09T12:00:00",
-  "processed_at": null,
-  "pages_count": 0,
-  "candidates_count": 0,
-  "answers_count": 0,
-  "drawing_count": 0,
-  "error_message": null,
-  "current_page": null,
-  "current_candidate_name": null,
-  "stage": null,
-  "queue_position": null,
-  "pages_completed": 0,
-  "attempt": 0,
-  "job_id": null,
-  "archive_status": null,
-  "archive_error": null
-}
-```
+{{example:status_pending}}
 
 A completed task:
 
-```json
-{
-  "submission_id": 1,
-  "filename": "example-exam.pdf",
-  "status": "completed",
-  "created_at": "2026-09-09T12:00:00",
-  "processed_at": "2026-09-09T12:00:00",
-  "pages_count": 1,
-  "candidates_count": 1,
-  "answers_count": 5,
-  "drawing_count": 0,
-  "error_message": null,
-  "current_page": null,
-  "current_candidate_name": null,
-  "stage": null,
-  "queue_position": null,
-  "pages_completed": 0,
-  "attempt": 0,
-  "job_id": null,
-  "archive_status": null,
-  "archive_error": null
-}
-```
+{{example:status_completed}}
 
 | State | Client action |
 | --- | --- |
@@ -213,12 +161,7 @@ Uploads are persisted with a durable job record before acknowledgment. Separate 
 
 No body. Available for `pending` and `processing` tasks. **200**:
 
-```json
-{
-  "submission_id": 2,
-  "status": "cancelled"
-}
-```
+{{example:cancel}}
 
 Cancellation is persistent and idempotent. The state changes to `cancelled` immediately; queued work is skipped and in-flight native/network work stops at the next checkpoint. Existing external OCR work is not revoked. The source PDF and any already-saved data are retained, but completed candidate details are not promised for a cancelled task.
 
@@ -251,135 +194,7 @@ Returns **200** only for a completed submission. Unknown IDs return **404**; all
 
 Full example, showing all five outcome states:
 
-```json
-{
-  "submission_id": 1,
-  "filename": "example-exam.pdf",
-  "status": "completed",
-  "created_at": "2026-09-09T12:00:00",
-  "processed_at": "2026-09-09T12:00:00",
-  "candidates": [
-    {
-      "id": 1,
-      "candidate_name": "Sample Student",
-      "candidate_number": "000123",
-      "country": "VN",
-      "paper_type": "A",
-      "page_number": 1,
-      "template_id": "seamo_2025_a",
-      "detection": {
-        "method": "footer_ocr",
-        "raw_text": "SEAMO 2025 Paper A",
-        "brand": "seamo",
-        "year": "2025",
-        "paper": "a"
-      },
-      "extra_fields": {
-        "answer_trust": {
-          "1": "trusted",
-          "2": "trusted",
-          "3": "trusted",
-          "4": "trusted",
-          "5": "needs_review"
-        },
-        "needs_review_questions": [
-          "5"
-        ]
-      },
-      "answers": {
-        "1": "A",
-        "2": "B",
-        "3": "BL",
-        "4": "IN",
-        "5": "D"
-      },
-      "drawing_questions": null,
-      "marking": {
-        "candidate_result_id": 1,
-        "candidate_number": "000123",
-        "awarded_marks": 2.0,
-        "max_marks": 10.0,
-        "percentage": 20.0,
-        "outcomes": [
-          {
-            "question_number": 1,
-            "status": "correct",
-            "response": "A",
-            "awarded_marks": 2.0,
-            "max_marks": 2.0,
-            "normalizer": "uppercase",
-            "judge_source": "deterministic",
-            "judge_verdict": null,
-            "judge_reason": null
-          },
-          {
-            "question_number": 2,
-            "status": "incorrect",
-            "response": "B",
-            "awarded_marks": 0.0,
-            "max_marks": 3.0,
-            "normalizer": "uppercase",
-            "judge_source": "deterministic",
-            "judge_verdict": null,
-            "judge_reason": null
-          },
-          {
-            "question_number": 3,
-            "status": "blank",
-            "response": "BL",
-            "awarded_marks": 0.0,
-            "max_marks": 1.0,
-            "normalizer": "uppercase",
-            "judge_source": "deterministic",
-            "judge_verdict": null,
-            "judge_reason": null
-          },
-          {
-            "question_number": 4,
-            "status": "invalid",
-            "response": "IN",
-            "awarded_marks": 0.0,
-            "max_marks": 2.0,
-            "normalizer": "uppercase",
-            "judge_source": "deterministic",
-            "judge_verdict": null,
-            "judge_reason": null
-          },
-          {
-            "question_number": 5,
-            "status": "needs_review",
-            "response": "D",
-            "awarded_marks": 0.0,
-            "max_marks": 2.0,
-            "normalizer": "uppercase",
-            "judge_source": "extraction_trust",
-            "judge_verdict": "needs_review",
-            "judge_reason": "flagged during extraction"
-          }
-        ]
-      }
-    }
-  ],
-  "latest_marking": {
-    "id": 1,
-    "status": "completed",
-    "answer_key_id": 1,
-    "provenance": {
-      "answer_key_id": 1,
-      "template_id": "seamo_2025_a",
-      "version": 1,
-      "source_filename": "example-key.pdf",
-      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "total_marks": 10
-    },
-    "error_message": null,
-    "created_at": "2026-09-09T12:00:00",
-    "started_at": "2026-09-09T12:00:00",
-    "completed_at": "2026-09-09T12:00:00",
-    "updated_at": "2026-09-09T12:00:00"
-  }
-}
-```
+{{example:submission}}
 
 ### GET /submission/{submission_id}/marked-json
 
@@ -479,11 +294,7 @@ Run marking again on a completed submission's persisted answers without re-extra
 
 **Input:** no body, `{}`, or `application/json`:
 
-```json
-{
-  "answer_key_id": 1
-}
-```
+{{example:remark_request}}
 
 Omitting the key selects active stored keys by each candidate's layout. The persisted workflow supports configured layout-to-key aliases. In a mixed submission, an explicit key overrides its matching layout's key; other layouts still use their own active keys.
 
@@ -507,41 +318,11 @@ Non-completed submissions, concurrent marking, and submissions with no candidate
 
 Example: confirm an uncertain answer after inspecting the scan and refresh its grade:
 
-```json
-{
-  "answers": {
-    "5": "D"
-  },
-  "remark": true,
-  "edited_by": "reviewer-42"
-}
-```
+{{example:confirm_review_request}}
 
 **Output — 200:**
 
-```json
-{
-  "status": "success",
-  "candidate_result_id": 1,
-  "needs_review_questions": [],
-  "answers": {
-    "1": "A",
-    "2": "B",
-    "3": "BL",
-    "4": "IN",
-    "5": "D"
-  },
-  "candidate_name": "Sample Student",
-  "candidate_number": "000123",
-  "country": "VN",
-  "paper_type": "A",
-  "edits_recorded": 0,
-  "remarked": true,
-  "marking_run_id": 2,
-  "remark_error": null,
-  "remark_job_id": null
-}
-```
+{{example:confirm_review}}
 
 The response includes the full current answer map, identity strings, remaining `needs_review_questions`, number of actual edits, and re-mark outcome. Supplying an answer also clears its extraction review flag, even when the value is unchanged. `clear_all_review` confirms all flagged answers, so use it only after actual review.
 
@@ -570,54 +351,7 @@ When present, `extra_fields.diagram_crops` maps question strings to crop metadat
 
 **Input:** multipart `file` (required PDF), query `template_id` (optional). No JSON body. **Output — 200**, `application/json`:
 
-```json
-{
-  "document_information": {
-    "filename": "example-exam.pdf",
-    "extraction_timestamp": "2026-09-09T12:00:00",
-    "total_candidates": 1,
-    "pages_processed": 1,
-    "pages_with_data": 1,
-    "processing_time": 1.25
-  },
-  "candidates": [
-    {
-      "candidate_name": "Sample Student",
-      "candidate_number": "000123",
-      "country": "VN",
-      "paper_type": "A",
-      "template_id": "seamo_2025_a",
-      "detection": {
-        "method": "footer_ocr",
-        "raw_text": "SEAMO 2025 Paper A",
-        "brand": "seamo",
-        "year": "2025",
-        "paper": "a"
-      },
-      "answers": {
-        "1": "A",
-        "2": "B",
-        "3": "BL",
-        "4": "IN",
-        "5": "D"
-      },
-      "drawing_questions": null,
-      "extra_fields": {
-        "answer_trust": {
-          "1": "trusted",
-          "2": "trusted",
-          "3": "trusted",
-          "4": "trusted",
-          "5": "needs_review"
-        },
-        "needs_review_questions": [
-          "5"
-        ]
-      }
-    }
-  ]
-}
-```
+{{example:sync_extract}}
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -690,23 +424,7 @@ The list includes variants and may change as layouts are added. `GET /templates`
 
 `GET /answer-keys` returns a metadata array; `GET /answer-keys/{key_id}` returns one object. Metadata includes `id`, `name`, nullable `template_id`, `version`, nullable `source_filename`, nullable `source_sha256`, nullable `total_questions` and `total_marks`, `is_active`, `created_at`, and `updated_at`.
 
-```json
-[
-  {
-    "id": 1,
-    "name": "Example Paper A v1",
-    "template_id": "seamo_2025_a",
-    "version": 1,
-    "source_filename": "example-key.pdf",
-    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "total_questions": 5,
-    "total_marks": 10,
-    "is_active": true,
-    "created_at": "2026-09-09T12:00:00",
-    "updated_at": "2026-09-09T12:00:00"
-  }
-]
-```
+{{example:answer_keys}}
 
 No accepted answers, question specifications, or drawing-key text are included. The separate reference-diagram image endpoint is available for visual review. Answer-key creation, update, and deletion are **not public API operations**; unsupported methods return 405. Coordinate key and new-layout provisioning with the operator. Uploading a correction PDF through the older `/exams` API does not activate a marking key.
 
@@ -763,21 +481,7 @@ Exam: `id` integer, `name` string, nullable `correction_pdf_path` string, `creat
 
 Application errors normally use `{"detail":"message"}`. FastAPI request validation uses an array in `detail`:
 
-```json
-{
-  "detail": [
-    {
-      "type": "missing",
-      "loc": [
-        "body",
-        "file"
-      ],
-      "msg": "Field required",
-      "input": null
-    }
-  ]
-}
-```
+{{example:validation_error}}
 
 The legacy `ErrorResponse` schema (`error`, `detail`, `timestamp`) is not the common runtime error wrapper. Proxy/network failures can return HTML, plain text, or no body; handle non-JSON errors too.
 

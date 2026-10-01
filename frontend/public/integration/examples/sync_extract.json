@@ -1,0 +1,46 @@
+{
+  "document_information": {
+    "filename": "example-exam.pdf",
+    "extraction_timestamp": "2026-09-09T12:00:00",
+    "total_candidates": 1,
+    "pages_processed": 1,
+    "pages_with_data": 1,
+    "processing_time": 1.25
+  },
+  "candidates": [
+    {
+      "candidate_name": "Sample Student",
+      "candidate_number": "000123",
+      "country": "VN",
+      "paper_type": "A",
+      "template_id": "seamo_2025_a",
+      "detection": {
+        "method": "footer_ocr",
+        "raw_text": "SEAMO 2025 Paper A",
+        "brand": "seamo",
+        "year": "2025",
+        "paper": "a"
+      },
+      "answers": {
+        "1": "A",
+        "2": "B",
+        "3": "BL",
+        "4": "IN",
+        "5": "D"
+      },
+      "drawing_questions": null,
+      "extra_fields": {
+        "answer_trust": {
+          "1": "trusted",
+          "2": "trusted",
+          "3": "trusted",
+          "4": "trusted",
+          "5": "needs_review"
+        },
+        "needs_review_questions": [
+          "5"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+[
+  {
+    "id": 1,
+    "name": "Example Paper A v1",
+    "template_id": "seamo_2025_a",
+    "version": 1,
+    "source_filename": "example-key.pdf",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "total_questions": 5,
+    "total_marks": 10,
+    "is_active": true,
+    "created_at": "2026-09-09T12:00:00",
+    "updated_at": "2026-09-09T12:00:00"
+  }
+]

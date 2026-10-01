@@ -1,0 +1,3451 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Exam Answer Sheet Extraction API",
+    "description": "\nPDF answer-sheet extraction and AI marking with a durable processing queue.\n\n1. POST /upload with multipart file (up to 3 GiB) and optional template_id query.\n2. Poll GET /status/{submission_id}; inspect queue stage and page progress.\n3. GET /submission/{submission_id}, inspect marking, and GET /submission/{submission_id}/marked-json.\n\nGET /candidate-page accepts exam_id=31 for the SEAMO 2026 series and a string candidate_number.\nPage lookup does not require answer keys; existing paper codes remain accepted.\nGET /capabilities reports upload and queue limits. Jobs survive API restarts.\nSynchronous extraction routes share the worker queue and return a job reference on timeout.\n\nSend X-API-Key or Authorization: Bearer when authentication is enabled.\nFull guide: https://aimarker.seamo-official.org/integration/\n",
+    "contact": {
+      "name": "Exam Extractor API"
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/templates": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "List Templates",
+        "description": "List all available exam layout templates with preview image URLs.",
+        "operationId": "list_templates_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/templates/all": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "List All Templates",
+        "description": "List ALL templates including variants (for programmatic use).",
+        "operationId": "list_all_templates_templates_all_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/templates/{template_id}/preview": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Get Template Preview",
+        "description": "Return the reference image for a template as a PNG.",
+        "operationId": "get_template_preview_templates__template_id__preview_get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exams": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "List Exams",
+        "operationId": "list_exams_exams_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExamResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Exams Exams Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Create Exam",
+        "operationId": "create_exam_exams_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExamCreateSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exams/{exam_id}": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Get Exam",
+        "operationId": "get_exam_exams__exam_id__get",
+        "parameters": [
+          {
+            "name": "exam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exams/{exam_id}/correction": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Upload Correction Pdf",
+        "operationId": "upload_correction_pdf_exams__exam_id__correction_post",
+        "parameters": [
+          {
+            "name": "exam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exam Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_correction_pdf_exams__exam_id__correction_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exams/{exam_id}/student-pdfs": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Upload Student Pdf",
+        "operationId": "upload_student_pdf_exams__exam_id__student_pdfs_post",
+        "parameters": [
+          {
+            "name": "exam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exam Id"
+            }
+          },
+          {
+            "name": "country",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Country"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_student_pdf_exams__exam_id__student_pdfs_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExamDocumentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exams/{exam_id}/extract/{document_id}": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Extract Exam Document",
+        "operationId": "extract_exam_document_exams__exam_id__extract__document_id__post",
+        "parameters": [
+          {
+            "name": "exam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exam Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "template_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Exam layout template id; required.",
+              "title": "Template Id"
+            },
+            "description": "Exam layout template id; required."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedJSONResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/exams/{exam_id}/jsons": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "List Exam Jsons",
+        "operationId": "list_exam_jsons_exams__exam_id__jsons_get",
+        "parameters": [
+          {
+            "name": "exam_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exam Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GeneratedJSONResponse"
+                  },
+                  "title": "Response List Exam Jsons Exams  Exam Id  Jsons Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jsons/{json_id}": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Download Json",
+        "operationId": "download_json_jsons__json_id__get",
+        "parameters": [
+          {
+            "name": "json_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Json Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Delete Json",
+        "operationId": "delete_json_jsons__json_id__delete",
+        "parameters": [
+          {
+            "name": "json_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Json Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upload": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Upload Pdf",
+        "description": "Upload a PDF exam answer sheet for processing.\n\nDefault is auto layout detection per page. Pass ``template_id`` to force\na single layout for every page.",
+        "operationId": "upload_pdf_upload_post",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional forced layout id. When omitted, each page is classified from the footer (OCR) across all templates.",
+              "title": "Template Id"
+            },
+            "description": "Optional forced layout id. When omitted, each page is classified from the footer (OCR) across all templates."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_pdf_upload_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/cancel": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Cancel Submission",
+        "description": "Cancel queued/running extraction. In-flight calls stop at a checkpoint.",
+        "operationId": "cancel_submission_submission__submission_id__cancel_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/status/{submission_id}": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Get Status",
+        "description": "Get processing status of a submission\n\nArgs:\n    submission_id: Submission ID\n    db: Database session\n    \nReturns:\n    Processing status details",
+        "operationId": "get_status_status__submission_id__get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessingStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Get Submission",
+        "description": "Get full submission details with all candidate results",
+        "operationId": "get_submission_submission__submission_id__get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Delete Submission",
+        "description": "Delete a submission and all associated data\n\nArgs:\n    submission_id: Submission ID\n    db: Database session\n    \nReturns:\n    Deletion confirmation",
+        "operationId": "delete_submission_submission__submission_id__delete",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "202": {
+            "description": "Deletion queued; response includes job_id"
+          },
+          "409": {
+            "description": "Active work must finish or be cancelled first"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submissions": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "List Submissions",
+        "description": "List all submissions with optional filtering\n\nArgs:\n    skip: Number of records to skip\n    limit: Maximum records to return\n    status: Filter by status (optional)\n    db: Database session\n    \nReturns:\n    List of submissions",
+        "operationId": "list_submissions_submissions_get",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProcessingStatusResponse"
+                  },
+                  "title": "Response List Submissions Submissions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/json": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Get Submission Json",
+        "description": "Get the raw JSON result file for a submission",
+        "operationId": "get_submission_json_submission__submission_id__json_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/logs": {
+      "get": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Get Submission Logs",
+        "description": "Return the most recent processing logs for a submission.",
+        "operationId": "get_submission_logs_submission__submission_id__logs_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/extract/json": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Extract PDF \u2192 JSON (sync, integration primary)",
+        "description": "Synchronous PDF \u2192 JSON extraction for third-party servers.\n\nUpload a PDF and receive structured candidate data in the HTTP response.\nNo submission row is created. Prefer this endpoint for server-to-server use.\n\nSet a client timeout of **\u2265 10 minutes** for multi-page PDFs.",
+        "operationId": "extract_json_extract_json_post",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional layout template id (see GET /templates/all). When omitted, each page is classified from the printed footer.",
+              "title": "Template Id"
+            },
+            "description": "Optional layout template id (see GET /templates/all). When omitted, each page is classified from the printed footer."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_json_extract_json_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Structured extraction JSON with candidates and answers",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/extract/json/mark": {
+      "post": {
+        "tags": [
+          "Exam Processing"
+        ],
+        "summary": "Extract PDF + mark against stored answer key (sync)",
+        "description": "Synchronous extract + mark against a **stored** answer key.\n\n``mark_request`` may select a stored immutable answer-key version by ID.\nInline answer keys are intentionally rejected.\n\nWithout ``mark_request``:\n- forced ``template_id`` \u2192 active key for that template\n- auto layout \u2192 active key matching each candidate's ``template_id``\nMissing keys leave that candidate unmarked (no marking block).",
+        "operationId": "extract_and_mark_extract_json_mark_post",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional forced layout id. When omitted, layout is auto-detected and each candidate is marked against the active key for their template.",
+              "title": "Template Id"
+            },
+            "description": "Optional forced layout id. When omitted, layout is auto-detected and each candidate is marked against the active key for their template."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_extract_and_mark_extract_json_mark_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/page/{page_number}.png": {
+      "get": {
+        "tags": [
+          "Exam Processing",
+          "Exam Processing"
+        ],
+        "summary": "Get Submission Page Image",
+        "description": "Render one page of a submission's uploaded PDF for on-screen review.\n\nDeliberately a sync def: rasterising a page is ~0.2s of CPU, and on the\nevent loop that stalls every other request for the duration. Starlette\nruns sync endpoints in its threadpool.\n\nQueued submissions retain their conversion PNGs locally or in Spaces.\nHistorical submissions without a retained PNG render from the source PDF.\n``CandidateResult.page_number`` is the original one-based PDF page index.",
+        "operationId": "get_submission_page_image_submission__submission_id__page__page_number__png_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Page Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/candidates/{candidate_id}/diagram/{question}.png": {
+      "get": {
+        "tags": [
+          "Exam Processing",
+          "Exam Processing"
+        ],
+        "summary": "Get Candidate Diagram Crop",
+        "description": "The candidate's drawing for one diagram question, as the judge saw it.",
+        "operationId": "get_candidate_diagram_crop_submission__submission_id__candidates__candidate_id__diagram__question__png_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Candidate Id"
+            }
+          },
+          {
+            "name": "question",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Question"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/answer-keys": {
+      "get": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "List Answer Keys",
+        "operationId": "list_answer_keys_answer_keys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AnswerKeyMetadataSchema"
+                  },
+                  "type": "array",
+                  "title": "Response List Answer Keys Answer Keys Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/answer-keys/{key_id}": {
+      "get": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "Get Answer Key",
+        "operationId": "get_answer_key_answer_keys__key_id__get",
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Key Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerKeyMetadataSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/marking": {
+      "get": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "Get Submission Marking",
+        "operationId": "get_submission_marking_submission__submission_id__marking_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionMarkingDetailSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/candidates/{candidate_id}/confirm-review": {
+      "post": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "Confirm Candidate Review",
+        "description": "Apply a human correction to a candidate and clear its review flags.\n\nHandles both the review queue (answers flagged during extraction) and a\nfree-form edit of any answer or identity field. Every change is appended to\n``extra_fields.manual_edits`` with the value the extractor originally\nproduced, so a mark can still be defended against what the scan said.\n\nRe-marking is opt-in via ``remark`` so existing callers keep the old\nbehaviour of leaving scores untouched.",
+        "operationId": "confirm_candidate_review_submission__submission_id__candidates__candidate_id__confirm_review_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfirmReviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/mark": {
+      "post": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "Mark Submission",
+        "operationId": "mark_submission_submission__submission_id__mark_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ManualRemarkRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualRemarkResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/marked-json": {
+      "get": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "Get Marked Json",
+        "operationId": "get_marked_json_submission__submission_id__marked_json_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkedExportSchema"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/answer-keys/reference/{template_id}/{question}.png": {
+      "get": {
+        "tags": [
+          "Marking",
+          "Marking"
+        ],
+        "summary": "Get Reference Diagram",
+        "description": "The answer key's own drawing for a diagram question.\n\nPaired with the candidate's crop in the results UI so a diagram mark can be\nchecked against exactly what the vision judge compared.",
+        "operationId": "get_reference_diagram_answer_keys_reference__template_id___question__png_get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Id"
+            }
+          },
+          {
+            "name": "question",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Question"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/capabilities": {
+      "get": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Capabilities",
+        "operationId": "capabilities_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Get Job",
+        "operationId": "get_job_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Cancel Job",
+        "operationId": "cancel_job_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/mark-jobs": {
+      "post": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Enqueue Mark",
+        "operationId": "enqueue_mark_submission__submission_id__mark_jobs_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{job_id}/retry": {
+      "post": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Retry Job",
+        "operationId": "retry_job_jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/submission/{submission_id}/archive": {
+      "post": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Enqueue Archive",
+        "operationId": "enqueue_archive_submission__submission_id__archive_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/candidate-page": {
+      "get": {
+        "tags": [
+          "Queue and storage"
+        ],
+        "summary": "Candidate Page",
+        "description": "Find a candidate's source page within an exam series, without requiring marking or answer keys.",
+        "operationId": "candidate_page_candidate_page_get",
+        "parameters": [
+          {
+            "name": "exam_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "External exam ID: 31 means SEAMO 2026 across all papers/layouts. Existing paper codes remain accepted.",
+              "title": "Exam Id"
+            },
+            "description": "External exam ID: 31 means SEAMO 2026 across all papers/layouts. Existing paper codes remain accepted."
+          },
+          {
+            "name": "candidate_number",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Candidate number as a string; preserve leading zeros.",
+              "title": "Candidate Number"
+            },
+            "description": "Candidate number as a string; preserve leading zeros."
+          },
+          {
+            "name": "submission_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "page_number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "image/png": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "tags": [
+          "Meta"
+        ],
+        "summary": "Root",
+        "description": "Service metadata and doc links.",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Meta"
+        ],
+        "summary": "Health Check",
+        "description": "Liveness probe for load balancers and uptime checks.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerKeyMetadataSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "source_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Filename"
+          },
+          "source_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sha256"
+          },
+          "total_questions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Questions"
+          },
+          "total_marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Marks"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AnswerKeyMetadataSchema"
+      },
+      "AnswerKeyProvenanceSchema": {
+        "properties": {
+          "answer_key_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Key Id"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "source_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Filename"
+          },
+          "source_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Sha256"
+          },
+          "total_marks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Marks"
+          }
+        },
+        "type": "object",
+        "title": "AnswerKeyProvenanceSchema"
+      },
+      "Body_extract_and_mark_extract_json_mark_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Scanned exam answer-sheet PDF"
+          },
+          "mark_request": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mark Request",
+            "description": "Optional JSON: {\"answer_key_id\": <int>}. Inline keys are rejected."
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_extract_and_mark_extract_json_mark_post"
+      },
+      "Body_extract_json_extract_json_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Scanned exam answer-sheet PDF"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_extract_json_extract_json_post"
+      },
+      "Body_upload_correction_pdf_exams__exam_id__correction_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_correction_pdf_exams__exam_id__correction_post"
+      },
+      "Body_upload_pdf_upload_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_pdf_upload_post"
+      },
+      "Body_upload_student_pdf_exams__exam_id__student_pdfs_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_student_pdf_exams__exam_id__student_pdfs_post"
+      },
+      "CandidateResultSchema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Stable persisted candidate result ID"
+          },
+          "candidate_name": {
+            "type": "string",
+            "title": "Candidate Name",
+            "description": "Full name of the candidate",
+            "default": ""
+          },
+          "candidate_number": {
+            "type": "string",
+            "title": "Candidate Number",
+            "description": "Candidate ID / number",
+            "default": ""
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "description": "Country",
+            "default": ""
+          },
+          "paper_type": {
+            "type": "string",
+            "title": "Paper Type",
+            "description": "Paper type or level",
+            "default": ""
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number",
+            "description": "1-based page of the uploaded PDF this candidate was read from"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id",
+            "description": "Detected or forced layout template for this page"
+          },
+          "detection": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detection",
+            "description": "Layout detection metadata (method, raw_text, warning)"
+          },
+          "extra_fields": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Fields",
+            "description": "Additional header / trust metadata. Values may be strings or nested JSON (e.g. answer_trust dict, needs_review_questions list)."
+          },
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Answers",
+            "description": "MCQ answers as {\"1\": \"D\", \"2\": \"B\", \"3\": \"BL\", \"4\": \"IN\", ...}"
+          },
+          "drawing_questions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drawing Questions",
+            "description": "Free-response / drawing answers as {\"31\": \"student text...\"}"
+          },
+          "marking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CandidateWeightedMarkingSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "CandidateResultSchema",
+        "description": "Schema for a single candidate's extracted result.\n\nThe four fixed header fields (candidate_name, candidate_number, country,\npaper_type) are kept for backward compatibility.  Any additional header\nfields discovered during dynamic format analysis are stored in\n``extra_fields``."
+      },
+      "CandidateWeightedMarkingSchema": {
+        "properties": {
+          "candidate_result_id": {
+            "type": "integer",
+            "title": "Candidate Result Id"
+          },
+          "candidate_number": {
+            "type": "string",
+            "title": "Candidate Number",
+            "default": ""
+          },
+          "awarded_marks": {
+            "type": "number",
+            "title": "Awarded Marks"
+          },
+          "max_marks": {
+            "type": "number",
+            "title": "Max Marks"
+          },
+          "percentage": {
+            "type": "number",
+            "title": "Percentage"
+          },
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionOutcomeSchema"
+            },
+            "type": "array",
+            "title": "Outcomes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_result_id",
+          "awarded_marks",
+          "max_marks",
+          "percentage"
+        ],
+        "title": "CandidateWeightedMarkingSchema"
+      },
+      "ConfirmReviewRequest": {
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Answers"
+          },
+          "clear_all_review": {
+            "type": "boolean",
+            "title": "Clear All Review",
+            "default": false
+          },
+          "candidate_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Name",
+            "description": "Set to correct a misread name; omit to leave unchanged"
+          },
+          "candidate_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Number",
+            "description": "Set to correct a misread candidate number"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "paper_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Type"
+          },
+          "remark": {
+            "type": "boolean",
+            "title": "Remark",
+            "description": "Re-mark this candidate after applying the edit. The run stays complete: other candidates' marks carry forward unchanged.",
+            "default": false
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited By",
+            "description": "Recorded in the edit history; free text, unauthenticated"
+          }
+        },
+        "type": "object",
+        "title": "ConfirmReviewRequest",
+        "description": "Human correction of a candidate: answers and/or identity fields.\n\nEvery field is optional and defaults preserve the original\nconfirm-review behaviour, so existing API callers are unaffected."
+      },
+      "ConfirmReviewResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "success",
+            "title": "Status",
+            "default": "success"
+          },
+          "candidate_result_id": {
+            "type": "integer",
+            "title": "Candidate Result Id"
+          },
+          "needs_review_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs Review Questions"
+          },
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Answers"
+          },
+          "candidate_name": {
+            "type": "string",
+            "title": "Candidate Name",
+            "default": ""
+          },
+          "candidate_number": {
+            "type": "string",
+            "title": "Candidate Number",
+            "default": ""
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "default": ""
+          },
+          "paper_type": {
+            "type": "string",
+            "title": "Paper Type",
+            "default": ""
+          },
+          "edits_recorded": {
+            "type": "integer",
+            "title": "Edits Recorded",
+            "description": "How many field/answer changes this request actually applied",
+            "default": 0
+          },
+          "remarked": {
+            "type": "boolean",
+            "title": "Remarked",
+            "default": false
+          },
+          "marking_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Marking Run Id"
+          },
+          "remark_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark Error"
+          },
+          "remark_job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_result_id"
+        ],
+        "title": "ConfirmReviewResponse"
+      },
+      "ExamCreateSchema": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Exam name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ExamCreateSchema"
+      },
+      "ExamDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "correction_pdf_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction Pdf Path"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/ExamDocumentResponse"
+            },
+            "type": "array",
+            "title": "Documents",
+            "default": []
+          },
+          "generated_jsons": {
+            "items": {
+              "$ref": "#/components/schemas/GeneratedJSONResponse"
+            },
+            "type": "array",
+            "title": "Generated Jsons",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "correction_pdf_path",
+          "created_at"
+        ],
+        "title": "ExamDetailResponse"
+      },
+      "ExamDocumentResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "exam_id": {
+            "type": "integer",
+            "title": "Exam Id"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "file_path": {
+            "type": "string",
+            "title": "File Path"
+          },
+          "pages_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages Count"
+          },
+          "uploaded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Uploaded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "exam_id",
+          "country",
+          "file_path",
+          "pages_count",
+          "uploaded_at"
+        ],
+        "title": "ExamDocumentResponse"
+      },
+      "ExamResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "correction_pdf_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction Pdf Path"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "correction_pdf_path",
+          "created_at"
+        ],
+        "title": "ExamResponse"
+      },
+      "GeneratedJSONResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "exam_id": {
+            "type": "integer",
+            "title": "Exam Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "file_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Path"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "exam_id",
+          "filename",
+          "file_path",
+          "created_at"
+        ],
+        "title": "GeneratedJSONResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ManualRemarkRequest": {
+        "properties": {
+          "answer_key_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Key Id"
+          }
+        },
+        "type": "object",
+        "title": "ManualRemarkRequest"
+      },
+      "ManualRemarkResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "success",
+            "title": "Status",
+            "default": "success"
+          },
+          "submission_id": {
+            "type": "integer",
+            "title": "Submission Id"
+          },
+          "total_candidates_marked": {
+            "type": "integer",
+            "title": "Total Candidates Marked"
+          },
+          "run": {
+            "$ref": "#/components/schemas/MarkingRunDetailSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "total_candidates_marked",
+          "run"
+        ],
+        "title": "ManualRemarkResponse"
+      },
+      "MarkedCandidateExportSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "candidate_name": {
+            "type": "string",
+            "title": "Candidate Name",
+            "default": ""
+          },
+          "candidate_number": {
+            "type": "string",
+            "title": "Candidate Number",
+            "default": ""
+          },
+          "country": {
+            "type": "string",
+            "title": "Country",
+            "default": ""
+          },
+          "paper_type": {
+            "type": "string",
+            "title": "Paper Type",
+            "default": ""
+          },
+          "extra_fields": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Fields"
+          },
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Answers"
+          },
+          "drawing_questions": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drawing Questions"
+          },
+          "marking": {
+            "$ref": "#/components/schemas/CandidateWeightedMarkingSchema"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "marking"
+        ],
+        "title": "MarkedCandidateExportSchema"
+      },
+      "MarkedExportSchema": {
+        "properties": {
+          "submission": {
+            "$ref": "#/components/schemas/MarkedExportSubmissionSchema"
+          },
+          "marking": {
+            "$ref": "#/components/schemas/MarkingRunMetadataSchema"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/MarkedCandidateExportSchema"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission",
+          "marking"
+        ],
+        "title": "MarkedExportSchema"
+      },
+      "MarkedExportSubmissionSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "pages_count": {
+            "type": "integer",
+            "title": "Pages Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "processed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "status",
+          "pages_count",
+          "created_at"
+        ],
+        "title": "MarkedExportSubmissionSchema"
+      },
+      "MarkingRunDetailSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "processing",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "answer_key_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Key Id"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerKeyProvenanceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateWeightedMarkingSchema"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MarkingRunDetailSchema"
+      },
+      "MarkingRunMetadataSchema": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "processing",
+              "completed",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "answer_key_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer Key Id"
+          },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerKeyProvenanceSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MarkingRunMetadataSchema"
+      },
+      "ProcessingStatusResponse": {
+        "properties": {
+          "submission_id": {
+            "type": "integer",
+            "title": "Submission Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "processed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed At"
+          },
+          "pages_count": {
+            "type": "integer",
+            "title": "Pages Count"
+          },
+          "candidates_count": {
+            "type": "integer",
+            "title": "Candidates Count",
+            "default": 0
+          },
+          "answers_count": {
+            "type": "integer",
+            "title": "Answers Count",
+            "default": 0
+          },
+          "drawing_count": {
+            "type": "integer",
+            "title": "Drawing Count",
+            "default": 0
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "current_page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Page"
+          },
+          "current_candidate_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Candidate Name"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "queue_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Position"
+          },
+          "pages_completed": {
+            "type": "integer",
+            "title": "Pages Completed",
+            "default": 0
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "default": 0
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "archive_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive Status"
+          },
+          "archive_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "filename",
+          "status",
+          "created_at",
+          "processed_at",
+          "pages_count"
+        ],
+        "title": "ProcessingStatusResponse",
+        "description": "Schema for processing status"
+      },
+      "QuestionOutcomeSchema": {
+        "properties": {
+          "question_number": {
+            "type": "integer",
+            "title": "Question Number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "correct",
+              "incorrect",
+              "blank",
+              "invalid",
+              "needs_review"
+            ],
+            "title": "Status"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response"
+          },
+          "awarded_marks": {
+            "type": "number",
+            "title": "Awarded Marks"
+          },
+          "max_marks": {
+            "type": "number",
+            "title": "Max Marks"
+          },
+          "normalizer": {
+            "type": "string",
+            "title": "Normalizer"
+          },
+          "judge_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judge Source"
+          },
+          "judge_verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judge Verdict"
+          },
+          "judge_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Judge Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_number",
+          "status",
+          "awarded_marks",
+          "max_marks",
+          "normalizer"
+        ],
+        "title": "QuestionOutcomeSchema"
+      },
+      "SubmissionDetailResponse": {
+        "properties": {
+          "submission_id": {
+            "type": "integer",
+            "title": "Submission Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "processed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed At"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateResultSchema"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "default": []
+          },
+          "latest_marking": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarkingRunMetadataSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "filename",
+          "status",
+          "created_at",
+          "processed_at"
+        ],
+        "title": "SubmissionDetailResponse",
+        "description": "Schema for submission details with candidate results"
+      },
+      "SubmissionMarkingDetailSchema": {
+        "properties": {
+          "submission_id": {
+            "type": "integer",
+            "title": "Submission Id"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarkingRunDetailSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/MarkingRunMetadataSchema"
+            },
+            "type": "array",
+            "title": "History"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id"
+        ],
+        "title": "SubmissionMarkingDetailSchema"
+      },
+      "UploadResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "submission_id": {
+            "type": "integer",
+            "title": "Submission Id"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "storage_path": {
+            "type": "string",
+            "title": "Storage Path"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message",
+          "submission_id",
+          "filename",
+          "storage_path"
+        ],
+        "title": "UploadResponse",
+        "description": "Schema for upload response"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

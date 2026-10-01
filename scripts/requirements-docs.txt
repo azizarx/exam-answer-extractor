@@ -1,0 +1,2 @@
+# Documentation generation only; not needed by the runtime or frontend image.
+Markdown>=3.7,<4

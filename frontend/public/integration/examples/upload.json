@@ -1,0 +1,7 @@
+{
+  "status": "success",
+  "message": "PDF uploaded successfully. Processing started.",
+  "submission_id": 1,
+  "filename": "example-exam.pdf",
+  "storage_path": "uploads/example-exam.pdf"
+}

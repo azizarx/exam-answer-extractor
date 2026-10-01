@@ -1,0 +1,21 @@
+{
+  "status": "success",
+  "candidate_result_id": 1,
+  "needs_review_questions": [],
+  "answers": {
+    "1": "A",
+    "2": "B",
+    "3": "BL",
+    "4": "IN",
+    "5": "D"
+  },
+  "candidate_name": "Sample Student",
+  "candidate_number": "000123",
+  "country": "VN",
+  "paper_type": "A",
+  "edits_recorded": 0,
+  "remarked": true,
+  "marking_run_id": 2,
+  "remark_error": null,
+  "remark_job_id": null
+}

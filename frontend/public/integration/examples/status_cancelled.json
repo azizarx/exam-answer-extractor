@@ -1,0 +1,21 @@
+{
+  "submission_id": 2,
+  "filename": "example-exam.pdf",
+  "status": "cancelled",
+  "created_at": "2026-09-09T12:00:00",
+  "processed_at": "2026-09-09T12:00:00",
+  "pages_count": 0,
+  "candidates_count": 0,
+  "answers_count": 0,
+  "drawing_count": 0,
+  "error_message": null,
+  "current_page": null,
+  "current_candidate_name": null,
+  "stage": null,
+  "queue_position": null,
+  "pages_completed": 0,
+  "attempt": 0,
+  "job_id": null,
+  "archive_status": null,
+  "archive_error": null
+}

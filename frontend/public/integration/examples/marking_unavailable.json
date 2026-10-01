@@ -1,0 +1,28 @@
+{
+  "submission_id": 4,
+  "latest_run": {
+    "id": 4,
+    "status": "unavailable",
+    "answer_key_id": null,
+    "provenance": null,
+    "error_message": "No active answer key is available for this submission",
+    "created_at": "2026-09-09T12:00:00",
+    "started_at": "2026-09-09T12:00:00",
+    "completed_at": "2026-09-09T12:00:00",
+    "updated_at": "2026-09-09T12:00:00",
+    "candidates": []
+  },
+  "history": [
+    {
+      "id": 4,
+      "status": "unavailable",
+      "answer_key_id": null,
+      "provenance": null,
+      "error_message": "No active answer key is available for this submission",
+      "created_at": "2026-09-09T12:00:00",
+      "started_at": "2026-09-09T12:00:00",
+      "completed_at": "2026-09-09T12:00:00",
+      "updated_at": "2026-09-09T12:00:00"
+    }
+  ]
+}

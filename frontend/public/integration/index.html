@@ -1,0 +1,1447 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Marker — Developer Integration Guide</title><meta name="description" content="Complete AI Marker API inputs, outputs, marking workflows, errors, and executable integration examples.">
+<style>
+article{overflow-wrap:anywhere}
+:root{color-scheme:light;--ink:#15263b;--muted:#526478;--line:#dce4ee;--accent:#185ad6;--bg:#f5f8fc}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:28px}body{margin:0;font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+a{color:var(--accent);text-underline-offset:3px}header{background:#112640;color:white;padding:36px max(24px,calc((100vw - 1320px)/2));border-bottom:4px solid #72b0ff}header .eyebrow{color:#a9c9f5;font-size:12px;letter-spacing:.15em;text-transform:uppercase;font-weight:700}header .title{font-size:clamp(26px,4vw,36px);font-weight:750;line-height:1.2;margin:8px 0}header p{color:#cfdaeb;margin:12px 0 20px;max-width:750px}.downloads{display:flex;gap:10px;flex-wrap:wrap}.downloads a,.downloads button{font:inherit;font-size:13px;font-weight:650;color:white;border:1px solid #6c87a9;border-radius:6px;padding:8px 12px;background:transparent;text-decoration:none;cursor:pointer}.downloads a:hover,.downloads button:hover{background:#274262}
+.layout{display:grid;grid-template-columns:265px minmax(0,1fr);gap:40px;max-width:1320px;padding:36px 24px 80px;margin:auto}aside{position:sticky;top:24px;align-self:start;max-height:calc(100vh - 48px);overflow:auto;padding-right:12px;font-size:13px}aside summary{font-size:12px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}aside ul{list-style:none;padding:0}aside li{margin:8px 0}aside a{text-decoration:none;color:var(--muted);display:block}aside a:hover{color:var(--accent)}aside li ul{display:none}article{min-width:0;background:white;padding:36px 42px;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px #243c5710}article>h1{font-size:30px;line-height:1.2;margin:0 0 18px}h2{font-size:25px;line-height:1.3;margin:54px 0 18px;padding-top:16px;border-top:1px solid var(--line)}h3{font-size:19px;line-height:1.5;margin-top:32px}p{margin:14px 0}li{margin:6px 0}strong{font-weight:700}code{font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf2f8;border-radius:4px;padding:2px 5px;overflow-wrap:anywhere}pre{position:relative;background:#142438;color:#e7edf7;padding:20px;border-radius:7px;overflow:auto;max-height:520px;border:1px solid #243d59}pre code{padding:0;background:none;color:inherit;white-space:pre;overflow-wrap:normal}.copy{position:sticky;float:right;top:0;right:0;background:#2c4663;color:white;border:1px solid #6c87a9;border-radius:4px;font-size:11px;padding:4px 8px;cursor:pointer}.table-wrap{overflow-x:auto;margin:18px 0}table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.55}th,td{border:1px solid var(--line);padding:11px 13px;vertical-align:top;text-align:left}th{background:#edf3fb;font-weight:700}tr:nth-child(even){background:#fafcfe}blockquote{margin:20px 0;padding:12px 20px;border-left:3px solid var(--accent);background:#edf4ff}.footer{font-size:12px;color:var(--muted);margin-top:40px}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #72b0ff;outline-offset:3px}
+@media(max-width:980px){.layout{display:block;padding:20px 12px}aside{position:static;max-height:none;padding:0 10px 20px}aside details:not([open]){margin:0}article{padding:24px 20px}h2{font-size:22px}header{padding:28px 24px}}@media print{header,aside,.copy{display:none}.layout{display:block;padding:0}article{border:0;box-shadow:none;padding:0}body{background:white;font-size:10pt}h2{break-after:avoid}pre{max-height:none;overflow:visible;white-space:pre-wrap;background:#f4f6f9;color:#111}pre code{white-space:pre-wrap;overflow-wrap:anywhere}.table-wrap{overflow:visible}table{font-size:9pt}tr{break-inside:avoid}a{color:inherit}}
+</style></head><body>
+<header><div class="eyebrow">Developer documentation · Reviewed 20 September 2026</div><div class="title">Build AI marking into your application</div>
+<p>Upload answer sheets, retrieve weighted results, and keep human review in control. A complete contract guide for the client engineering team.</p>
+<div class="downloads"><a href="integration-pack.zip" download>Download integration pack</a><a href="API.md" download>Markdown</a><a href="openapi.json" download>OpenAPI snapshot</a><a href="integration_client.py" download>Python client</a><button id="print-guide">Print / save PDF</button></div></header>
+<div class="layout"><aside aria-label="On this page"><details open><summary>On this page</summary><div class="toc">
+<ul>
+<li><a href="#1-connection-and-integration-choice">1. Connection and integration choice</a></li>
+<li><a href="#2-quick-start-upload-poll-marked-results">2. Quick start: upload → poll → marked results</a></li>
+<li><a href="#3-upload-inputs-and-task-lifecycle">3. Upload inputs and task lifecycle</a></li>
+<li><a href="#4-candidate-results-and-marked-export">4. Candidate results and marked export</a></li>
+<li><a href="#5-scoring-marking-runs-and-review-flags">5. Scoring, marking runs, and review flags</a></li>
+<li><a href="#6-human-corrections-and-image-io">6. Human corrections and image I/O</a></li>
+<li><a href="#7-synchronous-extraction-contracts">7. Synchronous extraction contracts</a></li>
+<li><a href="#8-templates-keys-logs-and-administration">8. Templates, keys, logs, and administration</a></li>
+<li><a href="#9-errors-limits-and-reliable-client-behavior">9. Errors, limits, and reliable client behavior</a></li>
+<li><a href="#10-handoff-acceptance-checks">10. Handoff acceptance checks</a></li>
+<li><a href="#11-queue-large-uploads-and-archived-page-images">11. Queue, large uploads, and archived page images</a></li>
+</ul>
+</div>
+</details></aside><article><h1 id="ai-marker-api-integration-guide">AI Marker API — Integration Guide</h1>
+<p><strong>Contract reviewed: 20 September 2026.</strong> For backend developers integrating PDF answer-sheet extraction, AI-assisted marking, and human review. All examples use synthetic candidate data and a five-question demonstration key; IDs, timestamps, filenames, and totals are illustrative.</p>
+<h2 id="1-connection-and-integration-choice">1. Connection and integration choice</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Address</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Production API base URL</td>
+<td><code>https://aimarker-bk.seamo-official.org</code></td>
+</tr>
+<tr>
+<td>Browser application</td>
+<td><code>https://aimarker.seamo-official.org</code></td>
+</tr>
+<tr>
+<td>Interactive endpoint reference</td>
+<td><a href="https://aimarker-bk.seamo-official.org/docs">Swagger UI</a></td>
+</tr>
+<tr>
+<td>Live OpenAPI schema</td>
+<td><a href="https://aimarker-bk.seamo-official.org/openapi.json">openapi.json</a></td>
+</tr>
+<tr>
+<td>Downloadable guide and client files</td>
+<td><a href="https://aimarker.seamo-official.org/integration/">Integration documentation</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>For AI marking, use the persisted upload workflow.</strong> It supplies candidate IDs, automatic marking, human review, cancellation, and downloadable marked results.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Capability</th>
+<th><code>POST /upload</code> workflow</th>
+<th><code>POST /extract/json</code></th>
+<th><code>POST /extract/json/mark</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP interaction</td>
+<td>Upload returns a task ID; poll separately</td>
+<td>Wait for extraction response</td>
+<td>Wait for extraction and marking response</td>
+</tr>
+<tr>
+<td>Extract answers and identity</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Deterministic weighted marking</td>
+<td>Automatic, when keys exist</td>
+<td>No</td>
+<td>Yes, when keys exist</td>
+</tr>
+<tr>
+<td>Extraction trust checks during marking</td>
+<td>Yes</td>
+<td>No marking</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>AI free-response equivalence / diagram judging</td>
+<td>Yes, subject to server configuration</td>
+<td>No marking</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Persisted candidate IDs, review, marking history</td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Cancel endpoint</td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Success response body</td>
+<td>Upload acknowledgment</td>
+<td><code>document_information</code> + <code>candidates</code></td>
+<td><code>filename</code> + <code>template_id</code> + <code>mode</code> + <code>total_candidates</code> + <code>candidates</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>The synchronous marking endpoint currently calls the deterministic marker directly. It is not equivalent to the full AI marking workflow. Choose it only when that narrower behavior meets your requirements. No JSON-only "submit answers for AI marking" endpoint or caller-supplied answer-key endpoint is currently exposed.</p>
+<h3 id="authentication">Authentication</h3>
+<p>Send either header on requests that require authentication:</p>
+<pre><code class="language-http">X-API-Key: YOUR_API_KEY
+</code></pre>
+<pre><code class="language-http">Authorization: Bearer YOUR_API_KEY
+</code></pre>
+<p>When configured, the API uses one shared deployment key; <code>X-API-Key</code> takes precedence if both headers are present. Obtain the key from the service operator and keep it in your backend. This is not per-user authentication or tenant isolation: caller-level permissions and mapping submissions to your users belong in your application.</p>
+<p>Authentication enforcement is deployment-configurable. <code>GET /</code> returns <code>api_key_required</code>; do not infer it from the availability of the docs. <code>/</code>, <code>/health</code>, <code>/docs</code>, <code>/redoc</code>, <code>/openapi.json</code>, and <code>/favicon.ico</code> are public. Invalid or missing credentials on protected routes return <strong>401</strong>:</p>
+<pre><code class="language-json">{&quot;detail&quot;:&quot;Missing or invalid API key. Send X-API-Key or Authorization: Bearer.&quot;}
+</code></pre>
+<p>Server-to-server callers do not need CORS configuration. Browser callers must use origins permitted by the deployment. The live OpenAPI schema does not currently declare the middleware's authentication schemes; include the header explicitly in your HTTP client.</p>
+<p>The browser application prompts for the API key when authentication is enabled. It retains the entered key in the current tab's session and sends it with API requests, including image downloads. Use <strong>Forget API key</strong> to clear it. Developer documentation remains publicly accessible; the deployment key is never embedded in the frontend build.</p>
+<h3 id="common-conventions">Common conventions</h3>
+<ul>
+<li>Request and response JSON is UTF-8. File uploads use <code>multipart/form-data</code> with a field named <strong><code>file</code></strong>. Let your HTTP library generate the multipart boundary.</li>
+<li>Submission, candidate, marking-run, and answer-key IDs are integers with different meanings. Store the IDs returned by the API; do not predict the next task number.</li>
+<li>Candidate numbers are <strong>strings</strong> and may contain leading zeros. They are extracted identifiers, not guaranteed unique database IDs.</li>
+<li>PDF page numbers start at <strong>1</strong>. Question keys in <code>answers</code> are strings such as <code>"12"</code>; <code>outcomes[].question_number</code> is an integer.</li>
+<li>Timestamps represent UTC. Most current responses serialize UTC timestamps <strong>without a trailing <code>Z</code> or offset</strong>; interpret these as UTC. Human-edit audit timestamps include <code>Z</code>.</li>
+<li>Missing identity fields can be <code>null</code> in raw extraction and are normalized to <code>""</code> in persisted candidate responses. Empty drawing payloads commonly serialize as <code>null</code>.</li>
+<li>Dynamic extraction and <code>extra_fields</code> objects may gain keys. Read documented fields and tolerate additional metadata.</li>
+</ul>
+<h2 id="2-quick-start-upload-poll-marked-results">2. Quick start: upload → poll → marked results</h2>
+<p>The upload workflow performs both extraction and automatic marking. <strong>A completed submission does not guarantee a completed or complete-coverage marking run.</strong> Check both states before accepting scores.</p>
+<pre><code class="language-bash">export API_BASE=&quot;https://aimarker-bk.seamo-official.org&quot;
+export API_KEY=&quot;YOUR_API_KEY&quot;
+
+# 1. Discover supported layouts and installed answer-key versions.
+curl --fail-with-body &quot;$API_BASE/templates/all&quot; -H &quot;X-API-Key: $API_KEY&quot;
+curl --fail-with-body &quot;$API_BASE/answer-keys&quot; -H &quot;X-API-Key: $API_KEY&quot;
+
+# 2. Upload; retain submission_id from the JSON response.
+curl --fail-with-body -X POST &quot;$API_BASE/upload&quot; \
+  -H &quot;X-API-Key: $API_KEY&quot; \
+  -F &quot;file=@example-exam.pdf;type=application/pdf&quot;
+
+# 3. Replace 1 with the returned ID. Poll about every three seconds.
+curl --fail-with-body &quot;$API_BASE/status/1&quot; -H &quot;X-API-Key: $API_KEY&quot;
+
+# 4. Once completed, inspect candidates and the latest marking state.
+curl --fail-with-body &quot;$API_BASE/submission/1&quot; -H &quot;X-API-Key: $API_KEY&quot;
+curl --fail-with-body &quot;$API_BASE/submission/1/marking&quot; -H &quot;X-API-Key: $API_KEY&quot;
+
+# 5. A complete marking run covering every candidate can be exported.
+curl --fail-with-body &quot;$API_BASE/submission/1/marked-json&quot; \
+  -H &quot;X-API-Key: $API_KEY&quot; -o example-exam.marked.json
+</code></pre>
+<p>A runnable <a href="https://aimarker.seamo-official.org/integration/integration_client.py">Python client</a> follows this flow, streams PDF uploads in bounded chunks, saves the extracted response separately, supports resuming polling by submission ID, and reports questions needing review. Install <code>requests</code>, then run:</p>
+<pre><code class="language-bash">python integration_client.py example-exam.pdf --output example-exam.marked.json
+# Resume without uploading or processing the same file again:
+python integration_client.py --submission-id 1 --output example-exam.marked.json
+</code></pre>
+<p>Before uploading, the client saves an <code>.upload.json</code> receipt containing an idempotency key. If the upload outcome is unknown, repeat the command with <code>--idempotency-key &lt;saved-key&gt;</code> and the same PDF/options. It never retries a POST automatically. The client reads <code>API_BASE</code> and <code>API_KEY</code> from the environment. Download all examples, the client, this guide, and an OpenAPI snapshot as the <a href="https://aimarker.seamo-official.org/integration/integration-pack.zip">integration pack</a>.</p>
+<h2 id="3-upload-inputs-and-task-lifecycle">3. Upload inputs and task lifecycle</h2>
+<h3 id="post-upload">POST /upload</h3>
+<p><strong>Input</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Location</th>
+<th>Name</th>
+<th>Type</th>
+<th>Required</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Multipart form</td>
+<td><code>file</code></td>
+<td>Binary PDF with a <code>.pdf</code> filename</td>
+<td>Yes</td>
+<td>Scanned answer sheets</td>
+</tr>
+<tr>
+<td>Query string</td>
+<td><code>template_id</code></td>
+<td>String</td>
+<td>No</td>
+<td>Force one layout on every page; omit for per-page detection</td>
+</tr>
+<tr>
+<td>Header</td>
+<td><code>Idempotency-Key</code></td>
+<td>String, up to 200 characters</td>
+<td>No</td>
+<td>Reconcile a repeated upload of the same PDF/options</td>
+</tr>
+<tr>
+<td>Header</td>
+<td><code>X-Content-SHA256</code></td>
+<td>64 hexadecimal characters</td>
+<td>No</td>
+<td>Verify the uploaded PDF bytes against this checksum</td>
+</tr>
+</tbody>
+</table></div>
+<p>Do not put <code>template_id</code> in a JSON body. For example: <code>/upload?template_id=seamo_2025_a</code>.</p>
+<p>Automatic mode supports mixed-layout PDFs. Detection uses embedded PDF text and narrow OCR bands, with an AI header fallback when needed. An unreadable or unsupported layout can produce a candidate with empty answers, <code>template_id: null</code>, and a detection warning. HTTP success does not imply that every page was readable.</p>
+<p>The filename extension is checked at upload time; malformed PDFs can fail later during processing. There is no caller-supplied callback URL, grading rubric, or answer-key selection field on <code>/upload</code>. Upload reconciliation uses the optional <code>Idempotency-Key</code> header.</p>
+<p><strong>Output — HTTP 200, <code>application/json</code></strong> (the current API returns 200, not 202):</p>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;message&quot;: &quot;PDF uploaded successfully. Processing started.&quot;,
+  &quot;submission_id&quot;: 1,
+  &quot;filename&quot;: &quot;example-exam.pdf&quot;,
+  &quot;storage_path&quot;: &quot;uploads/example-exam.pdf&quot;
+}
+</code></pre>
+<p><code>storage_path</code> is a server-relative storage reference, not a public download URL. The source PDF is retained for page previews and review. A task corresponds to an <code>ExamSubmission</code>; <code>/track/{submission_id}</code> is a browser UI route, not an API endpoint.</p>
+<h3 id="get-statussubmission_id">GET /status/{submission_id}</h3>
+<p>No body. Returns <strong>200</strong> with these fields:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>submission_id</code>, <code>filename</code></td>
+<td>Integer, string</td>
+<td>Task identity</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>String</td>
+<td><code>pending</code>, <code>processing</code>, <code>completed</code>, <code>failed</code>, or <code>cancelled</code></td>
+</tr>
+<tr>
+<td><code>created_at</code>, <code>processed_at</code></td>
+<td>UTC timestamp, nullable UTC timestamp</td>
+<td>Acceptance and terminal timestamps; failed processing may leave <code>processed_at</code> null</td>
+</tr>
+<tr>
+<td><code>pages_count</code></td>
+<td>Integer</td>
+<td>Number of rendered pages; can remain 0 during conversion</td>
+</tr>
+<tr>
+<td><code>candidates_count</code>, <code>answers_count</code>, <code>drawing_count</code></td>
+<td>Integers</td>
+<td>Counters, often 0 until completion; not a reliable progress percentage</td>
+</tr>
+<tr>
+<td><code>error_message</code></td>
+<td>String or null</td>
+<td>Failure details, when available</td>
+</tr>
+<tr>
+<td><code>current_page</code>, <code>current_candidate_name</code></td>
+<td>Integer or null, string or null</td>
+<td>Best-effort progress; may be null for the entire run</td>
+</tr>
+</tbody>
+</table></div>
+<p>An accepted task before work starts:</p>
+<pre><code class="language-json">{
+  &quot;submission_id&quot;: 1,
+  &quot;filename&quot;: &quot;example-exam.pdf&quot;,
+  &quot;status&quot;: &quot;pending&quot;,
+  &quot;created_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+  &quot;processed_at&quot;: null,
+  &quot;pages_count&quot;: 0,
+  &quot;candidates_count&quot;: 0,
+  &quot;answers_count&quot;: 0,
+  &quot;drawing_count&quot;: 0,
+  &quot;error_message&quot;: null,
+  &quot;current_page&quot;: null,
+  &quot;current_candidate_name&quot;: null,
+  &quot;stage&quot;: null,
+  &quot;queue_position&quot;: null,
+  &quot;pages_completed&quot;: 0,
+  &quot;attempt&quot;: 0,
+  &quot;job_id&quot;: null,
+  &quot;archive_status&quot;: null,
+  &quot;archive_error&quot;: null
+}
+</code></pre>
+<p>A completed task:</p>
+<pre><code class="language-json">{
+  &quot;submission_id&quot;: 1,
+  &quot;filename&quot;: &quot;example-exam.pdf&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;created_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+  &quot;processed_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+  &quot;pages_count&quot;: 1,
+  &quot;candidates_count&quot;: 1,
+  &quot;answers_count&quot;: 5,
+  &quot;drawing_count&quot;: 0,
+  &quot;error_message&quot;: null,
+  &quot;current_page&quot;: null,
+  &quot;current_candidate_name&quot;: null,
+  &quot;stage&quot;: null,
+  &quot;queue_position&quot;: null,
+  &quot;pages_completed&quot;: 0,
+  &quot;attempt&quot;: 0,
+  &quot;job_id&quot;: null,
+  &quot;archive_status&quot;: null,
+  &quot;archive_error&quot;: null
+}
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Client action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pending</code></td>
+<td>Continue polling; cancellation is available</td>
+</tr>
+<tr>
+<td><code>processing</code></td>
+<td>Continue polling; includes automatic marking time</td>
+</tr>
+<tr>
+<td><code>completed</code></td>
+<td>Fetch candidate details and inspect the marking run</td>
+</tr>
+<tr>
+<td><code>failed</code></td>
+<td>Stop polling; record <code>error_message</code>; investigate before a deliberate new upload</td>
+</tr>
+<tr>
+<td><code>cancelled</code></td>
+<td>Stop polling; no completed-result guarantee</td>
+</tr>
+</tbody>
+</table></div>
+<p>Uploads are persisted with a durable job record before acknowledgment. Separate workers process bounded page batches; pending work survives API/worker restarts. Shared OCR and Gemini limits apply across submissions. Retain the task ID, and use an <code>Idempotency-Key</code> header to reconcile a repeated upload rather than blindly creating another task.</p>
+<h3 id="post-submissionsubmission_idcancel">POST /submission/{submission_id}/cancel</h3>
+<p>No body. Available for <code>pending</code> and <code>processing</code> tasks. <strong>200</strong>:</p>
+<pre><code class="language-json">{
+  &quot;submission_id&quot;: 2,
+  &quot;status&quot;: &quot;cancelled&quot;
+}
+</code></pre>
+<p>Cancellation is persistent and idempotent. The state changes to <code>cancelled</code> immediately; queued work is skipped and in-flight native/network work stops at the next checkpoint. Existing external OCR work is not revoked. The source PDF and any already-saved data are retained, but completed candidate details are not promised for a cancelled task.</p>
+<p>A repeated cancellation returns 200. Cancelling a completed or failed task returns <strong>409</strong>; an unknown ID returns <strong>404</strong>. Closing the HTTP connection is not a cancellation request. This endpoint does not cancel a synchronous extraction request or a later manual re-mark of a completed submission.</p>
+<h2 id="4-candidate-results-and-marked-export">4. Candidate results and marked export</h2>
+<h3 id="get-submissionsubmission_id">GET /submission/{submission_id}</h3>
+<p>Returns <strong>200</strong> only for a completed submission. Unknown IDs return <strong>404</strong>; all non-completed states return <strong>400</strong>. This is the primary persisted candidate response, with stable candidate IDs and page numbers.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Top-level field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>submission_id</code>, <code>filename</code>, <code>status</code></td>
+<td>Integer, string, string</td>
+<td>Submission identity and state</td>
+</tr>
+<tr>
+<td><code>created_at</code>, <code>processed_at</code></td>
+<td>Timestamp, nullable timestamp</td>
+<td>Submission timestamps</td>
+</tr>
+<tr>
+<td><code>candidates</code></td>
+<td>Array of candidate objects</td>
+<td>Ordered by page number</td>
+</tr>
+<tr>
+<td><code>latest_marking</code></td>
+<td>Marking-run metadata or null</td>
+<td>Latest run, including a failed or incomplete attempt</td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Candidate field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Integer</td>
+<td>Use as <code>candidate_id</code> in review/image endpoints</td>
+</tr>
+<tr>
+<td><code>page_number</code></td>
+<td>Integer or null</td>
+<td>One-based source PDF page</td>
+</tr>
+<tr>
+<td><code>candidate_name</code>, <code>candidate_number</code>, <code>country</code>, <code>paper_type</code></td>
+<td>Strings</td>
+<td>Extracted identity; empty string when unavailable</td>
+</tr>
+<tr>
+<td><code>template_id</code></td>
+<td>String or null</td>
+<td>Detected or forced layout for this candidate</td>
+</tr>
+<tr>
+<td><code>detection</code></td>
+<td>Object or null</td>
+<td>Detection method, raw OCR text, optional warning and layout fields</td>
+</tr>
+<tr>
+<td><code>answers</code></td>
+<td>Object mapping question-number strings to strings</td>
+<td>Extracted answers, including MCQ and free-response values</td>
+</tr>
+<tr>
+<td><code>drawing_questions</code></td>
+<td>Object mapping strings to strings, or null</td>
+<td>Legacy/additional drawing text; not the image itself</td>
+</tr>
+<tr>
+<td><code>extra_fields</code></td>
+<td>Object or null</td>
+<td>Additional header fields, trust, drawing metadata, and manual-edit history</td>
+</tr>
+<tr>
+<td><code>marking</code></td>
+<td>Weighted marking object or null</td>
+<td>This candidate's result from the latest run, if covered</td>
+</tr>
+</tbody>
+</table></div>
+<p>Full example, showing all five outcome states:</p>
+<pre><code class="language-json">{
+  &quot;submission_id&quot;: 1,
+  &quot;filename&quot;: &quot;example-exam.pdf&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;created_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+  &quot;processed_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+  &quot;candidates&quot;: [
+    {
+      &quot;id&quot;: 1,
+      &quot;candidate_name&quot;: &quot;Sample Student&quot;,
+      &quot;candidate_number&quot;: &quot;000123&quot;,
+      &quot;country&quot;: &quot;VN&quot;,
+      &quot;paper_type&quot;: &quot;A&quot;,
+      &quot;page_number&quot;: 1,
+      &quot;template_id&quot;: &quot;seamo_2025_a&quot;,
+      &quot;detection&quot;: {
+        &quot;method&quot;: &quot;footer_ocr&quot;,
+        &quot;raw_text&quot;: &quot;SEAMO 2025 Paper A&quot;,
+        &quot;brand&quot;: &quot;seamo&quot;,
+        &quot;year&quot;: &quot;2025&quot;,
+        &quot;paper&quot;: &quot;a&quot;
+      },
+      &quot;extra_fields&quot;: {
+        &quot;answer_trust&quot;: {
+          &quot;1&quot;: &quot;trusted&quot;,
+          &quot;2&quot;: &quot;trusted&quot;,
+          &quot;3&quot;: &quot;trusted&quot;,
+          &quot;4&quot;: &quot;trusted&quot;,
+          &quot;5&quot;: &quot;needs_review&quot;
+        },
+        &quot;needs_review_questions&quot;: [
+          &quot;5&quot;
+        ]
+      },
+      &quot;answers&quot;: {
+        &quot;1&quot;: &quot;A&quot;,
+        &quot;2&quot;: &quot;B&quot;,
+        &quot;3&quot;: &quot;BL&quot;,
+        &quot;4&quot;: &quot;IN&quot;,
+        &quot;5&quot;: &quot;D&quot;
+      },
+      &quot;drawing_questions&quot;: null,
+      &quot;marking&quot;: {
+        &quot;candidate_result_id&quot;: 1,
+        &quot;candidate_number&quot;: &quot;000123&quot;,
+        &quot;awarded_marks&quot;: 2.0,
+        &quot;max_marks&quot;: 10.0,
+        &quot;percentage&quot;: 20.0,
+        &quot;outcomes&quot;: [
+          {
+            &quot;question_number&quot;: 1,
+            &quot;status&quot;: &quot;correct&quot;,
+            &quot;response&quot;: &quot;A&quot;,
+            &quot;awarded_marks&quot;: 2.0,
+            &quot;max_marks&quot;: 2.0,
+            &quot;normalizer&quot;: &quot;uppercase&quot;,
+            &quot;judge_source&quot;: &quot;deterministic&quot;,
+            &quot;judge_verdict&quot;: null,
+            &quot;judge_reason&quot;: null
+          },
+          {
+            &quot;question_number&quot;: 2,
+            &quot;status&quot;: &quot;incorrect&quot;,
+            &quot;response&quot;: &quot;B&quot;,
+            &quot;awarded_marks&quot;: 0.0,
+            &quot;max_marks&quot;: 3.0,
+            &quot;normalizer&quot;: &quot;uppercase&quot;,
+            &quot;judge_source&quot;: &quot;deterministic&quot;,
+            &quot;judge_verdict&quot;: null,
+            &quot;judge_reason&quot;: null
+          },
+          {
+            &quot;question_number&quot;: 3,
+            &quot;status&quot;: &quot;blank&quot;,
+            &quot;response&quot;: &quot;BL&quot;,
+            &quot;awarded_marks&quot;: 0.0,
+            &quot;max_marks&quot;: 1.0,
+            &quot;normalizer&quot;: &quot;uppercase&quot;,
+            &quot;judge_source&quot;: &quot;deterministic&quot;,
+            &quot;judge_verdict&quot;: null,
+            &quot;judge_reason&quot;: null
+          },
+          {
+            &quot;question_number&quot;: 4,
+            &quot;status&quot;: &quot;invalid&quot;,
+            &quot;response&quot;: &quot;IN&quot;,
+            &quot;awarded_marks&quot;: 0.0,
+            &quot;max_marks&quot;: 2.0,
+            &quot;normalizer&quot;: &quot;uppercase&quot;,
+            &quot;judge_source&quot;: &quot;deterministic&quot;,
+            &quot;judge_verdict&quot;: null,
+            &quot;judge_reason&quot;: null
+          },
+          {
+            &quot;question_number&quot;: 5,
+            &quot;status&quot;: &quot;needs_review&quot;,
+            &quot;response&quot;: &quot;D&quot;,
+            &quot;awarded_marks&quot;: 0.0,
+            &quot;max_marks&quot;: 2.0,
+            &quot;normalizer&quot;: &quot;uppercase&quot;,
+            &quot;judge_source&quot;: &quot;extraction_trust&quot;,
+            &quot;judge_verdict&quot;: &quot;needs_review&quot;,
+            &quot;judge_reason&quot;: &quot;flagged during extraction&quot;
+          }
+        ]
+      }
+    }
+  ],
+  &quot;latest_marking&quot;: {
+    &quot;id&quot;: 1,
+    &quot;status&quot;: &quot;completed&quot;,
+    &quot;answer_key_id&quot;: 1,
+    &quot;provenance&quot;: {
+      &quot;answer_key_id&quot;: 1,
+      &quot;template_id&quot;: &quot;seamo_2025_a&quot;,
+      &quot;version&quot;: 1,
+      &quot;source_filename&quot;: &quot;example-key.pdf&quot;,
+      &quot;source_sha256&quot;: &quot;aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&quot;,
+      &quot;total_marks&quot;: 10
+    },
+    &quot;error_message&quot;: null,
+    &quot;created_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+    &quot;started_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+    &quot;completed_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+    &quot;updated_at&quot;: &quot;2026-09-09T12:00:00&quot;
+  }
+}
+</code></pre>
+<h3 id="get-submissionsubmission_idmarked-json">GET /submission/{submission_id}/marked-json</h3>
+<p>Returns <strong>200</strong>, <code>Content-Type: application/json</code>, and an attachment <code>Content-Disposition</code> using the uploaded filename with <code>.marked.json</code>. Both ASCII <code>filename</code> and UTF-8 <code>filename*</code> may appear.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Top-level field</th>
+<th>Type</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>submission</code></td>
+<td>Object</td>
+<td><code>id</code>, <code>filename</code>, nullable <code>template_id</code>, <code>status</code>, <code>pages_count</code>, <code>created_at</code>, nullable <code>processed_at</code></td>
+</tr>
+<tr>
+<td><code>marking</code></td>
+<td>Object</td>
+<td>Latest marking-run metadata described in section 5</td>
+</tr>
+<tr>
+<td><code>candidates</code></td>
+<td>Array</td>
+<td><code>id</code>, <code>page_number</code>, identity strings, <code>extra_fields</code>, <code>answers</code>, <code>drawing_questions</code>, and required <code>marking</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Unlike <code>/submission/{id}</code>, exported candidate objects do <strong>not</strong> contain <code>template_id</code> or <code>detection</code>. Join by candidate <code>id</code> with the submission-detail response when you need those fields.</p>
+<p>A full <a href="https://aimarker.seamo-official.org/integration/examples/marked_export.json">marked-export response example</a> is included in the integration pack.</p>
+<p>The latest marking run must be completed and cover every candidate. The endpoint returns <strong>409</strong> when there are no candidates, the latest run is not completed, or any candidate is missing a marking. A partially marked mixed-layout submission can therefore have a completed run and still be ineligible for export. Retrieve <code>/submission/{id}</code> or <code>/submission/{id}/marking</code> to inspect available results and missing coverage.</p>
+<h3 id="get-submissionsubmission_idjson">GET /submission/{submission_id}/json</h3>
+<p>Returns the <strong>original extraction JSON snapshot</strong>, not the marked export. Its shape matches <code>/extract/json</code> in section 7. It is not refreshed after manual answer edits or re-marking. It has no persisted candidate IDs and removes each candidate's <code>page_number</code>.</p>
+<p>Use <code>/submission/{id}</code> for current corrected answers and <code>/marked-json</code> for current scores. A missing result reference returns <strong>404</strong>; a referenced file that cannot be read can currently return <strong>500</strong>. Do not use availability of this raw snapshot as the task-completion signal.</p>
+<h2 id="5-scoring-marking-runs-and-review-flags">5. Scoring, marking runs, and review flags</h2>
+<h3 id="answer-values-versus-grading-outcomes">Answer values versus grading outcomes</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Extracted value</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"A"</code>, <code>"B"</code>, etc.</td>
+<td>Candidate's selected MCQ answer; allowed letters depend on the layout</td>
+</tr>
+<tr>
+<td><code>"42"</code>, <code>"3/4"</code>, other text</td>
+<td>Transcribed numeric or free-response answer; retain it as a string</td>
+</tr>
+<tr>
+<td><code>"BL"</code></td>
+<td>Blank/unread text</td>
+</tr>
+<tr>
+<td><code>"IN"</code></td>
+<td>Invalid or multiple marks</td>
+</tr>
+<tr>
+<td><code>"DR"</code></td>
+<td>Drawing marker in legacy/compact payloads; not a grade or image URL</td>
+</tr>
+</tbody>
+</table></div>
+<p>Read <code>marking.outcomes</code> for grades. The current weighted API does not replace answers with legacy <code>P</code>/<code>IM</code> correctness codes. A <code>BL</code> text transcription on a diagram question can still have a visible drawing and receive marks from image comparison.</p>
+<h3 id="weighted-marking-object">Weighted marking object</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>candidate_result_id</code></td>
+<td>Integer</td>
+<td>Persisted candidate ID (absent from synchronous marking output)</td>
+</tr>
+<tr>
+<td><code>candidate_number</code></td>
+<td>String</td>
+<td>Extracted candidate number (persisted marking responses)</td>
+</tr>
+<tr>
+<td><code>awarded_marks</code></td>
+<td>Number</td>
+<td>Sum of awarded question marks</td>
+</tr>
+<tr>
+<td><code>max_marks</code></td>
+<td>Number</td>
+<td>Sum of marks in the selected key</td>
+</tr>
+<tr>
+<td><code>percentage</code></td>
+<td>Number</td>
+<td><code>100 × awarded_marks / max_marks</code>; do not assume fixed rounding</td>
+</tr>
+<tr>
+<td><code>outcomes</code></td>
+<td>Array</td>
+<td>One outcome per key question</td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Outcome field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>question_number</code></td>
+<td>Integer</td>
+<td>Key question number</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>String</td>
+<td><code>correct</code>, <code>incorrect</code>, <code>blank</code>, <code>invalid</code>, <code>needs_review</code></td>
+</tr>
+<tr>
+<td><code>response</code></td>
+<td>JSON scalar or null</td>
+<td>Original response associated with the outcome</td>
+</tr>
+<tr>
+<td><code>awarded_marks</code>, <code>max_marks</code></td>
+<td>Numbers</td>
+<td>Awarded and available weight</td>
+</tr>
+<tr>
+<td><code>normalizer</code></td>
+<td>String</td>
+<td>Comparison normalization, e.g. <code>uppercase</code>, <code>integer</code>, <code>text</code>, <code>time_12_24</code></td>
+</tr>
+<tr>
+<td><code>judge_source</code></td>
+<td>String or null</td>
+<td>Origin, e.g. <code>deterministic</code>, <code>extraction_trust</code>, <code>llm</code>, <code>diagram_vision</code>, <code>diagram_cv</code></td>
+</tr>
+<tr>
+<td><code>judge_verdict</code>, <code>judge_reason</code></td>
+<td>String or null</td>
+<td>Decision and explanation where provided</td>
+</tr>
+</tbody>
+</table></div>
+<p>Correct answers receive the question's full weight; other outcomes currently receive zero. <strong><code>needs_review</code> is unresolved, not a final incorrect answer.</strong> Totals containing it are provisional and should be reviewed before final publication. Do not implement grading by counting correct questions: weights may differ.</p>
+<p>Collect review items from both <code>extra_fields.needs_review_questions</code> and outcomes with <code>status: "needs_review"</code>. The former tracks extraction uncertainty; later AI judging can introduce additional review outcomes. Treat judge-source/reason values as explanatory metadata rather than a closed enum or a correctness guarantee.</p>
+<h3 id="get-submissionsubmission_idmarking">GET /submission/{submission_id}/marking</h3>
+<p>No body. <strong>200</strong> with:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>submission_id</code></td>
+<td>Integer</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>latest_run</code></td>
+<td>Run detail or null</td>
+<td>Latest attempt, with a <code>candidates</code> array of weighted marking objects</td>
+</tr>
+<tr>
+<td><code>history</code></td>
+<td>Array of run metadata</td>
+<td>Newest first; includes the latest attempt, without candidate outcomes</td>
+</tr>
+</tbody>
+</table></div>
+<p>No marking yet is represented by <code>{"submission_id":1,"latest_run":null,"history":[]}</code>. There is no public endpoint to fetch an arbitrary historical run's candidate outcomes by run ID; archive exports in your system if you need them.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Run metadata field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td>Integer</td>
+<td>Marking-run ID</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td>String</td>
+<td><code>unavailable</code>, <code>processing</code>, <code>completed</code>, or <code>failed</code></td>
+</tr>
+<tr>
+<td><code>answer_key_id</code></td>
+<td>Integer or null</td>
+<td>Representative stored key ID</td>
+</tr>
+<tr>
+<td><code>provenance</code></td>
+<td>Object or null</td>
+<td><code>answer_key_id</code>, <code>template_id</code>, <code>version</code>, <code>source_filename</code>, <code>source_sha256</code>, <code>total_marks</code> (each nullable)</td>
+</tr>
+<tr>
+<td><code>error_message</code></td>
+<td>String or null</td>
+<td>Error or partial-coverage explanation</td>
+</tr>
+<tr>
+<td><code>created_at</code>, <code>updated_at</code></td>
+<td>UTC timestamps</td>
+<td>Run timestamps</td>
+</tr>
+<tr>
+<td><code>started_at</code>, <code>completed_at</code></td>
+<td>Nullable UTC timestamps</td>
+<td>Processing boundaries</td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Marking state</th>
+<th>Client action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>unavailable</code></td>
+<td>No usable active key; coordinate key provisioning with the operator</td>
+</tr>
+<tr>
+<td><code>processing</code></td>
+<td>Poll marking state; do not start a duplicate re-mark</td>
+</tr>
+<tr>
+<td><code>completed</code></td>
+<td>Inspect review outcomes, <code>error_message</code>, and candidate coverage</td>
+</tr>
+<tr>
+<td><code>failed</code></td>
+<td>Preserve extracted answers; investigate and deliberately retry marking if appropriate</td>
+</tr>
+</tbody>
+</table></div>
+<p>The public provenance object exposes the <strong>first key only</strong> for a mixed-key run. It is not a complete per-candidate key audit. The latest run is returned even if it failed; the API does not automatically substitute an older successful run. Stale processing runs may be recovered as failed by status/detail reads.</p>
+<h3 id="post-submissionsubmission_idmark">POST /submission/{submission_id}/mark</h3>
+<p>Run marking again on a completed submission's persisted answers without re-extracting the PDF. This call is synchronous and can take minutes.</p>
+<p><strong>Input:</strong> no body, <code>{}</code>, or <code>application/json</code>:</p>
+<pre><code class="language-json">{
+  &quot;answer_key_id&quot;: 1
+}
+</code></pre>
+<p>Omitting the key selects active stored keys by each candidate's layout. The persisted workflow supports configured layout-to-key aliases. In a mixed submission, an explicit key overrides its matching layout's key; other layouts still use their own active keys.</p>
+<p><strong>Output — 200:</strong> <code>status: "success"</code>, <code>submission_id</code>, <code>total_candidates_marked</code>, and <code>run</code> (the run-detail object). <strong>Inspect <code>run.status</code></strong>: an HTTP 200 / <code>status: "success"</code> wrapper can contain a failed or unavailable marking run.</p>
+<p>Non-completed submissions, concurrent marking, and submissions with no candidates return <strong>409</strong>. Missing submission or requested key returns <strong>404</strong>. Each deliberate re-mark can create a new run; this POST is not idempotent. If its response is lost, query marking state before retrying.</p>
+<h2 id="6-human-corrections-and-image-io">6. Human corrections and image I/O</h2>
+<h3 id="post-submissionsubmission_idcandidatescandidate_idconfirm-review">POST /submission/{submission_id}/candidates/{candidate_id}/confirm-review</h3>
+<p><strong>Input — <code>application/json</code></strong>. The body object is required; every field inside it is optional:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default / behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>answers</code></td>
+<td>Object mapping question strings to answer strings</td>
+<td><code>{}</code>; merge only supplied answers, preserve other questions</td>
+</tr>
+<tr>
+<td><code>candidate_name</code>, <code>candidate_number</code>, <code>country</code>, <code>paper_type</code></td>
+<td>String or null</td>
+<td>Omitted/null preserves the value; <code>""</code> clears it</td>
+</tr>
+<tr>
+<td><code>clear_all_review</code></td>
+<td>Boolean</td>
+<td><code>false</code>; when true, clears all extraction review flags</td>
+</tr>
+<tr>
+<td><code>remark</code></td>
+<td>Boolean</td>
+<td><code>false</code>; when true, re-mark the edited candidate and carry other candidate marks forward</td>
+</tr>
+<tr>
+<td><code>edited_by</code></td>
+<td>String or null</td>
+<td>Audit label supplied by your application; not an authenticated user identity</td>
+</tr>
+</tbody>
+</table></div>
+<p>Example: confirm an uncertain answer after inspecting the scan and refresh its grade:</p>
+<pre><code class="language-json">{
+  &quot;answers&quot;: {
+    &quot;5&quot;: &quot;D&quot;
+  },
+  &quot;remark&quot;: true,
+  &quot;edited_by&quot;: &quot;reviewer-42&quot;
+}
+</code></pre>
+<p><strong>Output — 200:</strong></p>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;candidate_result_id&quot;: 1,
+  &quot;needs_review_questions&quot;: [],
+  &quot;answers&quot;: {
+    &quot;1&quot;: &quot;A&quot;,
+    &quot;2&quot;: &quot;B&quot;,
+    &quot;3&quot;: &quot;BL&quot;,
+    &quot;4&quot;: &quot;IN&quot;,
+    &quot;5&quot;: &quot;D&quot;
+  },
+  &quot;candidate_name&quot;: &quot;Sample Student&quot;,
+  &quot;candidate_number&quot;: &quot;000123&quot;,
+  &quot;country&quot;: &quot;VN&quot;,
+  &quot;paper_type&quot;: &quot;A&quot;,
+  &quot;edits_recorded&quot;: 0,
+  &quot;remarked&quot;: true,
+  &quot;marking_run_id&quot;: 2,
+  &quot;remark_error&quot;: null,
+  &quot;remark_job_id&quot;: null
+}
+</code></pre>
+<p>The response includes the full current answer map, identity strings, remaining <code>needs_review_questions</code>, number of actual edits, and re-mark outcome. Supplying an answer also clears its extraction review flag, even when the value is unchanged. <code>clear_all_review</code> confirms all flagged answers, so use it only after actual review.</p>
+<p>Edits are committed before re-marking. <strong>HTTP 200 can mean the edit succeeded but re-marking did not</strong>: check <code>remarked</code>, <code>marking_run_id</code>, and <code>remark_error</code>. With <code>remark: false</code>, existing scores remain unchanged and can be stale relative to edited answers. Re-fetch submission details after a successful re-mark.</p>
+<p>Actual value changes append <code>extra_fields.manual_edits</code> entries with <code>target</code>, <code>from</code>, <code>to</code>, <code>at</code>, and <code>by</code>. Clearing a review flag without changing the value does not add a value-change entry. Missing submission or a candidate belonging to another submission returns <strong>404</strong>. Wait until submission processing and marking are complete before editing.</p>
+<h3 id="image-endpoints">Image endpoints</h3>
+<p>All return PNG bytes (<code>Content-Type: image/png</code>), not JSON or base64:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>GET path</th>
+<th>Input / purpose</th>
+<th>Errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/submission/{submission_id}/page/{page_number}.png</code></td>
+<td>One-based source page for human review</td>
+<td>404 unknown submission/out-of-range page; 410 source PDF missing; 500 render failure</td>
+</tr>
+<tr>
+<td><code>/submission/{submission_id}/candidates/{candidate_id}/diagram/{question}.png</code></td>
+<td>Stored candidate drawing crop for an integer question number</td>
+<td>404 candidate or crop missing</td>
+</tr>
+<tr>
+<td><code>/answer-keys/reference/{template_id}/{question}.png</code></td>
+<td>Reference drawing for the template/question</td>
+<td>404 reference missing</td>
+</tr>
+<tr>
+<td><code>/templates/{template_id}/preview</code></td>
+<td>Example preview of a supported template</td>
+<td>404 if no preview is available</td>
+</tr>
+</tbody>
+</table></div>
+<p>Use the same authentication headers as JSON requests. Page and candidate-diagram responses use <code>Cache-Control: private, max-age=3600</code>. Some templates have no preview; a missing preview does not imply the layout is unsupported. Use <code>/templates/all</code> for layout discovery.</p>
+<p>When present, <code>extra_fields.diagram_crops</code> maps question strings to crop metadata, for example <code>{"12":{"file":"p1_q12.png","source":"template_region"}}</code>. The <code>file</code> is an internal filename; retrieve its bytes through the candidate-diagram endpoint. Crop metadata can include additional fields depending on the extraction provider. Editing an answer string does not replace the stored drawing image; there is no public endpoint for uploading a replacement drawing.</p>
+<h2 id="7-synchronous-extraction-contracts">7. Synchronous extraction contracts</h2>
+<h3 id="post-extractjson">POST /extract/json</h3>
+<p><strong>Input:</strong> multipart <code>file</code> (required PDF), query <code>template_id</code> (optional). No JSON body. <strong>Output — 200</strong>, <code>application/json</code>:</p>
+<pre><code class="language-json">{
+  &quot;document_information&quot;: {
+    &quot;filename&quot;: &quot;example-exam.pdf&quot;,
+    &quot;extraction_timestamp&quot;: &quot;2026-09-09T12:00:00&quot;,
+    &quot;total_candidates&quot;: 1,
+    &quot;pages_processed&quot;: 1,
+    &quot;pages_with_data&quot;: 1,
+    &quot;processing_time&quot;: 1.25
+  },
+  &quot;candidates&quot;: [
+    {
+      &quot;candidate_name&quot;: &quot;Sample Student&quot;,
+      &quot;candidate_number&quot;: &quot;000123&quot;,
+      &quot;country&quot;: &quot;VN&quot;,
+      &quot;paper_type&quot;: &quot;A&quot;,
+      &quot;template_id&quot;: &quot;seamo_2025_a&quot;,
+      &quot;detection&quot;: {
+        &quot;method&quot;: &quot;footer_ocr&quot;,
+        &quot;raw_text&quot;: &quot;SEAMO 2025 Paper A&quot;,
+        &quot;brand&quot;: &quot;seamo&quot;,
+        &quot;year&quot;: &quot;2025&quot;,
+        &quot;paper&quot;: &quot;a&quot;
+      },
+      &quot;answers&quot;: {
+        &quot;1&quot;: &quot;A&quot;,
+        &quot;2&quot;: &quot;B&quot;,
+        &quot;3&quot;: &quot;BL&quot;,
+        &quot;4&quot;: &quot;IN&quot;,
+        &quot;5&quot;: &quot;D&quot;
+      },
+      &quot;drawing_questions&quot;: null,
+      &quot;extra_fields&quot;: {
+        &quot;answer_trust&quot;: {
+          &quot;1&quot;: &quot;trusted&quot;,
+          &quot;2&quot;: &quot;trusted&quot;,
+          &quot;3&quot;: &quot;trusted&quot;,
+          &quot;4&quot;: &quot;trusted&quot;,
+          &quot;5&quot;: &quot;needs_review&quot;
+        },
+        &quot;needs_review_questions&quot;: [
+          &quot;5&quot;
+        ]
+      }
+    }
+  ]
+}
+</code></pre>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>document_information.filename</code></td>
+<td>String</td>
+<td>Original filename</td>
+</tr>
+<tr>
+<td><code>document_information.extraction_timestamp</code></td>
+<td>UTC timestamp string</td>
+<td>Export-generation time</td>
+</tr>
+<tr>
+<td><code>document_information.total_candidates</code></td>
+<td>Integer</td>
+<td>Number of returned candidate objects</td>
+</tr>
+<tr>
+<td><code>document_information.pages_processed</code>, <code>pages_with_data</code></td>
+<td>Integers</td>
+<td>Extraction page counts</td>
+</tr>
+<tr>
+<td><code>document_information.processing_time</code></td>
+<td>Number</td>
+<td>Extractor-reported seconds; not a full upload-to-final-marking duration</td>
+</tr>
+<tr>
+<td><code>candidates</code></td>
+<td>Array</td>
+<td>Dynamic raw candidate objects; no persisted ID or <code>page_number</code></td>
+</tr>
+<tr>
+<td><code>logs</code></td>
+<td>Optional object</td>
+<td>May contain <code>validation</code> and/or <code>extraction_errors</code> if the generator receives them</td>
+</tr>
+</tbody>
+</table></div>
+<p>The current route does not provide a top-level <code>validation</code> or <code>extraction_errors</code> field. It normally omits <code>logs</code> because no validation result is supplied. Do not expect the old <code>document_information</code> example's <code>validation.is_valid</code> guarantee.</p>
+<p>In queue-enabled deployments, this synchronous compatibility route waits for a worker job and preserves the extraction response shape. An internal submission and extraction checkpoints are retained. <code>X-Job-ID</code> identifies the job; a wait timeout returns HTTP 504 with <code>job_id</code> and <code>status_url</code>. Use <code>GET /jobs/{job_id}</code> to retrieve the eventual result, or <code>POST /jobs/{job_id}/cancel</code> to cancel it. No automatic AI marking runs on this route.</p>
+<pre><code class="language-bash">curl --fail-with-body --max-time 900 \
+  &quot;$API_BASE/extract/json?template_id=seamo_2025_a&quot; \
+  -H &quot;X-API-Key: $API_KEY&quot; \
+  -F &quot;file=@example-exam.pdf;type=application/pdf&quot;
+</code></pre>
+<h3 id="post-extractjsonmark">POST /extract/json/mark</h3>
+<p><strong>Input:</strong> same PDF and optional query <code>template_id</code>, plus an optional multipart <strong>text field</strong> <code>mark_request</code> containing JSON:</p>
+<pre><code class="language-bash">curl --fail-with-body --max-time 900 &quot;$API_BASE/extract/json/mark?template_id=seamo_2025_a&quot; \
+  -H &quot;X-API-Key: $API_KEY&quot; \
+  -F &quot;file=@example-exam.pdf;type=application/pdf&quot; \
+  -F 'mark_request={&quot;answer_key_id&quot;:1}'
+</code></pre>
+<p>Only <code>{"answer_key_id": &lt;integer&gt;}</code> is accepted in <code>mark_request</code>. Inline answers/keys, extra fields, malformed JSON, or other shapes return <strong>400</strong>. A missing selected key returns <strong>404</strong>; a selected key whose template differs from an explicitly forced template returns <strong>409</strong>. Selection is validated after extraction in the current implementation, so check key IDs before uploading.</p>
+<p>When omitted, marking resolves active keys by the exact template ID. Unlike persisted marking, this path does not apply layout-to-key alias resolution. If no key matches, that candidate remains in the response <strong>without a <code>marking</code> block</strong>; the overall HTTP status is still 200. If an explicit key is selected without forcing a template, it is applied to all candidates, so use that combination only when the PDF is known to match that key.</p>
+<p>The response is a different envelope from <code>/extract/json</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>filename</code></td>
+<td>String</td>
+<td>Uploaded filename</td>
+</tr>
+<tr>
+<td><code>template_id</code></td>
+<td>String or null</td>
+<td>Forced layout, null in auto mode</td>
+</tr>
+<tr>
+<td><code>mode</code></td>
+<td>String</td>
+<td><code>forced</code> or <code>auto</code></td>
+</tr>
+<tr>
+<td><code>total_candidates</code></td>
+<td>Integer</td>
+<td>Count including unmarked candidates</td>
+</tr>
+<tr>
+<td><code>candidates</code></td>
+<td>Array</td>
+<td>Raw extracted candidates (including <code>page_number</code>), with optional deterministic <code>marking</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Each synchronous <code>marking</code> object contains <code>awarded_marks</code>, <code>max_marks</code>, <code>percentage</code>, <code>answer_key_id</code>, and <code>outcomes</code>. It has no persisted candidate/run ID. See the <a href="https://aimarker.seamo-official.org/integration/examples/sync_mark.json">complete response example</a>.</p>
+<p>This endpoint does not run extraction-trust gating, AI free-response equivalence, or diagram vision judging. For example, the demonstration candidate's uncertain Q5 is marked correct here but remains <code>needs_review</code> in the persisted AI marking workflow. It must not be treated as an interchangeable shortcut for that workflow.</p>
+<h2 id="8-templates-keys-logs-and-administration">8. Templates, keys, logs, and administration</h2>
+<h3 id="template-discovery">Template discovery</h3>
+<p><code>GET /templates/all</code> returns an array. Each element has:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code>, <code>name</code></td>
+<td>String</td>
+</tr>
+<tr>
+<td><code>brand</code>, <code>paper</code></td>
+<td>String or null</td>
+</tr>
+<tr>
+<td><code>year</code></td>
+<td>Integer or null</td>
+</tr>
+<tr>
+<td><code>has_mcq</code>, <code>has_free_response</code></td>
+<td>Boolean</td>
+</tr>
+<tr>
+<td><code>total_questions</code></td>
+<td>Integer</td>
+</tr>
+<tr>
+<td><code>variant_of</code></td>
+<td>String or null</td>
+</tr>
+</tbody>
+</table></div>
+<p>The list includes variants and may change as layouts are added. <code>GET /templates</code> provides a display-oriented subset with the same core metadata plus <code>preview_url</code>, and may deduplicate variants. Use <code>/templates/all</code> to validate <code>template_id</code>; do not hard-code the number of supported layouts or infer the answer-key ID from the template ID.</p>
+<h3 id="answer-key-discovery">Answer-key discovery</h3>
+<p><code>GET /answer-keys</code> returns a metadata array; <code>GET /answer-keys/{key_id}</code> returns one object. Metadata includes <code>id</code>, <code>name</code>, nullable <code>template_id</code>, <code>version</code>, nullable <code>source_filename</code>, nullable <code>source_sha256</code>, nullable <code>total_questions</code> and <code>total_marks</code>, <code>is_active</code>, <code>created_at</code>, and <code>updated_at</code>.</p>
+<pre><code class="language-json">[
+  {
+    &quot;id&quot;: 1,
+    &quot;name&quot;: &quot;Example Paper A v1&quot;,
+    &quot;template_id&quot;: &quot;seamo_2025_a&quot;,
+    &quot;version&quot;: 1,
+    &quot;source_filename&quot;: &quot;example-key.pdf&quot;,
+    &quot;source_sha256&quot;: &quot;aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&quot;,
+    &quot;total_questions&quot;: 5,
+    &quot;total_marks&quot;: 10,
+    &quot;is_active&quot;: true,
+    &quot;created_at&quot;: &quot;2026-09-09T12:00:00&quot;,
+    &quot;updated_at&quot;: &quot;2026-09-09T12:00:00&quot;
+  }
+]
+</code></pre>
+<p>No accepted answers, question specifications, or drawing-key text are included. The separate reference-diagram image endpoint is available for visual review. Answer-key creation, update, and deletion are <strong>not public API operations</strong>; unsupported methods return 405. Coordinate key and new-layout provisioning with the operator. Uploading a correction PDF through the older <code>/exams</code> API does not activate a marking key.</p>
+<h3 id="listing-and-logs">Listing and logs</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>GET path</th>
+<th>Optional query inputs</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/submissions</code></td>
+<td><code>skip</code> integer (0), <code>limit</code> integer (100), <code>status</code> string</td>
+<td>Array of status-shaped objects, newest first; no total-count envelope</td>
+</tr>
+<tr>
+<td><code>/submission/{submission_id}/logs</code></td>
+<td><code>limit</code> integer (10)</td>
+<td>Newest-first array of log entries</td>
+</tr>
+</tbody>
+</table></div>
+<p>Use nonnegative <code>skip</code> and positive bounded <code>limit</code> values. A log entry has <code>id</code>, <code>action</code>, <code>status</code>, <code>message</code>, nullable <code>extra_data</code>, and nullable <code>created_at</code>. Logs are diagnostic and can contain internal paths or provider error text; action names, timing metadata, and per-page updates are not a stable progress protocol. Use <code>/status</code> for task state.</p>
+<h3 id="deletion">Deletion</h3>
+<p><code>DELETE /submission/{submission_id}</code> returns <strong>202</strong> in queued deployments:</p>
+<pre><code class="language-json">{&quot;status&quot;:&quot;deleting&quot;,&quot;submission_id&quot;:123,&quot;job_id&quot;:456}
+</code></pre>
+<p>Poll <code>/jobs/456</code> for completion. Cleanup includes local and archived files and
+associated results. Unknown IDs return <strong>404</strong>; active work returns <strong>409</strong>.
+Cancel or finish active work first. Deletion is destructive and has no undelete
+operation. In local development with the queue disabled, the older synchronous
+response is HTTP 200 with <code>status</code> and <code>message</code>.</p>
+<h3 id="health-and-service-metadata">Health and service metadata</h3>
+<p><code>GET /health</code> returns <code>{"status":"healthy","database":"connected","storage":"connected"}</code>. This is a liveness response; the database/storage labels are not active dependency or provider-quota probes.</p>
+<p><code>GET /</code> returns <code>message</code>, <code>version</code>, <code>status</code>, <code>docs</code>, <code>openapi</code>, <code>primary_endpoint</code>, and <code>api_key_required</code>. The <code>primary_endpoint</code> identifies <code>POST /upload</code>, the queued workflow for full AI marking.</p>
+<h3 id="separate-multi-document-exams-api">Separate multi-document /exams API</h3>
+<p>These existing routes belong to a separate extraction-oriented model. An <code>exam_id</code>, <code>document_id</code>, or generated <code>json_id</code> is not a submission ID and cannot be passed to submission-marking endpoints.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Method and path</th>
+<th>Input</th>
+<th>Success output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>POST /exams</code></td>
+<td>JSON <code>{"name":"Example exam"}</code></td>
+<td>Exam object</td>
+</tr>
+<tr>
+<td><code>GET /exams</code></td>
+<td>None</td>
+<td>Exam array, newest first</td>
+</tr>
+<tr>
+<td><code>GET /exams/{exam_id}</code></td>
+<td>Integer path ID</td>
+<td>Exam with <code>documents</code> and <code>generated_jsons</code> arrays</td>
+</tr>
+<tr>
+<td><code>POST /exams/{exam_id}/correction</code></td>
+<td>Multipart <code>file</code> PDF</td>
+<td>Updated exam; stores PDF only</td>
+</tr>
+<tr>
+<td><code>POST /exams/{exam_id}/student-pdfs</code></td>
+<td>Multipart <code>file</code> PDF; optional <strong>query</strong> <code>country</code></td>
+<td>Document object after page conversion</td>
+</tr>
+<tr>
+<td><code>POST /exams/{exam_id}/extract/{document_id}</code></td>
+<td>Required <strong>query</strong> <code>template_id</code></td>
+<td>Generated-JSON metadata after synchronous extraction</td>
+</tr>
+<tr>
+<td><code>GET /exams/{exam_id}/jsons</code></td>
+<td>Path ID</td>
+<td>Array of generated-JSON metadata</td>
+</tr>
+<tr>
+<td><code>GET /jsons/{json_id}</code></td>
+<td>Path ID</td>
+<td>Extraction JSON; object or compact candidate array depending on deployment settings</td>
+</tr>
+<tr>
+<td><code>DELETE /jsons/{json_id}</code></td>
+<td>Path ID</td>
+<td><code>{"status":"deleted"}</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Exam: <code>id</code> integer, <code>name</code> string, nullable <code>correction_pdf_path</code> string, <code>created_at</code> timestamp. Document: <code>id</code>, <code>exam_id</code> integers, nullable <code>country</code> string, <code>file_path</code> string, nullable <code>pages_count</code> integer, <code>uploaded_at</code> timestamp. Generated JSON: <code>id</code>, <code>exam_id</code> integers, <code>filename</code> string, nullable <code>file_path</code> string, <code>created_at</code> timestamp. Success is HTTP 200. Missing entities/files generally return 404; invalid PDF/template returns 400; a missing required query or form field returns 422; conversion/extraction failures return 500. This family does not produce the persisted AI marking/review contract documented above.</p>
+<h2 id="9-errors-limits-and-reliable-client-behavior">9. Errors, limits, and reliable client behavior</h2>
+<h3 id="error-bodies">Error bodies</h3>
+<p>Application errors normally use <code>{"detail":"message"}</code>. FastAPI request validation uses an array in <code>detail</code>:</p>
+<pre><code class="language-json">{
+  &quot;detail&quot;: [
+    {
+      &quot;type&quot;: &quot;missing&quot;,
+      &quot;loc&quot;: [
+        &quot;body&quot;,
+        &quot;file&quot;
+      ],
+      &quot;msg&quot;: &quot;Field required&quot;,
+      &quot;input&quot;: null
+    }
+  ]
+}
+</code></pre>
+<p>The legacy <code>ErrorResponse</code> schema (<code>error</code>, <code>detail</code>, <code>timestamp</code>) is not the common runtime error wrapper. Proxy/network failures can return HTML, plain text, or no body; handle non-JSON errors too.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>HTTP status</th>
+<th>Meaning / action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>400</td>
+<td>Invalid PDF filename, unknown forced layout, malformed <code>mark_request</code>, or details requested before completion; correct the input/state</td>
+</tr>
+<tr>
+<td>401</td>
+<td>Missing or invalid API credential</td>
+</tr>
+<tr>
+<td>404</td>
+<td>Unknown ID, unavailable image/reference, or missing result reference</td>
+</tr>
+<tr>
+<td>405</td>
+<td>Unsupported method, including public answer-key mutations</td>
+</tr>
+<tr>
+<td>409</td>
+<td>Operation conflicts with current task/marking state or marked-export coverage requirements</td>
+</tr>
+<tr>
+<td>410</td>
+<td>Retained source PDF is no longer available for page preview</td>
+</tr>
+<tr>
+<td>413</td>
+<td>Upload rejected by deployment/proxy body-size limits, when configured</td>
+</tr>
+<tr>
+<td>422</td>
+<td>Missing/invalid multipart field, path/query value, or typed JSON body</td>
+</tr>
+<tr>
+<td>500</td>
+<td>Extraction, rendering, storage, or other server error</td>
+</tr>
+<tr>
+<td>502 / 503 / 504</td>
+<td>Deployment/proxy availability or timeout failures; outcome may be unknown for a POST</td>
+</tr>
+</tbody>
+</table></div>
+<p>Endpoint-specific rules in the sections above take precedence. HTTP 200 can still contain unreadable pages, unmarked candidates, an unsuccessful marking run, provisional review scores, or an edit whose requested re-mark failed. Validate the response body as well as the status code.</p>
+<h3 id="timeouts-and-upload-limits">Timeouts and upload limits</h3>
+<ul>
+<li>Prefer upload-and-poll for large PDFs. Give the upload enough time for the client's uplink, then poll about every three seconds with a separate overall deadline.</li>
+<li>Synchronous extraction and manual re-marking can take minutes. A 10–15 minute client timeout may be appropriate, but <strong>the shortest proxy/load-balancer timeout still wins</strong>. The example nginx configuration uses a 600-second upstream timeout; confirm the deployed limit with the operator.</li>
+<li>The PDF limit is <strong>3 GiB (3,221,225,472 bytes)</strong>. The API counts received file bytes; nginx permits 3080 MiB for the full multipart request. <code>GET /capabilities</code> is the authoritative current configuration. Default document limits are 10,000 pages and 25,000,000 rendered pixels per page. Two uploads may be received concurrently, subject to disk reservations; capacity rejection returns 429 or 503 with <code>Retry-After</code>. Validation/render limits can produce a failed queued job after initial upload acceptance.</li>
+<li>No completion-time SLA is implied by benchmark timings. OCR layout detection, full extraction, and AI marking are separate stages. Provider latency, quota, page count, and review/diagram content affect total time.</li>
+</ul>
+<h3 id="retries-and-persistence">Retries and persistence</h3>
+<ul>
+<li>Save <code>submission_id</code> immediately after an accepted upload and associate it with your own exam/user record. Resume polling by ID after a client restart.</li>
+<li>There is no upload deduplication or <code>Idempotency-Key</code> support. Repeating <code>/upload</code> creates another task and can repeat billable processing. If the upload response is lost, reconcile recent submissions with your records/operator before retrying; filenames alone are not unique.</li>
+<li>Retrying a GET after a network error is normally appropriate. Use bounded backoff for timeouts and transient 429/502/503/504 responses. Do not retry every 4xx blindly.</li>
+<li>After a lost manual-mark response, fetch <code>/marking</code> before deciding to start another run. Edits and re-marks are separate commit boundaries.</li>
+<li>Retain source PDFs and final exports in your own system according to your retention requirements. The API has no source-PDF download endpoint, durable webhook delivery, automatic resume, or result-finalization acknowledgment.</li>
+<li>Keep human review in the integration: display the scan, corrections, question outcomes, and provisional scores before publishing final results.</li>
+</ul>
+<h2 id="10-handoff-acceptance-checks">10. Handoff acceptance checks</h2>
+<p>Before connecting the client application's production workflow:</p>
+<ol>
+<li>Confirm the API base URL, authentication mode, and installed template/key versions with the operator.</li>
+<li>Upload a representative PDF, retain the returned ID, and complete the status/marking/export flow.</li>
+<li>Verify leading-zero candidate numbers, mixed templates, absent header fields, and one-based page links.</li>
+<li>Exercise blank/invalid answers and <code>needs_review</code>; confirm an edit with <code>remark: true</code> changes the latest scores while preserving the raw snapshot.</li>
+<li>Exercise unavailable/partial key coverage, a failed marking attempt, a cancelled task, and a lost polling connection.</li>
+<li>Confirm file-size and timeout settings against the client application's infrastructure. Reconcile errors without blindly re-uploading.</li>
+</ol>
+<h3 id="contract-verification-and-maintenance">Contract verification and maintenance</h3>
+<p>The request/response examples in this guide are captured from the real FastAPI handlers using an isolated database, a synthetic answer key, and mocked extraction. No production student data is included. The examples test the distinction between deterministic synchronous marking and extraction-trust-aware persisted marking.</p>
+<p>The downloadable OpenAPI file is a snapshot of the live schema taken during this review. Some dynamic JSON endpoints currently have unconstrained response schemas in OpenAPI; their concrete field contracts and examples are supplied here. The live schema remains useful for parameter locations and typed request/response models. Do not assume generated clients alone cover undocumented dynamic envelopes.</p>
+<p>Maintainers: edit <code>docs/api/guide.md</code>, update examples through <code>tests/test_api_documentation.py</code> when the contract changes, and run <code>python scripts/build_api_docs.py</code>. <code>docs/API.md</code>, the standalone HTML, and the frontend's <code>/api-docs</code> view are generated from the same source.</p>
+<h2 id="11-queue-large-uploads-and-archived-page-images">11. Queue, large uploads, and archived page images</h2>
+<h3 id="capabilities-and-upload-retries">Capabilities and upload retries</h3>
+<p><code>GET /capabilities</code> returns <code>max_file_bytes</code>, <code>max_pdf_pages</code>, <code>max_page_pixels</code>, <code>max_concurrent_uploads</code>, <code>queue_enabled</code>, <code>archive_enabled</code>, <code>local_eviction_enabled</code>, <code>candidate_page_exam_id</code>, and <code>candidate_page_exams</code>. Page lookup currently advertises <code>candidate_page_exam_id: "external_exam_id_or_paper_code"</code> and <code>candidate_page_exams: {"31": "seamo_2026"}</code>.</p>
+<p><code>POST /upload</code> still returns HTTP 200 with the original acknowledgment fields, with <code>X-Job-ID</code> on a new acceptance. Send an optional <code>Idempotency-Key</code> (maximum 200 characters) to safely retry the same PDF and processing options. Identical completed uploads return the original submission ID. Different content/options or an upload still receiving bytes returns 409. Optional <code>X-Content-SHA256</code> must be the file's 64-character hexadecimal SHA-256 digest; mismatch returns 400. Do not reuse a key across endpoints or different PDFs.</p>
+<p>The uploader streams to persistent local storage before queue acceptance. Legacy <code>/exams/{id}/student-pdfs</code> and <code>/exams/{id}/correction</code> uploads share the same byte and disk admission limits; they store documents without starting extraction and do not accept <code>Idempotency-Key</code>. PDF processing does not depend on keeping the upload connection open. Closing the connection after acceptance does not cancel the queued task. Large uploads have a six-hour application deadline, plus proxy inactivity limits.</p>
+<h3 id="queue-status-and-operations">Queue status and operations</h3>
+<p><code>GET /status/{submission_id}</code> adds <code>job_id</code>, <code>stage</code>, nullable <code>queue_position</code>, <code>pages_completed</code>, <code>attempt</code>, <code>archive_status</code>, and nullable <code>archive_error</code>. Existing statuses remain unchanged. Queue position is approximate. <code>pages_completed</code> measures extracted pages; marking still follows extraction.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Input</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /jobs/{job_id}</code></td>
+<td>Integer job ID</td>
+<td><code>job_id</code>, <code>submission_id</code>, <code>kind</code>, <code>status</code>, <code>stage</code>, <code>attempt</code>, <code>error</code>, timestamps and terminal <code>result</code></td>
+</tr>
+<tr>
+<td><code>POST /jobs/{job_id}/cancel</code></td>
+<td>No body</td>
+<td>Updated job; 409 if already completed/failed</td>
+</tr>
+<tr>
+<td><code>POST /jobs/{job_id}/retry</code></td>
+<td>No body</td>
+<td>HTTP 202, requeued failed job; resumes checkpoints; 409 unless failed</td>
+</tr>
+<tr>
+<td><code>POST /submission/{submission_id}/mark-jobs</code></td>
+<td>Optional JSON <code>{"answer_key_id":1}</code></td>
+<td>HTTP 202, marking job; poll <code>/jobs/{id}</code></td>
+</tr>
+<tr>
+<td><code>POST /submission/{submission_id}/archive</code></td>
+<td>No body</td>
+<td>HTTP 202, archive job; 409 while Spaces is disabled or submission incomplete</td>
+</tr>
+</tbody>
+</table></div>
+<p>Job states are <code>pending</code>, <code>running</code>, <code>completed</code>, <code>failed</code>, or <code>cancelled</code>. Storage cleanup jobs (<code>delete</code> and <code>evict</code>) cannot be cancelled halfway through; retry failed cleanup instead. A completed marking job can still contain failed/unavailable marking; inspect its <code>result</code> exactly as for the synchronous marking response. Synchronous re-marking uses the same queue; a 504 includes the recoverable job ID and does not imply the task was cancelled. Review-edit responses include nullable <code>remark_job_id</code>, so the edit remains successful while its re-mark is still queued or running.</p>
+<h3 id="candidate-page-by-exam-id-and-candidate-number">Candidate page by exam ID and candidate number</h3>
+<pre><code class="language-http">GET /candidate-page?exam_id=31&amp;candidate_number=000123
+X-API-Key: YOUR_API_KEY
+</code></pre>
+<p>Required <code>exam_id=31</code> identifies the client’s <strong>SEAMO 2026 series</strong>, across all papers (K, A–F) and supported layout variants. This is the current production exam mapping, independent of the separate <code>/exams</code> database IDs. Matching uses explicit exam brand/year metadata. Existing paper codes from <code>/templates/all</code> remain accepted for compatibility.</p>
+<p><code>candidate_number</code> is a string; leading zeros are significant and only surrounding whitespace is trimmed. Optional integer <code>submission_id</code> and one-based <code>page_number</code> disambiguate repeated scans or matches across papers.</p>
+<p>Page lookup does <strong>not</strong> require answer keys, scores, or completed marking. SEAMO 2026 answer keys are pending; extraction and image retrieval remain available, but marking cannot be completed until the appropriate keys are provisioned.</p>
+<p>Success is HTTP 200 with PNG bytes for the full source page and <code>X-Submission-ID</code>, <code>X-Candidate-ID</code>, <code>X-Page-Number</code> headers. No match returns 404; unknown exam ID/paper code or malformed input returns 422. Multiple matches return 409 with <code>detail.code: "ambiguous_candidate_page"</code> and <code>detail.matches</code> containing submission, candidate and page IDs. The API never chooses a scan silently. A discriminator must belong to the matching candidate and exam series (or the selected paper when using a paper code).</p>
+<h3 id="spaces-archival">Spaces archival</h3>
+<p>After processing, the archive worker copies the original PDF, all retained converted page images, diagram crops and available result exports into a private <code>aimarker/</code> namespace. Large files use resumable multipart transfers and an end-to-end checksum readback. Image endpoints keep the same authentication and return bytes from local storage or Spaces.</p>
+<p>Processing and archiving have independent statuses. Archive failure preserves local files and does not re-run extraction. <code>archive_status</code> is <code>disabled</code>, <code>not_started</code>, <code>pending</code>, <code>running</code>, <code>completed</code>, <code>failed</code> or <code>cancelled</code>. <strong>Pre-rollout submissions remain pinned locally</strong> and are not automatically modified or backfilled. New submissions archive immediately after processing and retain a 24-hour local cache before verified cleanup. <code>local_eviction_enabled</code> reports whether this cleanup is enabled.</p>
+<p>The database remains authoritative for corrected answers and current scores. Marked snapshots are archived by marking-run ID. Human re-marking queues another archive when enabled. Temporary remote-storage errors return 503; an unavailable retained image returns 410.</p>
+<h3 id="explicit-deletion-and-local-retention">Explicit deletion and local retention</h3>
+<p>In queued deployments, <code>DELETE /submission/{submission_id}</code> returns HTTP 202:</p>
+<pre><code class="language-json">{&quot;status&quot;:&quot;deleting&quot;,&quot;submission_id&quot;:123,&quot;job_id&quot;:456}
+</code></pre>
+<p>Poll <code>GET /jobs/456</code> until completed. Deletion rejects active work with HTTP 409;
+finish or cancel that work first. The cleanup covers the submission's source,
+converted pages, diagram crops, exports, private Spaces namespace and associated
+database records. Failures retain a retryable cleanup job; other submissions
+and shared answer-key assets are untouched. Upload idempotency receipts survive
+deletion so replaying a deleted upload returns HTTP 410.</p>
+<p>For new submissions, a successful archive schedules cleanup after the configured
+cache interval (24 hours in production). Pre-rollout submissions are explicitly
+pinned by <code>ARCHIVE_PRESERVE_THROUGH_SUBMISSION_ID</code> and cannot be evicted by this cleanup. Cleanup requires all artifacts verified, matching
+local hashes, available remote copies and an idle submission. It removes only
+local copies; database results and authenticated Spaces-backed image access
+remain available. Historical submissions are not automatically backfilled.</p><div class="footer">Generated from the repository's integration guide and tested synthetic API examples.</div></article></div>
+<script>
+for (const pre of document.querySelectorAll('pre')) {
+ const code=pre.querySelector('code'); if(!code) continue;
+ const button=document.createElement('button'); button.className='copy'; button.textContent='Copy'; button.setAttribute('aria-label','Copy code example');
+ button.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(code.textContent);button.textContent='Copied';}catch{button.textContent='Select and copy';}setTimeout(()=>button.textContent='Copy',2000);});pre.prepend(button);
+}
+if(window.matchMedia('(max-width:980px)').matches)document.querySelector('aside details').removeAttribute('open');
+document.querySelector('#print-guide').addEventListener('click',()=>window.print());
+</script></body></html>
