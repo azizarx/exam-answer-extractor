@@ -1136,8 +1136,8 @@ def test_synchronous_extract_mark_uses_exact_template_or_leaves_unmarked(
 
 def test_startup_sync_is_idempotent_on_explicit_temp_database(engine):
     checked_db = ROOT / "exam_db.sqlite"
-    before_hash = hashlib.sha256(checked_db.read_bytes()).hexdigest()
-    before_mtime = checked_db.stat().st_mtime_ns
+    before_hash = hashlib.sha256(checked_db.read_bytes()).hexdigest() if checked_db.exists() else None
+    before_mtime = checked_db.stat().st_mtime_ns if checked_db.exists() else None
 
     import_db = engine.url.database + ".import"
     environment = {
@@ -1165,5 +1165,30 @@ def test_startup_sync_is_idempotent_on_explicit_temp_database(engine):
         assert len(rows) == 14
         assert all(row.is_active for row in rows)
 
-    assert hashlib.sha256(checked_db.read_bytes()).hexdigest() == before_hash
-    assert checked_db.stat().st_mtime_ns == before_mtime
+    if before_hash is None:
+        assert not checked_db.exists()
+    else:
+        assert hashlib.sha256(checked_db.read_bytes()).hexdigest() == before_hash
+        assert checked_db.stat().st_mtime_ns == before_mtime
+
+
+def test_cancellation_releases_marking_run_without_persisting_marks(engine, monkeypatch):
+    from backend.services.cancellation import ExtractionCancelled
+    import backend.services.marking_workflow as workflow
+
+    with Session(engine) as db:
+        submission_id, _ = _submission(db)
+        db.add(_key('seamo_2025_a'))
+        db.commit()
+
+        def cancel():
+            raise ExtractionCancelled()
+
+        monkeypatch.setattr(workflow, 'check_cancelled', cancel)
+        with pytest.raises(ExtractionCancelled):
+            mark_submission_answers(db, submission_id)
+        run = db.scalar(select(MarkingRun).where(MarkingRun.submission_id == submission_id))
+        assert run.status == 'failed'
+        assert run.error_message == 'Marking cancelled by user'
+        assert db.scalar(select(func.count()).select_from(CandidateMarking)) == 0
+        assert db.scalar(select(func.count()).select_from(CandidateResult)) == 1

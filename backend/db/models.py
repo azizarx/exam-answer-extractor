@@ -21,6 +21,78 @@ from datetime import datetime
 from backend.db.database import Base
 
 
+class ProcessingJob(Base):
+    """Durable job ledger and outbox. Redis carries only this row's ID."""
+    __tablename__ = "processing_jobs"
+    __table_args__ = (Index('uq_active_queued_mark', 'submission_id', unique=True,
+        sqlite_where=text("kind IN ('mark','review_mark') AND state IN ('pending','running')"),
+        postgresql_where=text("kind IN ('mark','review_mark') AND state IN ('pending','running')")),)
+    id = Column(Integer, primary_key=True)
+    submission_id = Column(Integer, index=True)  # retained audit even after explicit deletion
+    kind = Column(String(30), nullable=False, default="process")
+    state = Column(String(30), nullable=False, default="pending", index=True)
+    stage = Column(String(30), nullable=False, default="queued")
+    payload = Column(JSON, nullable=False, default=dict)
+    result = Column(JSON)
+    error = Column(Text)
+    attempts = Column(Integer, nullable=False, default=0)
+    generation = Column(Integer, nullable=False, default=0)
+    owner = Column(String(100))
+    lease_until = Column(DateTime, index=True)
+    published_at = Column(DateTime)
+    available_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class PageCheckpoint(Base):
+    __tablename__ = "page_checkpoints"
+    __table_args__ = (UniqueConstraint("submission_id", "page_number"),)
+    id = Column(Integer, primary_key=True)
+    submission_id = Column(Integer, nullable=False, index=True)
+    page_number = Column(Integer, nullable=False)
+    candidate_id = Column(Integer)
+    extraction = Column(JSON, nullable=False)
+
+
+class JobCheckpoint(Base):
+    __tablename__ = "job_checkpoints"
+    __table_args__ = (UniqueConstraint("job_id", "key"),)
+    id = Column(Integer, primary_key=True)
+    job_id = Column(Integer, nullable=False, index=True)
+    key = Column(String(128), nullable=False)
+    value = Column(JSON, nullable=False)
+
+
+class StorageArtifact(Base):
+    __tablename__ = "storage_artifacts"
+    id = Column(Integer, primary_key=True)
+    submission_id = Column(Integer, nullable=False, index=True)
+    kind = Column(String(30), nullable=False)
+    page_number = Column(Integer)
+    local_path = Column(String(500), nullable=False, unique=True)
+    object_key = Column(String(500), unique=True)
+    size = Column(Integer)
+    sha256 = Column(String(64))
+    state = Column(String(30), nullable=False, default="local")
+    upload_id = Column(String(500))
+    parts = Column(JSON)
+    verified_at = Column(DateTime)
+
+
+class UploadReservation(Base):
+    __tablename__ = "upload_reservations"
+    id = Column(String(64), primary_key=True)
+    idempotency_key = Column(String(200), unique=True)
+    request_signature = Column(String(64))
+    state = Column(String(30), nullable=False, default="receiving")
+    reserved_bytes = Column(Integer, nullable=False)
+    local_path = Column(String(500), nullable=False)
+    sha256 = Column(String(64))
+    submission_id = Column(Integer)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
 class ExamSubmission(Base):
     """Model for exam submission metadata"""
     __tablename__ = "exam_submissions"
@@ -30,7 +102,7 @@ class ExamSubmission(Base):
     original_pdf_key = Column(String(500), nullable=False)  # local storage path
     result_json_key = Column(String(500), nullable=True)  # local storage path for results
     template_id = Column(String(100), nullable=True, index=True)  # exam layout chosen at upload
-    status = Column(String(50), default="pending", index=True)  # pending, processing, completed, failed
+    status = Column(String(50), default="pending", index=True)  # pending, processing, completed, failed, cancelled
     created_at = Column(DateTime, default=datetime.utcnow)
     processed_at = Column(DateTime, nullable=True)
     pages_count = Column(Integer, default=0)

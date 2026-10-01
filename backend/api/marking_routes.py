@@ -297,12 +297,26 @@ async def confirm_candidate_review(
     Re-marking is opt-in via ``remark`` so existing callers keep the old
     behaviour of leaving scores untouched.
     """
+    from backend.config import get_settings
+    if get_settings().queue_enabled:
+        from sqlalchemy import text
+        db.rollback();db.execute(text('BEGIN IMMEDIATE'))
     submission = db.get(ExamSubmission, submission_id)
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
     candidate = db.get(CandidateResult, candidate_id)
     if candidate is None or candidate.submission_id != submission_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
+
+    from backend.config import get_settings
+    if get_settings().queue_enabled:
+        from backend.db.models import ProcessingJob
+        if submission.status != 'completed' or db.query(ProcessingJob.id).filter(
+            ProcessingJob.submission_id==submission_id,
+            ProcessingJob.kind.in_(['mark','review_mark']),
+            ProcessingJob.state.in_(['pending','running']),
+        ).first():
+            raise HTTPException(409, 'Wait for extraction and marking to finish before editing')
 
     edited_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     edits: list[dict[str, Any]] = []
@@ -359,23 +373,36 @@ async def confirm_candidate_review(
         history.extend(edits)
         extra["manual_edits"] = history
     candidate.extra_fields = extra
+    queued_remark = None
+    from backend.queue.runtime import current_job, enqueue
+    if body.remark and get_settings().queue_enabled and current_job.get() is None:
+        queued_remark = enqueue(db, 'review_mark', submission_id, {'candidate_ids':[candidate.id]})
     db.commit()
     db.refresh(candidate)
 
     remarked = False
     marking_run_id: Optional[int] = None
     remark_error: Optional[str] = None
+    remark_job_id: Optional[int] = None
     if body.remark:
         try:
-            run = mark_submission_answers(
-                db, submission_id, only_candidate_ids=[candidate.id],
-            )
-            remarked = run.status == "completed"
-            marking_run_id = run.id
-            if not remarked:
-                remark_error = _sanitize_error(run.error_message) or run.status
+            from backend.config import get_settings
+            from backend.queue.runtime import current_job, enqueue, wait_job
+            if get_settings().queue_enabled and current_job.get() is None:
+                remark_job_id = queued_remark.id
+                db.rollback()
+                result = await wait_job(remark_job_id)
+                remarked, marking_run_id, remark_error = result['remarked'], result['marking_run_id'], result['remark_error']
+            else:
+                run = mark_submission_answers(db, submission_id, only_candidate_ids=[candidate.id])
+                remarked = run.status == "completed"
+                marking_run_id = run.id
+                if not remarked:
+                    remark_error = _sanitize_error(run.error_message) or run.status
         except MarkingInProgressError:
             remark_error = "another marking run is already in progress"
+        except HTTPException as exc:
+            remark_error = str(exc.detail)
         except Exception as exc:
             # The edit itself is committed and must not be reported as failed
             # just because re-marking could not run.
@@ -395,6 +422,7 @@ async def confirm_candidate_review(
         remarked=remarked,
         marking_run_id=marking_run_id,
         remark_error=remark_error,
+        remark_job_id=remark_job_id,
     )
 
 
@@ -407,6 +435,13 @@ async def mark_submission(
     body: Optional[ManualRemarkRequest] = None,
     db: Session = Depends(get_db),
 ):
+    from backend.config import get_settings
+    from backend.queue.runtime import current_job, wait_job
+    if get_settings().queue_enabled and current_job.get() is None:
+        from backend.api.queue_routes import enqueue_mark
+        accepted = enqueue_mark(submission_id, body.model_dump() if body else {}, db)
+        db.rollback()
+        return ManualRemarkResponse(**await wait_job(accepted['job_id']))
     submission = db.get(ExamSubmission, submission_id)
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")

@@ -119,6 +119,7 @@ class ConfirmReviewResponse(BaseModel):
     remarked: bool = False
     marking_run_id: Optional[int] = None
     remark_error: Optional[str] = None
+    remark_job_id: Optional[int] = None
 
 
 class AnswerKeyMetadataSchema(BaseModel):
@@ -222,6 +223,13 @@ class ProcessingStatusResponse(BaseModel):
     error_message: Optional[str] = None
     current_page: Optional[int] = None
     current_candidate_name: Optional[str] = None
+    stage: Optional[str] = None
+    queue_position: Optional[int] = None
+    pages_completed: int = 0
+    attempt: int = 0
+    job_id: Optional[int] = None
+    archive_status: Optional[str] = None
+    archive_error: Optional[str] = None
 
 
 class SubmissionDetailResponse(BaseModel):

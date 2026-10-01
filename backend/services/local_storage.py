@@ -54,9 +54,21 @@ class LocalStorage:
         """Persist a PDF upload to disk."""
         final_name = self._unique_name(filename)
         destination = self.uploads_path / final_name
+        settings = get_settings()
+        limit = settings.max_file_size_mb * 1024**2
         file_obj.seek(0)
-        with open(destination, "wb") as dest:
-            shutil.copyfileobj(file_obj, dest)
+        written = 0
+        try:
+            with open(destination, "wb") as dest:
+                while chunk := file_obj.read(1024*1024):
+                    written += len(chunk)
+                    if written > limit:
+                        from fastapi import HTTPException
+                        raise HTTPException(413, 'PDF exceeds the maximum file size')
+                    dest.write(chunk)
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
         logger.info("Saved PDF %s to %s", filename, destination)
         return self._build_result(destination)
 
@@ -71,6 +83,12 @@ class LocalStorage:
     def read_json(self, relative_path: str) -> Optional[str]:
         """Read stored JSON results; returns None if missing."""
         path = self.get_absolute_path(relative_path)
+        if path and not Path(path).is_file():
+            from backend.services.artifact_storage import ensure_local
+            try:
+                path = ensure_local(relative_path)
+            except FileNotFoundError:
+                return None
         if path and path.exists():
             return path.read_text(encoding="utf-8")
         logger.warning("JSON path %s not found", relative_path)

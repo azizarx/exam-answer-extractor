@@ -40,6 +40,9 @@ from backend.services.json_generator import get_json_generator
 from backend.services.space_client import get_spaces_client
 from backend.services.image_preprocessor import ImagePreprocessor
 from backend.services.run_logger import attach_run_log, detach_run_log, step_timer
+from backend.services.cancellation import (
+    CancellationToken, ExtractionCancelled, check_cancelled, current_cancellation,
+)
 from backend.services.marking_workflow import (
     MarkingInProgressError,
     manifest_from_key,
@@ -205,8 +208,14 @@ async def upload_student_pdf(exam_id: int, country: Optional[str] = None, file: 
     if not absolute_path:
         raise HTTPException(status_code=500, detail="Could not resolve saved file path")
 
-    image_paths = pdf_converter.convert_from_file(absolute_path)
-    pages = len(image_paths)
+    # Counting pages does not require rendering them in the API process.
+    if get_settings().queue_enabled:
+        from starlette.concurrency import run_in_threadpool
+        pages = await run_in_threadpool(pdf_converter.get_page_count, str(absolute_path))
+        image_paths = []
+    else:
+        image_paths = pdf_converter.convert_from_file(absolute_path)
+        pages = len(image_paths)
     # cleanup images
     for img in image_paths:
         try:
@@ -232,6 +241,31 @@ async def extract_exam_document(
     template_id: str = Query(..., description="Exam layout template id; required."),
     db: Session = Depends(get_db),
 ):
+    from backend.queue.runtime import current_job, enqueue, wait_job
+    if get_settings().queue_enabled and current_job.get() is None:
+        _validate_optional_template_id(template_id)
+        doc = db.get(ExamDocument, document_id)
+        if doc is None or doc.exam_id != exam_id:
+            raise HTTPException(404, 'Document not found for this exam')
+        from starlette.concurrency import run_in_threadpool
+        def copy_source():
+            import os
+            from uuid import uuid4
+            storage = get_local_storage()
+            destination=storage.uploads_path/f'{uuid4().hex}.pdf'
+            # Same-volume hard link preserves the legacy document while avoiding
+            # a second multi-gigabyte copy for its queued extraction submission.
+            os.link(storage.get_absolute_path(doc.file_path),destination)
+            return storage._build_result(destination)
+        saved = await run_in_threadpool(copy_source)
+        from backend.queue.runtime import next_submission_id
+        from sqlalchemy import text
+        db.rollback();db.execute(text('BEGIN IMMEDIATE'))
+        sub = ExamSubmission(id=next_submission_id(db),filename=Path(doc.file_path).name, original_pdf_key=saved['relative_path'], template_id=template_id, status='pending')
+        db.add(sub); db.flush()
+        job = enqueue(db, 'exam', sub.id, {'exam_id':exam_id})
+        db.commit()
+        return await wait_job(job.id)
     # template_id is mandatory: trust-the-template policy.
     from backend.services.template_service import get_template_registry
     if get_template_registry().get(template_id) is None:
@@ -351,10 +385,12 @@ async def download_json(json_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="JSON not found")
     if not record.file_path:
         raise HTTPException(status_code=404, detail="No file associated with this record")
-    abs_path = storage.get_absolute_path(record.file_path)
-    if not abs_path or not Path(abs_path).exists():
+    from starlette.concurrency import run_in_threadpool
+    try:content=await run_in_threadpool(storage.read_json,record.file_path)
+    except Exception:raise HTTPException(503,'Archived JSON is temporarily unavailable')
+    if content is None:
         raise HTTPException(status_code=404, detail="File missing")
-    return JSONResponse(content=_json.loads(Path(abs_path).read_text(encoding="utf-8")))
+    return JSONResponse(content=_json.loads(content))
 
 
 @router.delete("/jsons/{json_id}")
@@ -427,7 +463,9 @@ def process_pdf_extraction(
     _filename_for_log = str(getattr(_sub_pre, "filename") or Path(pdf_path).name)
     run_log = attach_run_log(submission_id, _filename_for_log, template_id)
     run_log_path = run_log.path
+    cancellation_context = current_cancellation.set(CancellationToken(submission_id, SessionLocal))
     try:
+        check_cancelled()
         sub = _sub_pre
         settings = get_settings()
         logger.info(
@@ -441,7 +479,13 @@ def process_pdf_extraction(
             "forced" if template_id else "auto",
         )
 
-        setattr(sub, 'status', 'processing')
+        started = db.query(ExamSubmission).filter(
+            ExamSubmission.id == submission_id,
+            ExamSubmission.status == "pending",
+        ).update({"status": "processing"}, synchronize_session=False)
+        if not started:
+            db.rollback()
+            return
         setattr(sub, 'template_id', template_id)  # None in auto mode
         db.commit()
 
@@ -464,6 +508,7 @@ def process_pdf_extraction(
         pdf_converter = get_pdf_converter()
         with step_timer("pdf_to_images", logger):
             image_paths = pdf_converter.convert_from_file(pdf_path)
+        check_cancelled()
         conversion_seconds = time.perf_counter() - conversion_started
         logger.info("pdf_to_images: produced %d page images in %.2fs", len(image_paths), conversion_seconds)
 
@@ -523,6 +568,7 @@ def process_pdf_extraction(
                 diagram_crop_dir=diagram_crop_dir,
             )
         extraction_seconds = time.perf_counter() - extraction_started
+        check_cancelled()
 
         json_gen = get_json_generator()
         json_data = json_gen.generate_with_validation(
@@ -610,6 +656,7 @@ def process_pdf_extraction(
         # Secure raw extraction in its own transaction before marking. The
         # marking workflow owns separate transactions and cannot roll these
         # candidate rows back.
+        check_cancelled()
         db.commit()
 
         prior_marking_run_id = None
@@ -668,8 +715,14 @@ def process_pdf_extraction(
 
         # Unavailable and failed marking are terminal marking outcomes, not
         # extraction failures.
-        setattr(sub, 'status', 'completed')
-        setattr(sub, 'processed_at', datetime.utcnow())
+        check_cancelled()
+        finished = db.query(ExamSubmission).filter(
+            ExamSubmission.id == submission_id,
+            ExamSubmission.status == "processing",
+        ).update({"status": "completed", "processed_at": datetime.utcnow()}, synchronize_session=False)
+        if not finished:
+            db.rollback()
+            raise ExtractionCancelled()
         db.commit()
 
         _write_processing_log(
@@ -692,14 +745,18 @@ def process_pdf_extraction(
 
         logger.info(f"Successfully processed submission {submission_id}")
 
+    except ExtractionCancelled:
+        db.rollback()
+        logger.info("Submission %s cancelled; workers stopped", submission_id)
     except Exception as e:
         logger.exception(f"Failed to process submission {submission_id}: {e}")
         db.rollback()
-        sub = db.query(ExamSubmission).filter(ExamSubmission.id == submission_id).first()
-        if sub:
-            setattr(sub, 'status', 'failed')
-            setattr(sub, 'error_message', str(e))
-            db.commit()
+        failed = db.query(ExamSubmission).filter(
+            ExamSubmission.id == submission_id,
+            ExamSubmission.status.in_(("pending", "processing")),
+        ).update({"status": "failed", "error_message": str(e)}, synchronize_session=False)
+        db.commit()
+        if failed:
             _write_processing_log(
                 db,
                 submission_id,
@@ -709,6 +766,7 @@ def process_pdf_extraction(
                 extra_data={"total_seconds": round(time.perf_counter() - job_started, 2)},
             )
     finally:
+        current_cancellation.reset(cancellation_context)
         for image_path in image_paths:
             try:
                 Path(image_path).unlink(missing_ok=True)
@@ -802,6 +860,35 @@ async def upload_pdf(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+@router.post("/submission/{submission_id}/cancel")
+def cancel_submission(submission_id: int, db: Session = Depends(get_db)):
+    """Cancel queued/running extraction. In-flight calls stop at a checkpoint."""
+    changed = db.query(ExamSubmission).filter(
+        ExamSubmission.id == submission_id,
+        ExamSubmission.status.in_(("pending", "processing")),
+    ).update({
+        "status": "cancelled", "processed_at": datetime.utcnow(), "error_message": None,
+    }, synchronize_session=False)
+    if changed:
+        from backend.db.models import ProcessingJob
+        db.query(ProcessingJob).filter(
+            ProcessingJob.submission_id == submission_id,
+            ProcessingJob.state.in_(("pending", "running")),
+            ProcessingJob.kind == "process",
+        ).update({"state": "cancelled", "stage": "cancelled"})
+        db.add(ProcessingLog(
+            submission_id=submission_id, action="extract_cancelled", status="info",
+            message="Cancelled by user. In-flight work will stop at the next checkpoint.",
+        ))
+    db.commit()
+    submission = db.get(ExamSubmission, submission_id)
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.status != "cancelled":
+        raise HTTPException(status_code=409, detail=f"Cannot cancel a {submission.status} submission")
+    return {"submission_id": submission_id, "status": "cancelled"}
+
+
 @router.get("/status/{submission_id}", response_model=ProcessingStatusResponse)
 async def get_status(submission_id: int, db: Session = Depends(get_db)):
     """
@@ -887,7 +974,8 @@ async def get_status(submission_id: int, db: Session = Depends(get_db)):
         drawing_count=drawing_count,
         error_message=str(d.get("error_message")) if d.get("error_message") is not None else None,
         current_page=current_page,
-        current_candidate_name=current_candidate_name
+        current_candidate_name=current_candidate_name,
+        **__import__('backend.api.queue_routes', fromlist=['queue_status']).queue_status(db,submission_id),
     )
 
 
@@ -1087,7 +1175,7 @@ async def get_submission_logs(submission_id: int, limit: int = 10, db: Session =
     return out
 
 
-@router.delete("/submission/{submission_id}")
+@router.delete("/submission/{submission_id}", responses={202:{"description":"Deletion queued; response includes job_id"},409:{"description":"Active work must finish or be cancelled first"}})
 async def delete_submission(submission_id: int, db: Session = Depends(get_db)):
     """
     Delete a submission and all associated data
@@ -1104,6 +1192,25 @@ async def delete_submission(submission_id: int, db: Session = Depends(get_db)):
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
     
+    if get_settings().queue_enabled:
+        from sqlalchemy import text
+        from backend.db.models import ProcessingJob
+        from backend.queue.runtime import enqueue
+        from fastapi.responses import JSONResponse
+        # Serialize the tombstone with marking/archive admission on this host.
+        db.rollback()
+        db.execute(text('BEGIN IMMEDIATE'))
+        submission=db.get(ExamSubmission,submission_id)
+        existing=db.query(ProcessingJob).filter_by(submission_id=submission_id,kind='delete').order_by(ProcessingJob.id.desc()).first()
+        if existing:
+            return JSONResponse(status_code=202,content={'status':'deleting','submission_id':submission_id,'job_id':existing.id})
+        if db.query(ProcessingJob.id).filter(ProcessingJob.submission_id==submission_id,ProcessingJob.kind!='evict',ProcessingJob.state.in_(['pending','running'])).first():
+            raise HTTPException(409,'Wait for active jobs to finish or cancel them before deleting')
+        db.query(ProcessingJob).filter_by(submission_id=submission_id,kind='evict',state='pending').update({'state':'cancelled','stage':'superseded_by_deletion'})
+        submission.status='deleting'
+        job=enqueue(db,'delete',submission_id)
+        db.commit()
+        return JSONResponse(status_code=202,content={'status':'deleting','submission_id':submission_id,'job_id':job.id})
     storage = get_local_storage()
     storage.delete_file(getattr(submission, 'original_pdf_key', None))
     storage.delete_diagram_crops(submission_id)
@@ -1372,9 +1479,9 @@ def get_submission_page_image(
     event loop that stalls every other request for the duration. Starlette
     runs sync endpoints in its threadpool.
 
-    Page images from extraction are deleted once a run finishes, so this
-    re-renders from the retained source PDF.  ``CandidateResult.page_number``
-    indexes the PDF's pages directly, which makes candidate -> page exact.
+    Queued submissions retain their conversion PNGs locally or in Spaces.
+    Historical submissions without a retained PNG render from the source PDF.
+    ``CandidateResult.page_number`` is the original one-based PDF page index.
     """
     submission = db.query(ExamSubmission).filter(
         ExamSubmission.id == submission_id
@@ -1390,7 +1497,20 @@ def get_submission_page_image(
         )
 
     storage = get_local_storage()
+    from backend.db.models import StorageArtifact
+    from backend.services.artifact_storage import artifact_response, ensure_local
+    page_key = f"pages/sub{submission_id}/{page_number:06d}.png"
+    existing = db.query(StorageArtifact).filter_by(local_path=page_key).first()
+    if existing or (storage.base_path / page_key).is_file():
+        return artifact_response(page_key, headers={"Cache-Control": "private, max-age=3600"})
     pdf_path = storage.resolve_within(str(getattr(submission, "original_pdf_key", "") or ""))
+    if pdf_path is not None and not pdf_path.is_file():
+        try:
+            pdf_path = ensure_local(submission.original_pdf_key)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            raise HTTPException(503, detail="Archived source is temporarily unavailable")
     if pdf_path is None or not pdf_path.is_file():
         raise HTTPException(
             status_code=410, detail="The uploaded PDF for this submission is no longer stored"
@@ -1416,11 +1536,18 @@ def get_submission_page_image(
         )
         raise HTTPException(status_code=500, detail="Could not render that page")
 
-    return Response(
-        content=png_bytes,
-        media_type="image/png",
-        headers={"Cache-Control": "private, max-age=3600"},
-    )
+    if settings.queue_enabled:
+        import os
+        import uuid
+        target = storage.base_path / page_key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(target.name + '.' + uuid.uuid4().hex + '.part')
+        temporary.write_bytes(png_bytes)
+        os.replace(temporary, target)
+        from backend.queue.pipeline import artifact
+        artifact(db, submission_id, target, 'page', page_number)
+        db.commit()
+    return Response(content=png_bytes, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.get(
@@ -1452,6 +1579,11 @@ async def get_candidate_diagram_crop(
 
     path = get_local_storage().diagram_crop_dir(submission_id) / str(name)
     if not path.is_file():
+        from backend.services.artifact_storage import artifact_response
+        from backend.db.models import StorageArtifact
+        relative = str(path.relative_to(get_local_storage().base_path))
+        if db.query(StorageArtifact).filter_by(local_path=relative, state='verified').first():
+            return artifact_response(relative, headers={"Cache-Control": "private, max-age=3600"})
         raise HTTPException(
             status_code=404, detail="No diagram crop stored for that question"
         )

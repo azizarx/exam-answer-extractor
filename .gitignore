@@ -29,6 +29,7 @@ env/
 # Environment / secrets
 .env
 .env.local
+.env.spaces
 .env.*.local
 
 # IDE / editor
@@ -84,6 +85,9 @@ storage/results/*
 storage/pipeline_runs/*
 !storage/pipeline_runs/.gitkeep
 storage/diagrams/
+storage/pages/
+storage/work/
+storage/queue_cache/
 storage/cv_overlays/
 storage/annotations/
 storage/OCRResults/

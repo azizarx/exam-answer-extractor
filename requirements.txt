@@ -18,6 +18,8 @@ python-dotenv>=1.0.0
 
 # ---- Database ----
 SQLAlchemy>=2.0.25,<3.0
+celery[redis]==5.6.3
+redis==6.4.0
 # Needed when DATABASE_URL points at Postgres (recommended in production)
 psycopg2-binary>=2.9.9
 

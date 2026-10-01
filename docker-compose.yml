@@ -1,24 +1,69 @@
+x-runtime: &runtime
+  image: aimarker-app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  env_file: [.env]
+  environment: &environment
+    DATABASE_URL: sqlite:////app/data/exam_db.sqlite
+    APP_ENV: production
+    DEBUG: "false"
+    OMP_THREAD_LIMIT: "1"
+    QUEUE_ENABLED: "true"
+    REDIS_URL: redis://redis:6379/0
+  volumes:
+    - ./storage:/app/storage
+    - ./data:/app/data
+
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-
+    <<: *runtime
     container_name: python-app
-
-    ports:
-      - "8000:8000"
-
+    ports: ["8000:8000"]
+    cpus: "0.5"
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+    depends_on:
+      redis: {condition: service_healthy}
+  worker:
+    <<: *runtime
+    command: ["celery", "-A", "backend.queue.app:app", "worker", "-Q", "process", "--concurrency=1", "--loglevel=INFO", "--hostname=process@%h"]
+    cpus: "2.5"
+    mem_limit: 4g
+    stop_grace_period: 120s
+    depends_on:
+      app: {condition: service_healthy}
+  archive:
+    <<: *runtime
+    command: ["celery", "-A", "backend.queue.app:app", "worker", "-Q", "archive", "--concurrency=1", "--loglevel=INFO", "--hostname=archive@%h"]
+    cpus: "0.25"
+    mem_limit: 512m
+    stop_grace_period: 120s
+    depends_on:
+      app: {condition: service_healthy}
+  dispatcher:
+    <<: *runtime
+    command: ["python", "-m", "backend.queue.dispatcher"]
+    cpus: "0.25"
+    mem_limit: 256m
+    depends_on:
+      app: {condition: service_healthy}
+  redis:
+    image: redis:7.4-alpine
     restart: unless-stopped
-
-    env_file:
-      - .env
-
-    environment:
-      DATABASE_URL: sqlite:////app/data/exam_db.sqlite
-      APP_ENV: production
-      DEBUG: "false"
-
-    volumes:
-      - ./storage:/app/storage
-      - ./data:/app/data
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "192mb", "--maxmemory-policy", "noeviction"]
+    volumes: ["queue-data:/data"]
+    mem_limit: 256m
+    cpus: "0.25"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  queue-data:

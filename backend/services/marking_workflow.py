@@ -7,7 +7,8 @@ import logging
 import re
 import sqlite3
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import as_completed
+from backend.services.cancellation import CancellationExecutor as ThreadPoolExecutor, check_cancelled, ExtractionCancelled
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from typing import Any, Sequence
@@ -133,6 +134,14 @@ def recover_stale_marking_runs(
     if not stale:
         return []
     for run in stale:
+        from backend.db.models import ProcessingJob
+        if db.query(ProcessingJob.id).filter(
+            ProcessingJob.submission_id == run.submission_id,
+            ProcessingJob.state == 'running',
+            ProcessingJob.lease_until > recovered_at,
+            ProcessingJob.kind.in_(['process', 'mark', 'review_mark']),
+        ).first():
+            continue
         run.status = "failed"
         run.completed_at = recovered_at
         run.error_message = INTERRUPTED_MARKING_MESSAGE
@@ -184,6 +193,12 @@ def mark_submission_answers(
     marks from the newest run alone and a partial run would blank the rest.
     It is ignored when there is no previous run to carry forward from.
     """
+    from backend.queue.runtime import current_job, checkpoint_get
+    committed = checkpoint_get('committed-mark-run')
+    if committed:
+        previous_run = db.get(MarkingRun, committed['run_id'])
+        if previous_run and previous_run.submission_id == submission_id and previous_run.status in {'completed','unavailable'}:
+            return previous_run
     submission = db.get(ExamSubmission, submission_id)
     if submission is None:
         raise ValueError(f"Submission {submission_id} not found")
@@ -399,6 +414,10 @@ def mark_submission_answers(
             else (_LazyDiagramVisionJudge() if diagram_vision_enabled else None)
         )
         crop_dir = get_local_storage().diagram_crop_dir(submission_id)
+        from backend.db.models import StorageArtifact
+        from backend.services.artifact_storage import ensure_local
+        for stored in db.query(StorageArtifact).filter_by(submission_id=submission_id, kind='diagram', state='verified'):
+            ensure_local(stored.local_path)
 
         def _mark_one(
             candidate_id: int,
@@ -412,6 +431,17 @@ def mark_submission_answers(
         ):
             # Pass plain dicts only — ORM CandidateResult is not thread-safe
             # and lazy-loading from worker threads raises ObjectDeletedError.
+            check_cancelled()
+            import hashlib
+            from backend.queue.runtime import checkpoint_get, checkpoint_put
+            from backend.services.marking_service import CandidateMarkingResult, QuestionOutcome
+            cache_key = hashlib.sha256(json.dumps([candidate_id, answers, answer_key_id,
+                manifest.source_sha256, needs_review_questions, diagram_crops, cv_owned_questions], sort_keys=True).encode()).hexdigest()
+            cached = checkpoint_get(cache_key)
+            if cached is not None:
+                return candidate_id, answer_key_id, CandidateMarkingResult(
+                    outcomes=tuple(QuestionOutcome(**o) for o in cached['outcomes']),
+                    awarded_marks=cached['awarded_marks'], max_marks=cached['max_marks'], percentage=cached['percentage'])
             result = marker.mark(answers or {})
             result = apply_extraction_trust(result, needs_review_questions)
             result = apply_fr_equivalence_judge(
@@ -429,6 +459,8 @@ def mark_submission_answers(
                     crop_dir=crop_dir,
                     cv_owned_questions=cv_owned_questions,
                 )
+            check_cancelled()
+            checkpoint_put(cache_key, asdict(result))
             return candidate_id, answer_key_id, result
 
         with db.begin_nested():
@@ -500,8 +532,21 @@ def mark_submission_answers(
                 )
             else:
                 run.error_message = None
+            from backend.queue.runtime import assert_owned, current_job
+            assert_owned(db, current_job.get())
+            if current_job.get() is not None:
+                from backend.db.models import JobCheckpoint
+                db.add(JobCheckpoint(job_id=current_job.get().id,key='committed-mark-run',value={'run_id':run_id}))
             db.flush()
         db.commit()
+    except ExtractionCancelled:
+        db.rollback()
+        run = db.get(MarkingRun, run_id)
+        run.status = "failed"
+        run.completed_at = datetime.utcnow()
+        run.error_message = "Marking cancelled by user"
+        db.commit()
+        raise
     except Exception as exc:
         db.rollback()
         run = db.get(MarkingRun, run_id)

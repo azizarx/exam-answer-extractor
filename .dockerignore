@@ -15,6 +15,9 @@ storage/uploads/**
 storage/results/**
 storage/pipeline_runs/**
 storage/diagrams/
+storage/pages/
+storage/work/
+storage/queue_cache/
 storage/cv_overlays/
 storage/annotations/
 storage/OCRResults/
