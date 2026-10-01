@@ -10,7 +10,9 @@ import pytest
 
 from backend.services.page_layout_classifier import (
     PageLayoutDetection,
+    apply_document_year_majority,
     apply_embedded_family_hint,
+    document_year_majority,
     classify_page_image,
     classify_embedded_page_family,
     classify_pdf_text_page_families,
@@ -361,3 +363,136 @@ def test_resolve_layout_fields_direct():
     )
     assert det.template_id == "seamo_2025_a_fb"
     assert det.method == "gemini_header"
+
+
+def _unresolved(**kwargs):
+    """A page whose footer parsed partially and resolved to no template."""
+    fields = {
+        "template_id": None,
+        "method": "gemini_header",
+        "warning": "unparseable_footer",
+        "brand": "seamo",
+        "year": None,
+        "paper": "c",
+        "format_b": False,
+    }
+    fields.update(kwargs)
+    return PageLayoutDetection(**fields)
+
+
+def _resolved(template_id, brand="seamo", year="2026", paper="c"):
+    return PageLayoutDetection(
+        template_id=template_id,
+        method="footer_ocr",
+        brand=brand,
+        year=year,
+        paper=paper,
+    )
+
+
+def test_year_majority_counts_only_resolved_pages():
+    detections = [
+        _resolved("seamo_2026_a", paper="a"),
+        _resolved("seamo_2026_b", paper="b"),
+        _unresolved(year="1999"),
+        None,
+    ]
+
+    assert document_year_majority(detections) == {"seamo": "2026"}
+
+
+def test_year_majority_is_per_brand():
+    detections = [
+        _resolved("seamo_2026_a", paper="a"),
+        _resolved("seamo_x_2026_b", brand="seamo_x", paper="b"),
+        _resolved("seamo_x_2026_c", brand="seamo_x", paper="c"),
+    ]
+
+    assert document_year_majority(detections) == {
+        "seamo": "2026",
+        "seamo_x": "2026",
+    }
+
+
+def test_year_majority_refuses_a_tie():
+    detections = [
+        _resolved("seamo_2025_a", year="2025", paper="a"),
+        _resolved("seamo_2026_b", year="2026", paper="b"),
+    ]
+
+    assert document_year_majority(detections) == {}
+
+
+def test_document_year_repairs_a_page_missing_only_the_year():
+    registry = _FakeRegistry({"seamo_2026_c"})
+
+    repaired = apply_document_year_majority(
+        _unresolved(), {"seamo": "2026"}, registry=registry
+    )
+
+    assert repaired.template_id == "seamo_2026_c"
+    assert repaired.method == "gemini_header+doc_year"
+    assert repaired.year == "2026"
+    assert repaired.warning is None
+
+
+def test_document_year_carries_the_format_b_family():
+    registry = _FakeRegistry({"seamo_2026_c_fb"})
+
+    repaired = apply_document_year_majority(
+        _unresolved(format_b=True), {"seamo": "2026"}, registry=registry
+    )
+
+    assert repaired.template_id == "seamo_2026_c_fb"
+
+
+def test_document_year_does_not_overrule_a_year_that_was_read():
+    registry = _FakeRegistry({"seamo_2026_c", "seamo_2025_c"})
+
+    unchanged = apply_document_year_majority(
+        _unresolved(year="2025", warning="unknown_template:seamo_2025_c_fb"),
+        {"seamo": "2026"},
+        registry=registry,
+    )
+
+    assert unchanged.template_id is None
+
+
+def test_document_year_refuses_without_a_paper():
+    registry = _FakeRegistry({"seamo_2026_c"})
+
+    unchanged = apply_document_year_majority(
+        _unresolved(paper=None), {"seamo": "2026"}, registry=registry
+    )
+
+    assert unchanged.template_id is None
+
+
+def test_document_year_refuses_without_a_brand():
+    registry = _FakeRegistry({"seamo_2026_c"})
+
+    unchanged = apply_document_year_majority(
+        _unresolved(brand=None), {"seamo": "2026"}, registry=registry
+    )
+
+    assert unchanged.template_id is None
+
+
+def test_document_year_leaves_page_unresolved_when_template_absent():
+    registry = _FakeRegistry(set())
+
+    unchanged = apply_document_year_majority(
+        _unresolved(), {"seamo": "2026"}, registry=registry
+    )
+
+    assert unchanged.template_id is None
+    assert unchanged.warning == "unparseable_footer"
+
+
+def test_document_year_never_touches_an_already_resolved_page():
+    registry = _FakeRegistry({"seamo_2026_c", "seamo_2025_c"})
+    original = _resolved("seamo_2025_c", year="2025")
+
+    assert apply_document_year_majority(
+        original, {"seamo": "2026"}, registry=registry
+    ) is original

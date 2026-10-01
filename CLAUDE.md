@@ -214,6 +214,12 @@ multiple `template_id`s. The cascade is cheapest-first:
 2. Tesseract on three raster bands (bottom 12%, bottom 22%, top 10%), with
    hand-tuned repairs for known OCR confusions (`SRAMO→SEAMO`, `£025→2025`)
 3. Gemini on a top-30% crop, only for pages the first two missed
+4. Document-year majority: a page that read a brand and paper but **no** year
+   borrows the modal year of the pages that resolved on their own
+   (`apply_document_year_majority`). It fills one absent field only — it never
+   overrules a year that was read, never invents brand or paper, abstains on a
+   tie, and the repaired page must still resolve to a real template. The method
+   is suffixed `+doc_year` so the inference is auditable.
 
 The bottom clip is deliberately narrow: OCR layers contain candidate numbers
 that read like years. `resolve_layout_fields` is the only brand/year/paper → id

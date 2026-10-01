@@ -15,8 +15,9 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -251,6 +252,70 @@ def apply_embedded_family_hint(
         raw_text=detection.raw_text,
     )
     return corrected if corrected.template_id else detection
+
+
+def document_year_majority(
+    detections: Iterable[Optional[PageLayoutDetection]],
+) -> Dict[str, str]:
+    """Per-brand modal year across the pages that resolved on their own.
+
+    Only confidently resolved pages vote, so a page that failed cannot
+    influence the year another failed page is repaired with.
+    """
+    votes: Dict[str, Counter] = defaultdict(Counter)
+    for detection in detections:
+        if detection is None or not detection.template_id:
+            continue
+        if not detection.brand or not detection.year:
+            continue
+        votes[detection.brand.strip().lower()][detection.year.strip()] += 1
+
+    majority: Dict[str, str] = {}
+    for brand, counter in votes.items():
+        ranked = counter.most_common()
+        # A tie is not a majority; refusing is better than picking the first.
+        if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+            continue
+        majority[brand] = ranked[0][0]
+    return majority
+
+
+def apply_document_year_majority(
+    detection: PageLayoutDetection,
+    majority: Dict[str, str],
+    *,
+    registry=None,
+) -> PageLayoutDetection:
+    """Supply a missing year from the document's own, for that page alone.
+
+    A scanned footer can degrade enough that the year is unreadable while the
+    brand and paper survive — the year is the one field with no redundancy
+    elsewhere on the sheet. Everything else must still have been read: this
+    fills in one absent field, it does not overrule a year that was read, and
+    it never invents a brand or paper. The repaired page still has to resolve
+    to a real template or it stays unresolved.
+    """
+    if detection.template_id:
+        return detection
+    # A year that was read but did not resolve is a genuine mismatch, not a
+    # gap; overwriting it would be guessing rather than completing.
+    if detection.year or not detection.brand or not detection.paper:
+        return detection
+
+    year = majority.get(detection.brand.strip().lower())
+    if not year:
+        return detection
+
+    repaired = resolve_layout_fields(
+        detection.brand,
+        year,
+        detection.paper,
+        bool(detection.format_b),
+        registry=registry,
+        method=f"{detection.method}+doc_year",
+        raw_text=detection.raw_text,
+    )
+    return repaired if repaired.template_id else detection
 
 
 # Optional injectable: (bgr_image) -> {brand, year, paper, format_b}

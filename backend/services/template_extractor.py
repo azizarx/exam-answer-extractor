@@ -49,10 +49,12 @@ from backend.services.page_deskew import deskew_if_enabled
 from backend.services.page_layout_classifier import (
     PageLayoutDetection,
     _gemini_classify_header,
+    apply_document_year_majority,
     apply_embedded_family_hint,
     classify_pdf_text_page_families,
     classify_pdf_text_pages,
     classify_page_path,
+    document_year_majority,
 )
 from backend.services.run_logger import llm_call
 from backend.services.template_service import (
@@ -877,6 +879,29 @@ def extract_pdf_auto(
         )
         for index, detection in enumerate(detections)
     ]
+
+    # A degraded footer often loses only the year: the brand and paper are
+    # printed as words and survive, while the year is four digits with no
+    # redundancy anywhere else on the sheet. When the rest of the document
+    # agrees on one year, supply it rather than discarding an otherwise
+    # complete reading. Pages that resolved on their own are the only voters.
+    year_majority = document_year_majority(detections)
+    if year_majority:
+        repaired = 0
+        for index, detection in enumerate(detections):
+            if detection is None:
+                continue
+            updated = apply_document_year_majority(detection, year_majority)
+            if updated is not detection:
+                detections[index] = updated
+                repaired += 1
+                logger.info(
+                    "LAYOUT[%d] year from document majority -> template=%s",
+                    index + 1, updated.template_id,
+                )
+        logger.info(
+            "LAYOUT doc_year majority=%s repaired=%d", year_majority, repaired,
+        )
 
     # type narrowing for mypy-ish use
     resolved: List[PageLayoutDetection] = [
