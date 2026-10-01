@@ -31,3 +31,10 @@ data/
 New folder/
 *.rar
 graphify-out/
+# The services never run the suite, but tests/fixtures is tracked and large
+# (gold corpus plus the 2026 layout pages), so COPY . . would bake ~200MB of
+# scans into every image. Nothing under backend/ imports these fixtures;
+# gold_eval.py only names tests/fixtures/gold as a default for the offline
+# eval scripts.
+tests/
+backend/examples/
