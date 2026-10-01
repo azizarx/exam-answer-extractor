@@ -1,5 +1,6 @@
 
 import axios from 'axios';
+import { getApiKey } from './apiKey';
 
 // Prefer VITE_API_BASE_URL when set (build-time).
 // Production default: same-origin (""), so nginx can proxy /upload, /health, etc.
@@ -17,7 +18,7 @@ const TIMEOUT = {
   standard: 2 * 60 * 1000, // ordinary JSON calls
   transfer: 10 * 60 * 1000, // large payloads in either direction
   marking: 15 * 60 * 1000, // synchronous marking of a whole submission
-  upload: 30 * 60 * 1000,  // multipart PDF upload
+  upload: 6 * 60 * 60 * 1000,  // large uploads; server also enforces inactivity limits
 };
 
 // Create axios instance with default config
@@ -28,6 +29,18 @@ const apiClient = axios.create({
   },
   timeout: TIMEOUT.standard,
 });
+
+apiClient.interceptors.request.use((config) => {
+  const key = getApiKey();
+  if (key) config.headers.set('X-API-Key', key);
+  return config;
+});
+
+// Validate a proposed key without storing it or exposing it in error logs.
+export const verifyApiAccess = (key = getApiKey()) => axios.get(
+  `${API_BASE_URL}/templates/all`,
+  { headers: key ? { 'X-API-Key': key } : {}, timeout: TIMEOUT.poll },
+);
 
 const decodeFilename = (value) => {
   try {
@@ -53,12 +66,15 @@ const filenameFromDisposition = (disposition, fallback) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error?.response?.status === 401) {
+      window.dispatchEvent(new Event('aimarker-auth-required'));
+    }
     const requestUrl = String(error?.config?.url || '');
     const isPollingEndpoint = requestUrl.includes('/status/') || requestUrl.includes('/logs');
     const isTimeout = error?.code === 'ECONNABORTED';
 
     if (!(isTimeout && isPollingEndpoint)) {
-      console.error('API Error:', error);
+      console.error('API request failed:', error?.response?.status || error?.code);
     }
     return Promise.reject(error);
   }
@@ -67,7 +83,9 @@ apiClient.interceptors.response.use(
 /**
  * API service for interacting with the exam extraction backend
  */
+const uploadKeys = new WeakMap();
 export const examAPI = {
+  getCapabilities: async () => (await apiClient.get('/capabilities')).data,
   /**
    * Upload a PDF file for processing
    * @param {File} file - PDF file to upload
@@ -84,6 +102,7 @@ export const examAPI = {
   },
 
   uploadPDF: async (file, onProgress, templateId) => {
+    if (!uploadKeys.has(file)) uploadKeys.set(file, crypto.randomUUID());
     const formData = new FormData();
     formData.append('file', file);
 
@@ -91,6 +110,7 @@ export const examAPI = {
     const response = await apiClient.post(`/upload${params}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
+        'Idempotency-Key': uploadKeys.get(file),
       },
       timeout: TIMEOUT.upload,
       onUploadProgress: (progressEvent) => {
@@ -115,6 +135,11 @@ export const examAPI = {
     const response = await apiClient.get(`/status/${submissionId}`, {
       timeout: TIMEOUT.poll, // tolerate DB contention while extraction writes are in progress
     });
+    return response.data;
+  },
+
+  cancelSubmission: async (submissionId) => {
+    const response = await apiClient.post(`/submission/${submissionId}/cancel`);
     return response.data;
   },
 

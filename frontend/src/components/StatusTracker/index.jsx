@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Loader2 } from 'lucide-react';
-import { Card, Badge, LoadingSpinner } from '../common';
+import { AlertCircle, CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react';
+import { Button, Card, Badge, LoadingSpinner } from '../common';
 import examAPI from '../../services/api';
 import clsx from 'clsx';
 
@@ -10,6 +10,7 @@ const ACTION_LABELS = {
   page_progress: 'Progress update',
   extract_complete: 'Extraction complete',
   extract_error: 'Extraction failed',
+  extract_cancelled: 'Cancelled',
 };
 
 const toFiniteNumber = (value) => {
@@ -93,7 +94,8 @@ const computeProgress = (status, logs) => {
       percent: 100,
       current: total,
       total,
-      label: 'Processing complete',
+      label: status.archive_status && status.archive_status !== 'disabled'
+        ? `Processing complete · archive ${status.archive_status}` : 'Processing complete',
     };
   }
 
@@ -121,7 +123,16 @@ const computeProgress = (status, logs) => {
       percent: 5,
       current: null,
       total: pagesTotal,
-      label: 'Queued for processing',
+      label: status.queue_position ? `Queued for processing · position ${status.queue_position}` : 'Queued for processing',
+    };
+  }
+
+  if (status.job_id && status.status === 'processing') {
+    const current = status.pages_completed || 0;
+    return {
+      percent: status.stage === 'marking' ? 95 : clampPercent(pagesTotal ? current / pagesTotal * 90 : 5),
+      current, total: pagesTotal,
+      label: status.stage === 'marking' ? 'Marking extracted answers' : `Extracted ${current} of ${pagesTotal || '…'} pages`,
     };
   }
 
@@ -179,6 +190,37 @@ const StatusTracker = ({ submissionId, onComplete }) => {
   const [debugOpen, setDebugOpen] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+  const cancelledRef = useRef(false);
+  const cancelInFlightRef = useRef(false);
+  const currentSubmissionRef = useRef(submissionId);
+  currentSubmissionRef.current = submissionId;
+
+  const handleCancel = async () => {
+    if (cancelInFlightRef.current) return;
+    const expectedId = submissionId;
+    cancelInFlightRef.current = true;
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await examAPI.cancelSubmission(expectedId);
+      if (currentSubmissionRef.current !== expectedId) return;
+      cancelledRef.current = true;
+      setStatus((previous) => ({ ...previous, status: 'cancelled', error_message: null }));
+      setError('');
+      setPageMessage('');
+    } catch (err) {
+      if (currentSubmissionRef.current !== expectedId) return;
+      const detail = err?.response?.data?.detail;
+      setCancelError(typeof detail === 'string' ? detail : 'Could not cancel. Please try again.');
+    } finally {
+      if (currentSubmissionRef.current === expectedId) {
+        cancelInFlightRef.current = false;
+        setCancelling(false);
+      }
+    }
+  };
 
   const orderedLogs = useMemo(() => sortLogsAscending(logs), [logs]);
   const latestLog = orderedLogs.length ? orderedLogs[orderedLogs.length - 1] : null;
@@ -193,6 +235,13 @@ const StatusTracker = ({ submissionId, onComplete }) => {
     prevPageRef.current = null;
     completedRef.current = false;
     hasStatusRef.current = false;
+    cancelledRef.current = false;
+    cancelInFlightRef.current = false;
+    setCancelling(false);
+    setCancelError('');
+    setStatus(null);
+    setLoading(true);
+    setError('');
   }, [submissionId]);
 
   useEffect(() => {
@@ -218,9 +267,13 @@ const StatusTracker = ({ submissionId, onComplete }) => {
     let isMounted = true;
 
     const fetchStatus = async () => {
+      if (cancelledRef.current) {
+        if (interval) clearInterval(interval);
+        return;
+      }
       try {
         const data = await examAPI.getStatus(submissionId);
-        if (!isMounted) return;
+        if (!isMounted || cancelledRef.current) return;
 
         setStatus(data);
         setLoading(false);
@@ -237,7 +290,7 @@ const StatusTracker = ({ submissionId, onComplete }) => {
 
         try {
           const latestLogs = await examAPI.getSubmissionLogs(submissionId, 50);
-          if (!isMounted) return;
+          if (!isMounted || cancelledRef.current) return;
 
           const normalizedLogs = sortLogsAscending(latestLogs);
           setLogs(normalizedLogs);
@@ -261,8 +314,13 @@ const StatusTracker = ({ submissionId, onComplete }) => {
           }
         }
 
-        if (data.status === 'completed') {
+        if (cancelledRef.current) return;
+        if (data.status === 'cancelled') {
+          cancelledRef.current = true;
+          setPageMessage('');
           if (interval) clearInterval(interval);
+        } else if (data.status === 'completed') {
+          if (interval && !['pending', 'running', 'not_started'].includes(data.archive_status)) clearInterval(interval);
           if (onComplete && !completedRef.current) {
             completedRef.current = true;
             onComplete(data);
@@ -272,7 +330,7 @@ const StatusTracker = ({ submissionId, onComplete }) => {
           setError(data.error_message || 'Processing failed');
         }
       } catch (err) {
-        if (!isMounted) return;
+        if (!isMounted || cancelledRef.current) return;
         const isTimeout = err?.code === 'ECONNABORTED';
         if (!isTimeout) {
           console.error('Status check failed, retrying...', err);
@@ -377,6 +435,14 @@ const StatusTracker = ({ submissionId, onComplete }) => {
       title: 'Failed',
       description: status.error_message || 'Processing failed. Please try again.',
     },
+    cancelled: {
+      icon: XCircle,
+      color: 'text-slate-600',
+      bgColor: 'bg-slate-100',
+      badge: 'pending',
+      title: 'Cancelled',
+      description: 'Cancellation accepted. Any work already in progress is winding down.',
+    },
   };
 
   const config = statusConfig[status.status] || statusConfig.pending;
@@ -412,7 +478,15 @@ const StatusTracker = ({ submissionId, onComplete }) => {
 
           <p className="text-slate-600 mb-4 text-sm">{config.description}</p>
 
-          {latestActivity && status.status !== 'completed' && (
+          {['pending', 'processing'].includes(status.status) && (
+            <Button variant="danger" loading={cancelling} onClick={handleCancel} className="mb-4">
+              {!cancelling && <XCircle className="w-4 h-4" />}
+              {cancelling ? 'Cancelling…' : 'Cancel task'}
+            </Button>
+          )}
+          {cancelError && <p role="alert" className="text-sm text-red-700 mb-4">{cancelError}</p>}
+
+          {latestActivity && !['completed', 'cancelled'].includes(status.status) && (
             <div className="mb-3 bg-slate-50 border border-slate-200 rounded p-2 text-xs text-slate-600">
               <span className="font-semibold text-slate-700">Latest:</span> {latestActivity}
             </div>

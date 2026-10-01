@@ -3,6 +3,7 @@ import Navbar from './components/common/Navbar';
 import UploadPage from './pages/UploadPage';
 import TrackingPage from './pages/TrackingPage';
 import ApiDocsPage from './pages/ApiDocsPage';
+import ApiAccess from './components/common/ApiAccess';
 
 function App() {
   return (
@@ -11,8 +12,8 @@ function App() {
       
       <div className="pt-4">
         <Routes>
-          <Route path="/" element={<UploadPage />} />
-          <Route path="/track/:submissionId" element={<TrackingPage />} />
+          <Route path="/" element={<ApiAccess><UploadPage /></ApiAccess>} />
+          <Route path="/track/:submissionId" element={<ApiAccess><TrackingPage /></ApiAccess>} />
           <Route path="/api-docs" element={<ApiDocsPage />} />
         </Routes>
       </div>

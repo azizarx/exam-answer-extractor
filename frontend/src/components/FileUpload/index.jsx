@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import examAPI from '../../services/api';
 import { Upload, FileText, X } from 'lucide-react';
 import { Button, Alert, ProgressBar } from '../common';
 import clsx from 'clsx';
@@ -11,6 +12,14 @@ const FileUpload = ({ onFileSelect, onUpload, uploading = false, uploadProgress 
   const [selectedFile, setSelectedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState('');
+  const [maxSize, setMaxSize] = useState(3 * 1024 ** 3);
+  useEffect(() => {
+    let active = true;
+    examAPI.getCapabilities().then((data) => {
+      if (active && data.max_file_bytes > 0) setMaxSize(data.max_file_bytes);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -22,7 +31,7 @@ const FileUpload = ({ onFileSelect, onUpload, uploading = false, uploadProgress 
     }
   }, []);
 
-  const validateFile = (file) => {
+  const validateFile = useCallback((file) => {
     setError('');
     
     if (!file) {
@@ -30,19 +39,18 @@ const FileUpload = ({ onFileSelect, onUpload, uploading = false, uploadProgress 
       return false;
     }
 
-    if (file.type !== 'application/pdf') {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
       setError('Only PDF files are allowed');
       return false;
     }
 
-    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
-      setError('File size must be less than 50MB');
+      setError(`PDF exceeds the ${(maxSize / 1024 ** 3).toFixed(0)} GiB limit`);
       return false;
     }
 
     return true;
-  };
+  }, [maxSize]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -56,7 +64,7 @@ const FileUpload = ({ onFileSelect, onUpload, uploading = false, uploadProgress 
         onFileSelect(file);
       }
     }
-  }, [onFileSelect]);
+  }, [onFileSelect, validateFile]);
 
   const handleChange = (e) => {
     e.preventDefault();
@@ -123,7 +131,7 @@ const FileUpload = ({ onFileSelect, onUpload, uploading = false, uploadProgress 
                 Drag and drop your PDF file here, or click to browse
               </p>
               <p className="text-sm text-slate-500 mt-2">
-                Maximum file size: 50MB
+                Maximum PDF size: {(maxSize / 1024 ** 3).toFixed(0)} GiB
               </p>
             </div>
             
