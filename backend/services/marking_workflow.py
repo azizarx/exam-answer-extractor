@@ -303,7 +303,10 @@ def mark_submission_answers(
 
         keys_by_template: dict[str, AnswerKey] = {}
         missing_templates: list[str] = []
-        from backend.services.template_service import get_template_registry
+        from backend.services.template_service import (
+            get_template_registry,
+            is_template_disabled,
+        )
 
         registry = get_template_registry()
 
@@ -317,6 +320,11 @@ def mark_submission_answers(
         for tid in groups:
             if tid is None:
                 missing_templates.append("(undetected)")
+                continue
+            if is_template_disabled(tid):
+                # Withdrawn from automatic processing: report it as unmarked
+                # rather than scoring empty answers as a zero.
+                missing_templates.append(f"{tid} (withdrawn)")
                 continue
             key_template_ids[tid] = _key_tid_for_layout(tid)
 

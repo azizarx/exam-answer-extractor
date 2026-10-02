@@ -733,3 +733,22 @@ def detect_template(
 ) -> Optional[Tuple[ExamTemplate, float, Tuple[int, int]]]:
     """Convenience: auto-detect template from the global registry."""
     return get_template_registry().detect(page_image, filename, ocr_text)
+
+
+def disabled_template_ids() -> frozenset[str]:
+    """Layouts withdrawn from automatic extraction and marking.
+
+    A page detected as one of these is still identified by layout, so it stays
+    traceable and can be handled by hand — it is simply not read or scored. The
+    alternative for a layout whose geometry is known to be wrong is an
+    all-blank zero, which is indistinguishable from a candidate who answered
+    nothing.
+    """
+    from backend.config import get_settings
+
+    raw = getattr(get_settings(), "disabled_template_ids", "") or ""
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+
+def is_template_disabled(template_id: Optional[str]) -> bool:
+    return bool(template_id) and template_id in disabled_template_ids()

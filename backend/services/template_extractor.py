@@ -64,6 +64,7 @@ from backend.services.template_service import (
     Region,
     TemplateRegistry,
     get_template_registry,
+    is_template_disabled,
 )
 
 logger = logging.getLogger(__name__)
@@ -764,6 +765,21 @@ def extract_pages(
             )
             cand["template_id"] = None
             cand["detection"] = det.to_dict()
+            return cand
+        if is_template_disabled(det.template_id):
+            # Identified, deliberately not read. Reading it with geometry we
+            # know to be wrong would produce an all-blank zero, which is
+            # indistinguishable from a candidate who answered nothing.
+            logger.info(
+                "PAGE[%d] template %s is withdrawn from automatic processing",
+                page_num, det.template_id,
+            )
+            cand = _empty_candidate(page_num, errors=["template_disabled"])
+            cand["template_id"] = det.template_id
+            cand["detection"] = det.to_dict()
+            cand.setdefault("extra_fields", {})["extraction_flags"] = [
+                "template_disabled",
+            ]
             return cand
         extractor = _get_extractor(det.template_id)
         cand = extractor._extract_one_page(

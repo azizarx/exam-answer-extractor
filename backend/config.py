@@ -126,6 +126,15 @@ class Settings(BaseSettings):
     # call and starved the visible JSON. The model's default cap (~64k) is
     # what we want.
 
+    # Layouts withdrawn from automatic processing. A page detected as one of
+    # these is still identified, but it is neither extracted nor marked: it is
+    # stored with empty answers and a reason, and marking reports it as having
+    # no usable key rather than scoring it zero. Use when a layout's geometry
+    # is known to be wrong — a confident wrong score is worse than an explicit
+    # refusal, and an all-blank 0 reads as a real result.
+    # Comma-separated template ids.
+    disabled_template_ids: str = "seamo_2026_k"
+
     # Second opinion on MCQ questions the CV reader would not commit to. The
     # model reports which box is filled, on a crop of that one question's row;
     # the deterministic marker still scores it against the key, so the model

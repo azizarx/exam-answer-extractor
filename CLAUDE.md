@@ -154,6 +154,25 @@ Five things matter to remember:
    answer-key-blind by contract: no keys, labels or reference images may leak
    into it, or the gold acceptance test becomes meaningless.
 
+### Withdrawn layouts (`DISABLED_TEMPLATE_IDS`)
+
+`seamo_2026_k` is withdrawn from automatic processing. Its sheet is a different
+layout from the 2025 one it inherits geometry from (banner separation 1755px vs
+1931px), so the anchor scores 0.169 against a 0.45 threshold and the grid lands
+on the letter labels. A page detected as a withdrawn layout is still identified
+— so it stays traceable and can be marked by hand — but it is **not extracted
+and not marked**: it stores empty answers with reason `template_disabled`, and
+marking lists it under `missing_templates` as `"<id> (withdrawn)"` rather than
+scoring blanks as a zero. An all-blank 0 is indistinguishable from a candidate
+who answered nothing, which is why this is a refusal rather than a low score.
+
+Only the classic layout is withdrawn. `seamo_2026_k_fb` is mapped from the
+clean vector sheet in `backend/examples/seamo-2026-answer-key-format.pdf`,
+anchors at 0.917 and marks normally. `/capabilities` reports the list as
+`withdrawn_templates` so an integrator can route those pages for manual
+handling. Remove the id from the setting once the layout is mapped with
+`scripts/annotate_mcq_grid.py` and verified.
+
 ### Review-vision second opinion (`review_vision.py`)
 
 A question CV will not commit to reaches marking as `needs_review` and scores

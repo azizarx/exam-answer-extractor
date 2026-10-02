@@ -25,12 +25,17 @@ def job_dict(job):
 
 @router.get('/capabilities')
 def capabilities():
+    from backend.services.template_service import disabled_template_ids
     s=get_settings()
     return {'max_file_bytes':s.max_file_size_mb*1024**2,'max_pdf_pages':s.max_pdf_pages,
         'max_page_pixels':s.max_page_pixels,'max_concurrent_uploads':s.max_uploads,
         'queue_enabled':s.queue_enabled,'archive_enabled':s.archive_enabled,
         'local_eviction_enabled':s.archive_evict_local,'candidate_page_exam_id':'external_exam_id_or_paper_code',
-        'candidate_page_exams':{key:value['series'] for key,value in PAGE_LOOKUP_EXAMS.items()}}
+        'candidate_page_exams':{key:value['series'] for key,value in PAGE_LOOKUP_EXAMS.items()},
+        # Layouts detected but deliberately not read or scored. Their pages
+        # come back with no answers and no marks, so an integrator can route
+        # them for manual handling instead of reading a zero as a real result.
+        'withdrawn_templates':sorted(disabled_template_ids())}
 
 
 @router.get('/jobs/{job_id}')
