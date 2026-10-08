@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k/page_004",
+  "template_id": "seamo_2025_k",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Indonesia ID13-193.pdf",
+    "page_number": 10
+  },
+  "answers": {
+    "1": "B",
+    "2": "A",
+    "3": "B",
+    "4": "A",
+    "5": "A",
+    "6": "C",
+    "7": "B",
+    "8": "C",
+    "9": "A",
+    "10": "B",
+    "11": "A",
+    "12": "C",
+    "13": "B",
+    "14": "BL",
+    "15": "BL"
+  },
+  "notes": "Blurriest print (laplacian 104), content at 89.5% scale, offset (+77,+248). Q14 and Q15 are genuinely blank. Answers verified row by row against the scan."
+}

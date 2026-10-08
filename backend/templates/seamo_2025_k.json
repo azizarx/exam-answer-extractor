@@ -111,18 +111,19 @@
             1487
           ]
         ],
-        "cell_width": 98,
-        "cell_height": 0,
-        "bubble_height": 31,
+        "cell_width": 66,
+        "cell_height": 11,
+        "bubble_height": 13,
         "row_pitch": 169.0
       },
       "extraction_strategy": "cv_then_llm",
       "scoring": {
         "min_ink_pixels": 35,
-        "min_ratio": 1.12,
+        "min_ratio": 2.0,
         "binary_threshold": 180,
         "min_page_coverage": 0.6,
-        "min_avg_ratio": 1.1
+        "min_avg_ratio": 1.1,
+        "blank_review_ink": 8
       }
     }
   ]

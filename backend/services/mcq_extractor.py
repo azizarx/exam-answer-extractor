@@ -682,7 +682,11 @@ def extract_page(
             break
         label_geometry.append(aligned)
         section_result = extract_mcq_section(bin_inv, aligned, 0, 0)
-        if not template.id.endswith("_fb"):
+        # Ink energy rescues one real fill on a grey photocopy where every
+        # box crosses the binary threshold.  Paper K scores only the box
+        # interior, so blank boxes read ~0 and the step's only effect on the
+        # K audit was to promote three genuine double marks to letters.
+        if not template.id.endswith("_fb") and len(section.grid.col_positions) == 1:
             section_result = _apply_classic_ink_energy(
                 gray,
                 aligned,
@@ -989,6 +993,15 @@ def extract_page(
                 page_number, template.id, len(amb_hard),
             )
 
+    # Two-column sheets (Paper K) register by their label lattice.  The anchor
+    # path above cannot see content scale: on the Paper K gold set a
+    # self-primed anchor scored 1.000 with no warning and read 4/15 correctly.
+    # Keep its answers for the reviewer but never let them pass as trusted.
+    if not result.warning and any(
+        s.grid is not None and len(s.grid.col_positions) > 1 for s in mcq_sections
+    ):
+        result.warning = "label_lattice_failed"
+
     logger.info(
         "MCQ[%d/%s] ACCEPT answers=%d warning=%s dx=%d dy=%d",
         page_number, template.id,
@@ -1003,6 +1016,7 @@ def ambiguous_mcq_questions(
     *,
     min_ratio: float = 1.2,
     min_ink_pixels: int = 110,
+    blank_review_ink: int = 0,
 ) -> List[str]:
     """Question numbers that should not be auto-trusted.
 
@@ -1037,6 +1051,15 @@ def ambiguous_mcq_questions(
             if ans == "IN":
                 suspicious = True
             elif ans not in ("", "BL") and row.ratio < ratio_threshold:
+                suspicious = True
+            elif (
+                not legacy_geometry
+                and blank_review_ink
+                and ans == "BL"
+                and row.best_score >= blank_review_ink
+            ):
+                # Lattice geometry is trusted, so ink in a blank row is a
+                # faint mark, not a missed ROI (opt-in per template).
                 suspicious = True
             elif legacy_geometry and ans == "BL" and row.best_score >= blank_gray_zone:
                 suspicious = True

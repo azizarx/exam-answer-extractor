@@ -67,6 +67,9 @@ class ScoringParams:
     binary_threshold: int = 180
     min_page_coverage: float = 0.60
     min_avg_ratio: float = 1.10
+    # On a label-lattice fit, a blank row carrying at least this much ink is
+    # sent for review (a faint mark the binary threshold missed).  0 = off.
+    blank_review_ink: int = 0
 
     def scaled(self, factor: float) -> "ScoringParams":
         """Scale absolute pixel thresholds with area (factor²); ratios stay put."""
@@ -77,6 +80,7 @@ class ScoringParams:
             binary_threshold=self.binary_threshold,
             min_page_coverage=self.min_page_coverage,
             min_avg_ratio=self.min_avg_ratio,
+            blank_review_ink=round(self.blank_review_ink * area),
         )
 
 
@@ -325,6 +329,7 @@ def _parse_scoring(d: Optional[dict]) -> Optional[ScoringParams]:
         binary_threshold=d.get("binary_threshold", 180),
         min_page_coverage=d.get("min_page_coverage", 0.60),
         min_avg_ratio=d.get("min_avg_ratio", 1.10),
+        blank_review_ink=d.get("blank_review_ink", 0),
     )
 
 

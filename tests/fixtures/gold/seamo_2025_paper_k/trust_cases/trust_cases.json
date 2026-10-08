@@ -1,0 +1,33 @@
+{
+  "about": "Real Paper K rows that the CV path once trusted wrongly. Every answer was checked by a blind independent transcription of the page and, where it disagreed with CV, by an adjudicator on a zoomed crop. '?' marks a question that must never be auto-trusted; every other letter (or BL) must be read exactly and trusted.",
+  "pages": [
+    {
+      "image": "fb_au2_222_p002.png",
+      "template_id": "seamo_2025_k_fb",
+      "source": "SEAMO 2025 marking Drive, AU2-222.pdf page 2",
+      "answers": "BCBACCABBCAA??A",
+      "why": "Q13 A and B both scribbled; Q14 A filled and C scribbled (binary ratio 1.39). The old 1.12 floor committed Q14 as A."
+    },
+    {
+      "image": "fb_id18_200_p018.png",
+      "template_id": "seamo_2025_k_fb",
+      "source": "SEAMO 2025 marking Drive, ID18-200.pdf page 18",
+      "answers": "BA?CBACAABBBAAC",
+      "why": "Q3 A shaded, B heavily scribbled (ratio 1.17): two real marks."
+    },
+    {
+      "image": "classic_lk4_207_p127.png",
+      "template_id": "seamo_2025_k",
+      "source": "SEAMO 2025 marking Drive, LK4-207.pdf page 127",
+      "answers": "BCB?ACBCCACAABB",
+      "why": "Q4 A and C both scribbled (binary ratio 1.49). The classic ink-energy step rescored it 5.23 and trusted C."
+    },
+    {
+      "image": "classic_id15_200_p004.png",
+      "template_id": "seamo_2025_k",
+      "source": "SEAMO 2025 marking Drive, ID15-200.pdf page 4",
+      "answers": "CBBBC?BCCAAAAAA",
+      "why": "Light pencil throughout; Q6 B is a faint scribble with 12 ink pixels, under the 35 floor, and was trusted as blank."
+    }
+  ]
+}

@@ -456,6 +456,11 @@
                 "type": "number",
                 "description": "Minimum average best/second ratio across all rows. Maps to current 1.10.",
                 "default": 1.1
+              },
+              "blank_review_ink": {
+                "type": "integer",
+                "description": "On a label-lattice fit, a blank row whose best box carries at least this many ink pixels is flagged for review (faint mark). 0 disables.",
+                "default": 0
               }
             }
           }

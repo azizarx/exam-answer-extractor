@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k_fb/page_004",
+  "template_id": "seamo_2025_k_fb",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Indonesia ID13-193.pdf",
+    "page_number": 4
+  },
+  "answers": {
+    "1": "B",
+    "2": "C",
+    "3": "B",
+    "4": "A",
+    "5": "B",
+    "6": "C",
+    "7": "C",
+    "8": "C",
+    "9": "A",
+    "10": "C",
+    "11": "C",
+    "12": "B",
+    "13": "A",
+    "14": "B",
+    "15": "B"
+  },
+  "notes": "Blurriest format-B print (laplacian 89), 93.5% scale. Answers verified row by row against the scan."
+}

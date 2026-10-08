@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k/page_003",
+  "template_id": "seamo_2025_k",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Indonesia ID13-193.pdf",
+    "page_number": 6
+  },
+  "answers": {
+    "1": "B",
+    "2": "C",
+    "3": "B",
+    "4": "A",
+    "5": "B",
+    "6": "C",
+    "7": "B",
+    "8": "A",
+    "9": "B",
+    "10": "C",
+    "11": "B",
+    "12": "C",
+    "13": "B",
+    "14": "A",
+    "15": "B"
+  },
+  "notes": "Content at 84.6% scale, the smallest in the set; old path coverage 0.87. Answers verified row by row against the scan."
+}

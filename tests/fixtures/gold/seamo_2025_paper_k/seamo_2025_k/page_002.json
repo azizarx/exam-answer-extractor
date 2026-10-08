@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k/page_002",
+  "template_id": "seamo_2025_k",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Indonesia ID13-193.pdf",
+    "page_number": 36
+  },
+  "answers": {
+    "1": "C",
+    "2": "C",
+    "3": "B",
+    "4": "A",
+    "5": "B",
+    "6": "C",
+    "7": "B",
+    "8": "A",
+    "9": "B",
+    "10": "B",
+    "11": "C",
+    "12": "A",
+    "13": "A",
+    "14": "A",
+    "15": "A"
+  },
+  "notes": "Content at 88.7% scale; anchor 0.154, huge_dx. Answers verified row by row against the scan."
+}

@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k_fb/page_001",
+  "template_id": "seamo_2025_k_fb",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "AU2-222.pdf",
+    "page_number": 194
+  },
+  "answers": {
+    "1": "B",
+    "2": "C",
+    "3": "C",
+    "4": "A",
+    "5": "C",
+    "6": "C",
+    "7": "C",
+    "8": "C",
+    "9": "A",
+    "10": "C",
+    "11": "C",
+    "12": "A",
+    "13": "A",
+    "14": "B",
+    "15": "B"
+  },
+  "notes": "Dithered, speckled scan (laplacian 2315, the highest in the harvest) at 90% scale. The only A/B/C format-B page whose lattice fit failed (Q1 fill covers its B label) until two-of-three label rows were accepted; the old path read it B*C.B*A.A..**.. under huge_dx. Answers agreed by three independent readings (selector, verifier, blind audit)."
+}

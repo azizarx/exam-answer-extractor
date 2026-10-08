@@ -60,6 +60,28 @@ MAX_INFERRED_ROW_FRACTION = 0.25
 # the detected row pitch keeps this stable when image DPI changes.
 LABEL_BOTTOM_TO_FILL_TOP = 4.0
 
+# Multi-column sheets (Paper K: Q1-10 left, Q11-15 right).  The column with
+# the most rows is fitted by the single-column path above; the others are
+# then searched only near where that fit predicts their labels, within this
+# fraction of a column/row pitch.
+SECONDARY_SEARCH_TOL_FRAC = 0.25
+# Paper K prints the same ~34 px option letters as format B but on a much
+# taller row (about 170 px against ~100), so glyph height as a fraction of the
+# row pitch drops to 0.22-0.24, below the single-column floor.  Measured on the
+# Paper K gold set (tests/fixtures/gold/seamo_2025_paper_k).
+MULTI_COL_GLYPH_WIDTH_MIN_FRAC = 0.09
+MULTI_COL_GLYPH_HEIGHT_MIN_FRAC = 0.15
+MULTI_COL_GLYPH_HEIGHT_MAX_FRAC = 0.35
+MULTI_COL_GLYPH_AREA_MIN_FRAC = 0.006
+# Label bottom -> outer top edge of the printed box, which is what a Paper K
+# row position marks.  The scored band then starts the template's own
+# cell_height below it, so a template can score only the box interior.
+MULTI_COL_LABEL_BOTTOM_TO_ROW_TOP = 19.0
+# A Paper K row has only three labels, and a child's fill often runs up over
+# one of them.  Count a row seen when two of its three labels are; the strong-
+# row and regular-pitch gates of the single-column fit still apply.
+MULTI_COL_MIN_ROW_SUPPORT = 2
+
 
 @dataclass
 class LabelLatticeFit:
@@ -159,6 +181,10 @@ def _extract_glyph_components(
     col_pitch: float,
     row_pitch: float,
     binary_threshold: int,
+    width_min_frac: float = GLYPH_WIDTH_MIN_FRAC,
+    height_min_frac: float = GLYPH_HEIGHT_MIN_FRAC,
+    height_max_frac: float = GLYPH_HEIGHT_MAX_FRAC,
+    area_min_frac: float = GLYPH_AREA_MIN_FRAC,
 ) -> List[_Component]:
     region = section.region
     pad_x = int(round(ROI_PAD_COL_PITCHES * col_pitch))
@@ -179,20 +205,20 @@ def _extract_glyph_components(
         binary, connectivity=8,
     )
 
-    min_area = max(20, int(round(GLYPH_AREA_MIN_FRAC * col_pitch * row_pitch)))
+    min_area = max(20, int(round(area_min_frac * col_pitch * row_pitch)))
     components: List[_Component] = []
     for component_index in range(1, count):
         x, y, width, height, area = map(int, stats[component_index])
         if not (
-            GLYPH_WIDTH_MIN_FRAC * col_pitch
+            width_min_frac * col_pitch
             <= width
             <= GLYPH_WIDTH_MAX_FRAC * col_pitch
         ):
             continue
         if not (
-            GLYPH_HEIGHT_MIN_FRAC * row_pitch
+            height_min_frac * row_pitch
             <= height
-            <= GLYPH_HEIGHT_MAX_FRAC * row_pitch
+            <= height_max_frac * row_pitch
         ):
             continue
         if area < min_area:
@@ -357,6 +383,27 @@ def align_mcq_section_from_labels(
         gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
 
     grid = section.grid
+    if grid is not None and len(grid.col_positions) > 1:
+        return _align_multi_column(
+            gray, section, binary_threshold=binary_threshold,
+        )
+    return _align_single_column(gray, section, binary_threshold=binary_threshold)
+
+
+def _align_single_column(
+    gray: np.ndarray,
+    section: AnswerSection,
+    *,
+    binary_threshold: Optional[int],
+    glyph_width_min_frac: float = GLYPH_WIDTH_MIN_FRAC,
+    glyph_height_frac: Tuple[float, float] = (
+        GLYPH_HEIGHT_MIN_FRAC, GLYPH_HEIGHT_MAX_FRAC,
+    ),
+    glyph_area_min_frac: float = GLYPH_AREA_MIN_FRAC,
+    label_bottom_to_fill_top: float = LABEL_BOTTOM_TO_FILL_TOP,
+    min_row_support: Optional[int] = None,
+) -> Tuple[Optional[AnswerSection], LabelLatticeFit]:
+    grid = section.grid
     if (
         grid is None
         or len(grid.col_positions) != 1
@@ -398,6 +445,10 @@ def align_mcq_section_from_labels(
         col_pitch=col_pitch,
         row_pitch=row_pitch,
         binary_threshold=geometry_threshold,
+        width_min_frac=glyph_width_min_frac,
+        height_min_frac=glyph_height_frac[0],
+        height_max_frac=glyph_height_frac[1],
+        area_min_frac=glyph_area_min_frac,
     )
     if not components:
         return _failed("label_lattice_no_components")
@@ -417,7 +468,8 @@ def align_mcq_section_from_labels(
 
     y_tolerance = max(3.0, Y_CLUSTER_TOL_FRAC * row_pitch)
     min_observed_rows = max(2, int(np.ceil(n_rows * MIN_OBSERVED_ROW_FRACTION)))
-    min_row_support = max(3, n_options - 2)
+    if min_row_support is None:
+        min_row_support = max(3, n_options - 2)
     strong_row_support = max(3, n_options - 1)
 
     best = None
@@ -510,7 +562,7 @@ def align_mcq_section_from_labels(
     observed_pitch = float(np.median(np.diff([row["center"] for row in rows])))
     sy_size = observed_pitch / row_pitch
     fill_tops = [
-        float(row["bottom"] + LABEL_BOTTOM_TO_FILL_TOP * sy_size)
+        float(row["bottom"] + label_bottom_to_fill_top * sy_size)
         for row in rows
     ]
     template_fill_tops = [
@@ -638,5 +690,231 @@ def align_mcq_section_from_labels(
         col_rmse,
         row_rmse,
         row_pitch_cv,
+    )
+    return new_section, fit
+
+
+def _align_multi_column(
+    gray: np.ndarray,
+    section: AnswerSection,
+    *,
+    binary_threshold: Optional[int],
+) -> Tuple[Optional[AnswerSection], LabelLatticeFit]:
+    """Fit a grid printed as several visual columns sharing one lattice.
+
+    The column with the most rows is fitted exactly as a single-column sheet,
+    with every trust gate of that path.  Each remaining column is then accepted
+    only if its own option labels are found where that fit predicts them, and
+    one scale/offset per axis is refitted across all columns.  A missing or
+    misplaced column fails closed: a sheet whose right-hand block is written
+    answers, not boxes, must not borrow the left block's registration.
+    """
+    grid = section.grid
+    qpc = list(grid.questions_per_col or [])
+    n_visual = len(grid.col_positions)
+    widths = {len(cols) for cols in grid.col_positions}
+    if (
+        len(qpc) != n_visual
+        or len(widths) != 1
+        or min(widths) < 3
+        or len(grid.row_positions) != sum(qpc)
+        or min(qpc) < 2
+    ):
+        return _failed("label_lattice_unsupported_geometry")
+
+    starts = [sum(qpc[:visual]) for visual in range(n_visual)]
+    visual_rows = [
+        [float(y) for y in grid.row_positions[start : start + count]]
+        for start, count in zip(starts, qpc)
+    ]
+    primary = max(range(n_visual), key=lambda visual: qpc[visual])
+    primary_section = AnswerSection(
+        type=section.type,
+        question_start=section.question_start,
+        question_end=section.question_end,
+        region=section.region,
+        grid=GridGeometry(
+            rows=qpc[primary],
+            cols=1,
+            questions_per_col=[qpc[primary]],
+            options=list(grid.options),
+            cells_per_question=grid.cells_per_question,
+            row_positions=list(grid.row_positions[starts[primary] : starts[primary] + qpc[primary]]),
+            col_positions=[list(grid.col_positions[primary])],
+            row_pitch=grid.row_pitch,
+            col_pitch=grid.col_pitch,
+            cell_width=grid.cell_width,
+            # Fit the printed box tops; cell_height is re-applied below.
+            cell_height=0,
+            bubble_height=grid.bubble_height,
+            first_row_offset=grid.first_row_offset,
+        ),
+        extraction_strategy=section.extraction_strategy,
+        scoring=section.scoring,
+        question_overrides=section.question_overrides,
+    )
+    aligned_primary, fit = _align_single_column(
+        gray,
+        primary_section,
+        binary_threshold=binary_threshold,
+        glyph_width_min_frac=MULTI_COL_GLYPH_WIDTH_MIN_FRAC,
+        glyph_height_frac=(
+            MULTI_COL_GLYPH_HEIGHT_MIN_FRAC, MULTI_COL_GLYPH_HEIGHT_MAX_FRAC,
+        ),
+        glyph_area_min_frac=MULTI_COL_GLYPH_AREA_MIN_FRAC,
+        label_bottom_to_fill_top=MULTI_COL_LABEL_BOTTOM_TO_ROW_TOP,
+        min_row_support=MULTI_COL_MIN_ROW_SUPPORT,
+    )
+    if aligned_primary is None or not fit.ok:
+        return None, fit
+
+    template_cols = np.asarray(grid.col_positions[primary], dtype=np.float64)
+    col_pitch = float(np.median(np.diff(template_cols)))
+    row_pitch = float(np.median(np.diff(np.asarray(visual_rows[primary]))))
+    scoring = section.scoring or ScoringParams()
+    geometry_threshold = (
+        int(binary_threshold)
+        if binary_threshold is not None
+        else int(scoring.binary_threshold)
+    )
+    components = _extract_glyph_components(
+        gray,
+        section,
+        col_pitch=col_pitch,
+        row_pitch=row_pitch,
+        binary_threshold=geometry_threshold,
+        width_min_frac=MULTI_COL_GLYPH_WIDTH_MIN_FRAC,
+        height_min_frac=MULTI_COL_GLYPH_HEIGHT_MIN_FRAC,
+        height_max_frac=MULTI_COL_GLYPH_HEIGHT_MAX_FRAC,
+        area_min_frac=MULTI_COL_GLYPH_AREA_MIN_FRAC,
+    )
+    # Box top sits a fixed distance below its label row's centre; carry that
+    # offset over from the fitted column to predict the others' labels.
+    label_to_top = float(np.median(
+        np.asarray(fit.fill_tops) - np.asarray(fit.row_centers)
+    ))
+    x_tol = SECONDARY_SEARCH_TOL_FRAC * col_pitch * fit.sx
+    y_tol = SECONDARY_SEARCH_TOL_FRAC * row_pitch * fit.sy
+    gap = MULTI_COL_LABEL_BOTTOM_TO_ROW_TOP * fit.sy
+    n_options = len(template_cols)
+    min_observed = max(2, int(np.ceil(min(qpc) * MIN_OBSERVED_ROW_FRACTION)))
+
+    x_src = list(map(float, template_cols))
+    x_dst = list(fit.col_centers or [])
+    y_src = list(visual_rows[primary])
+    y_dst = list(fit.fill_tops or [])
+    observed_tops: dict = {}
+    observed_cols: dict = {}
+    n_observed_rows = fit.n_observed_rows
+    for visual in range(n_visual):
+        if visual == primary:
+            continue
+        cols = [float(x) for x in grid.col_positions[visual]]
+        found_x: List[List[float]] = [[] for _ in cols]
+        tops: dict = {}
+        for row_index, row_y in enumerate(visual_rows[visual]):
+            centre_y = fit.sy * row_y + fit.ty - label_to_top
+            bottoms = []
+            hits = []
+            for option, col_x in enumerate(cols):
+                centre_x = fit.sx * col_x + fit.tx
+                near = [
+                    c for c in components
+                    if abs(c[0] - centre_x) <= x_tol and abs(c[1] - centre_y) <= y_tol
+                ]
+                if not near:
+                    continue
+                best = max(near, key=lambda c: c[4])
+                hits.append((option, best))
+                bottoms.append(best[6] + best[3])
+            if len(hits) >= MULTI_COL_MIN_ROW_SUPPORT:
+                for option, best in hits:
+                    found_x[option].append(best[0])
+                tops[row_index] = float(np.median(bottoms)) + gap
+        if len(tops) < min_observed or not all(found_x):
+            fit.ok = False
+            fit.warning = "label_lattice_secondary_column_missing"
+            logger.info(
+                "label_lattice FAIL warn=%s visual_col=%d observed=%d/%d",
+                fit.warning, visual, len(tops), qpc[visual],
+            )
+            return None, fit
+        observed_cols[visual] = [float(np.median(xs)) for xs in found_x]
+        observed_tops[visual] = tops
+        x_src.extend(cols)
+        x_dst.extend(observed_cols[visual])
+        for row_index, top in tops.items():
+            y_src.append(visual_rows[visual][row_index])
+            y_dst.append(top)
+        n_observed_rows += len(tops)
+
+    sx, tx, col_rmse = _fit_1d(x_src, x_dst)
+    sy, ty, row_rmse = _fit_1d(y_src, y_dst)
+    fit.sx, fit.tx, fit.sy, fit.ty = sx, tx, sy, ty
+    fit.col_rmse = max(fit.col_rmse, col_rmse)
+    fit.row_rmse = max(fit.row_rmse, row_rmse)
+    fit.n_observed_rows = n_observed_rows
+    if col_rmse > TRUST_MAX_COL_RMSE or row_rmse > TRUST_MAX_ROW_RMSE:
+        fit.ok = False
+        fit.warning = (
+            "label_lattice_column_residual_high"
+            if col_rmse > TRUST_MAX_COL_RMSE
+            else "label_lattice_row_residual_high"
+        )
+        logger.info(
+            "label_lattice FAIL warn=%s multi_col crmse=%.1f rrmse=%.1f",
+            fit.warning, col_rmse, row_rmse,
+        )
+        return None, fit
+
+    new_cell_height = max(0, int(round((grid.cell_height or 0) * sy)))
+    new_cols: List[List[int]] = []
+    new_rows: List[int] = []
+    for visual in range(n_visual):
+        if visual == primary:
+            new_cols.append(list(aligned_primary.grid.col_positions[0]))
+            new_rows.extend(aligned_primary.grid.row_positions)
+            continue
+        new_cols.append([int(round(x)) for x in observed_cols[visual]])
+        for row_index, row_y in enumerate(visual_rows[visual]):
+            top = observed_tops[visual].get(row_index, sy * row_y + ty)
+            new_rows.append(int(round(top)))
+
+    new_grid = GridGeometry(
+        rows=grid.rows,
+        cols=grid.cols,
+        questions_per_col=list(qpc),
+        options=list(grid.options),
+        cells_per_question=grid.cells_per_question,
+        row_positions=new_rows,
+        col_positions=new_cols,
+        row_pitch=aligned_primary.grid.row_pitch,
+        col_pitch=aligned_primary.grid.col_pitch,
+        cell_width=aligned_primary.grid.cell_width,
+        cell_height=new_cell_height,
+        bubble_height=aligned_primary.grid.bubble_height,
+        first_row_offset=grid.first_row_offset,
+    )
+    region = section.region
+    x0 = int(round(sx * region.x + tx))
+    x1 = int(round(sx * (region.x + region.w) + tx))
+    y0 = int(round(sy * region.y + ty))
+    y1 = int(round(sy * (region.y + region.h) + ty))
+    new_section = AnswerSection(
+        type=section.type,
+        question_start=section.question_start,
+        question_end=section.question_end,
+        region=Region(x=x0, y=y0, w=max(1, x1 - x0), h=max(1, y1 - y0)),
+        grid=new_grid,
+        extraction_strategy=section.extraction_strategy,
+        scoring=section.scoring,
+        question_overrides=section.question_overrides,
+    )
+    fit.col_centers = [x for cols in new_cols for x in map(float, cols)]
+    fit.fill_tops = [float(y + new_cell_height) for y in new_rows]
+    logger.info(
+        "label_lattice OK multi_col visual_cols=%d rows=%d sx=%.3f sy=%.3f "
+        "crmse=%.1f rrmse=%.1f",
+        n_visual, n_observed_rows, sx, sy, col_rmse, row_rmse,
     )
     return new_section, fit

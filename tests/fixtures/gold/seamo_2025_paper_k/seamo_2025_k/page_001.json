@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k/page_001",
+  "template_id": "seamo_2025_k",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Indonesia ID13-193.pdf",
+    "page_number": 8
+  },
+  "answers": {
+    "1": "C",
+    "2": "B",
+    "3": "A",
+    "4": "C",
+    "5": "B",
+    "6": "A",
+    "7": "C",
+    "8": "B",
+    "9": "C",
+    "10": "C",
+    "11": "B",
+    "12": "A",
+    "13": "C",
+    "14": "A",
+    "15": "B"
+  },
+  "notes": "Content printed at 85% scale, offset (+149,+125): worst anchor lock (0.131). Answers verified row by row against the scan."
+}

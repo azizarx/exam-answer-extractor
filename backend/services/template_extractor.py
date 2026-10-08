@@ -80,6 +80,7 @@ MCQ_TRUST_WARNINGS = frozenset({
     "weak_fill_scores",
     "lattice_align_failed",
     "lattice_residual_high",
+    "label_lattice_failed",
 })
 FR_SECTION_TYPES = frozenset({"open_response", "numeric_grid"})
 
@@ -254,16 +255,19 @@ class TemplateExtractor:
                     )
                     min_ratio = 1.2
                     min_ink = 110
+                    blank_ink = 0
                     for sec in page_template.sections:
                         if sec.type == "mcq_grid" and sec.scoring:
                             min_ratio = float(sec.scoring.min_ratio)
                             min_ink = int(sec.scoring.min_ink_pixels)
+                            blank_ink = int(sec.scoring.blank_review_ink)
                             break
                     review_qs |= set(
                         ambiguous_mcq_questions(
                             mcq_result,
                             min_ratio=min_ratio,
                             min_ink_pixels=min_ink,
+                            blank_review_ink=blank_ink,
                         )
                     )
                     logger.info(

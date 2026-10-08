@@ -1,0 +1,93 @@
+{
+  "source_image": "tests/fixtures/gold/seamo_2025_paper_k/seamo_2025_k/page_003.png",
+  "image_size": {
+    "w": 2481,
+    "h": 3508
+  },
+  "reference_dpi_note": "Coordinates are in this image pixel space (~300 DPI pages).",
+  "click_convention": "cols = fill center X per block; rows clicks = fill-top Y per block; row_positions = fill_y - cell_height, blocks concatenated in order",
+  "grid": {
+    "rows": 15,
+    "cols": 2,
+    "questions_per_col": [
+      10,
+      5
+    ],
+    "options": [
+      "A",
+      "B",
+      "C"
+    ],
+    "row_positions": [
+      1083,
+      1226,
+      1370,
+      1513,
+      1656,
+      1800,
+      1943,
+      2086,
+      2230,
+      2373,
+      1083,
+      1225,
+      1368,
+      1510,
+      1653
+    ],
+    "col_positions": [
+      [
+        407,
+        566,
+        725
+      ],
+      [
+        1086,
+        1245,
+        1404
+      ]
+    ],
+    "cell_width": 70,
+    "cell_height": 32,
+    "bubble_height": 30,
+    "row_pitch": 143.3,
+    "first_row_offset": 38
+  },
+  "raw_clicks": {
+    "blocks": [
+      {
+        "col_xs": [
+          407.00982666015625,
+          566.2114234665432,
+          725.4130202729302
+        ],
+        "fill_top_ys": [
+          1114.9540710449219,
+          1258.2873942057292,
+          1401.6207173665362,
+          1544.9540405273435,
+          1688.287363688151,
+          1831.6206868489578,
+          1974.9540100097652,
+          2118.2873331705728,
+          2261.62065633138,
+          2404.9539794921875
+        ]
+      },
+      {
+        "col_xs": [
+          1085.6066330473816,
+          1244.808229853769,
+          1404.0098266601562
+        ],
+        "fill_top_ys": [
+          1114.9540710449219,
+          1257.4540710449219,
+          1399.9540710449219,
+          1542.4540710449219,
+          1684.9540710449214
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k_fb/page_003",
+  "template_id": "seamo_2025_k_fb",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Sri Lanka LK2-206.pdf",
+    "page_number": 71
+  },
+  "answers": {
+    "1": "B",
+    "2": "C",
+    "3": "B",
+    "4": "C",
+    "5": "A",
+    "6": "C",
+    "7": "A",
+    "8": "B",
+    "9": "A",
+    "10": "B",
+    "11": "A",
+    "12": "A",
+    "13": "B",
+    "14": "B",
+    "15": "A"
+  },
+  "notes": "Format B at 92% scale. Self-primed anchor scored 1.000 with no warning and read 4/15 correctly: a silent-wrong page under the old path. Answers verified row by row against the scan."
+}

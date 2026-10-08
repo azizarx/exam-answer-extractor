@@ -34,6 +34,7 @@ DEBUG=false .venv/bin/python -m pytest tests/ -q                  # whole suite,
 .venv/bin/python -m pytest tests/test_template_extractor.py -v    # mocked Gemini + Mathpix; covers merge logic + diagram URL matching
 .venv/bin/python tests/test_mcq_pipeline.py                       # CV bubble extractor against synthetic filled bubbles
 .venv/bin/python -m pytest tests/test_format_b_cv_accuracy.py -v  # the gold MCQ bar: all 500 answers across 25 adversarial scans
+.venv/bin/python -m pytest tests/test_paper_k_cv_accuracy.py -v   # the Paper K bar: 150 answers + hand-annotated grids on 10 adversarial scans, plus trust cases
 .venv/bin/python -m pytest tests/test_diagram_crops.py tests/test_diagram_vision_judge.py tests/test_diagram_endpoints.py -v   # diagram cropping, vision marking, image endpoints
 .venv/bin/python -m pytest tests/test_queue_system.py tests/test_cancellation.py tests/test_cpu_limits.py -q   # durable queue, cancellation, CPU budget
 .venv/bin/python scripts/extract_reference_diagrams.py --check    # answer-key reference drawings still match the key PDFs
@@ -136,7 +137,7 @@ Five things matter to remember:
 
 1. **No `max_output_tokens` on Gemini calls.** Gemini 2.5 models spend reasoning tokens from the same budget; the previous default cap of 1024 caused `finish_reason=MAX_TOKENS` on every call and starved the visible JSON. Letting the model use its default (~64k) is the deliberate fix. See `template_extractor.py::_llm_extract_full`.
 
-2. **Anchor priming.** Before per-page CV MCQ runs, `TemplateExtractor._prime_anchor_from_page()` (`template_extractor.py:360`, called at `:649`) crops the template's anchor region from the first page carrying THAT layout and stashes it in `TemplateRegistry._anchor_images` (process-wide cache). Without this, the registry falls back to the on-disk `backend/templates/<id>_anchor.png` which is from a canonical reference scan, not the current scan — that mismatch drops MCQ coverage from ~99% to ~70%. (`_prime_anchor_from_first_page` at `:357` is a back-compat alias with no callers in `backend/`.) This now matters only on the legacy anchor fallback path; A–F papers are fitted by the printed-label lattice and never call `_match_anchor`.
+2. **Anchor priming.** Before per-page CV MCQ runs, `TemplateExtractor._prime_anchor_from_page()` (`template_extractor.py:360`, called at `:649`) crops the template's anchor region from the first page carrying THAT layout and stashes it in `TemplateRegistry._anchor_images` (process-wide cache). Without this, the registry falls back to the on-disk `backend/templates/<id>_anchor.png` which is from a canonical reference scan, not the current scan — that mismatch drops MCQ coverage from ~99% to ~70%. (`_prime_anchor_from_first_page` at `:357` is a back-compat alias with no callers in `backend/`.) This now matters only on the legacy anchor fallback path; A–F and Paper K papers are fitted by the printed-label lattice and never call `_match_anchor`.
 
 3. **Rate-limit retry.** `run_logger.llm_call` is the SINGLE retry owner — callers must not wrap it. Backoff is `_TRANSIENT_BACKOFF_SECONDS = (2.0, 5.0, 10.0)` (`run_logger.py:183`) with `GEMINI_TRANSIENT_RETRIES=2`, covering 429 *and* deadline/503/504. Pacing is separate: a process-wide sliding-60s token bucket at `GEMINI_MAX_RPM` (repo default 4.0, raise it on paid tiers). Under the queue this bucket lives in Redis and **fails closed** — a Redis outage fails the job rather than issuing unpaced calls.
 
@@ -154,12 +155,57 @@ Five things matter to remember:
    answer-key-blind by contract: no keys, labels or reference images may leak
    into it, or the gold acceptance test becomes meaningless.
 
+### Paper K: two-column label lattice
+
+Paper K (Q1-10 left, Q11-15 right) is the only multi-column layout, and
+`mcq_label_lattice._align_multi_column` registers it: the 10-row column is
+fitted exactly like a single-column sheet, and the 5-row column is accepted
+only if its own A/B/C labels appear where that fit predicts. One scale and
+offset per axis is then refitted across both. The annotated gold set showed
+why the anchor could never do this: K scans are routinely printed at **85-97 %
+content scale**, which `adapted_to_image` cannot see (it only reacts to ≥10 %
+page-size drift). The anchor scored those pages 0.13-0.17, or 1.000 when
+self-primed, and put the grid 80-280 px off.
+
+- The K-only glyph and gap constants (`MULTI_COL_*`) are separate so the
+  single-column A-F path stays byte-identical. Don't merge them.
+- K boxes have heavy printed outlines, so the K templates score only the box
+  interior (`cell_height` 11, `bubble_height` 13, `cell_width` 66). Scoring the
+  outline made every blank row read `IN`.
+- A K row counts as seen when 2 of its 3 labels are found
+  (`MULTI_COL_MIN_ROW_SUPPORT`), because a child's fill often covers one label.
+  Requiring all 3 dropped Q1 on AU2-222 p194, and the fit then failed.
+- K's `min_ratio` is 2.0 (it was 1.12). With the interior-only window, a clean
+  single mark leaves the other boxes near zero. Across 1,845 harvested format-B
+  rows, every real double mark scored ≤ 1.39 and every
+  fill-plus-erasure-residue row scored ≥ 2.48. At 1.12, a filled-A /
+  scribbled-C row was committed as A.
+- The classic ink-energy rescore is skipped for two-column sheets. On 66
+  classic K pages it changed only three rows, each a double mark it promoted to
+  a letter, and one of those was trusted wrongly.
+- The K templates set `scoring.blank_review_ink` = 8. On a lattice fit, a
+  blank row with that much ink goes to review. Audited blank K rows read
+  exactly 0, and a missed faint pencil mark read 12. The setting defaults to 0
+  (off) everywhere else.
+- Audit (2026-10-08): 190 harvested K pages (123 format B, 67 classic) were
+  transcribed blind by independent agents, and every disagreement was
+  adjudicated. Zero trusted answers are wrong on the current code. The
+  regressions live in `trust_cases/` and `test_paper_k_cv_accuracy.py`.
+- If the lattice fails on a two-column sheet, the anchor fallback still runs
+  for the reviewer, but the page is always flagged `label_lattice_failed`. A
+  self-primed anchor read 4/15 correctly with no warning on a gold page.
+- A sheet printed with `1 2 3` options and written Q11-15 also carries the
+  "SEAMO 2025 Paper K" footer. No K template can mark it, and the lattice
+  refuses it (no right-hand box column).
+
 ### Withdrawn layouts (`DISABLED_TEMPLATE_IDS`)
 
-`seamo_2026_k` is withdrawn from automatic processing. Its sheet is a different
-layout from the 2025 one it inherits geometry from (banner separation 1755px vs
-1931px), so the anchor scores 0.169 against a 0.45 threshold and the grid lands
-on the letter labels. A page detected as a withdrawn layout is still identified
+`seamo_2026_k` is withdrawn from automatic processing. It was withdrawn while
+Paper K was still registered by anchor: the anchor scored 0.169 against a 0.45
+threshold and the grid landed on the letter labels. Paper K now registers by its
+label lattice (above), and the one real 2026 classic page available
+(`backend/examples` Australia PDF, p21) reads 15/15, but the withdrawal stands
+until the id is removed from the setting deliberately. A page detected as a withdrawn layout is still identified
 — so it stays traceable and can be marked by hand — but it is **not extracted
 and not marked**: it stores empty answers with reason `template_disabled`, and
 marking lists it under `missing_templates` as `"<id> (withdrawn)"` rather than
@@ -170,8 +216,7 @@ Only the classic layout is withdrawn. `seamo_2026_k_fb` is mapped from the
 clean vector sheet in `backend/examples/seamo-2026-answer-key-format.pdf`,
 anchors at 0.917 and marks normally. `/capabilities` reports the list as
 `withdrawn_templates` so an integrator can route those pages for manual
-handling. Remove the id from the setting once the layout is mapped with
-`scripts/annotate_mcq_grid.py` and verified.
+handling.
 
 ### Review-vision second opinion (`review_vision.py`)
 

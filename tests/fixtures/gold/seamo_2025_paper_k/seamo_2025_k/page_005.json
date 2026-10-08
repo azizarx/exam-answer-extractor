@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k/page_005",
+  "template_id": "seamo_2025_k",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "Sri Lanka LK2-206.pdf",
+    "page_number": 17
+  },
+  "answers": {
+    "1": "B",
+    "2": "B",
+    "3": "B",
+    "4": "A",
+    "5": "C",
+    "6": "C",
+    "7": "B",
+    "8": "A",
+    "9": "A",
+    "10": "B",
+    "11": "A",
+    "12": "B",
+    "13": "A",
+    "14": "C",
+    "15": "C"
+  },
+  "notes": "Clean baseline at ~100% scale; the only page the old anchor path read correctly. Answers verified row by row against the scan."
+}

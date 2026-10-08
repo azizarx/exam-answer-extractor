@@ -1,0 +1,27 @@
+{
+  "page_id": "seamo_2025_k_fb/page_002",
+  "template_id": "seamo_2025_k_fb",
+  "source": {
+    "drive": "SEAMO 2025 marking Drive",
+    "pdf": "ID15-200.pdf",
+    "page_number": 6
+  },
+  "answers": {
+    "1": "A",
+    "2": "A",
+    "3": "B",
+    "4": "C",
+    "5": "A",
+    "6": "A",
+    "7": "B",
+    "8": "A",
+    "9": "C",
+    "10": "C",
+    "11": "A",
+    "12": "B",
+    "13": "C",
+    "14": "A",
+    "15": "B"
+  },
+  "notes": "Blurriest page in the harvest (laplacian 86.6) with scrawled marks spilling outside the boxes (Q11, Q13) and a stray stroke on Q7 A; the two-column fit fails at threshold 180 and holds at 140. Answers agreed by three independent readings (selector, verifier, blind audit)."
+}
