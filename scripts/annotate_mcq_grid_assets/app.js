@@ -12,6 +12,7 @@ const state = {
   mode: "cols",
   blocks: [{ cols: [], rows: [] }],
   active: 0,
+  explicit: false, // true when the user picked the active column by hand
   img: null,
   imgPath: null,
   imgNatural: { w: 0, h: 0 },
@@ -154,6 +155,46 @@ function allComplete() {
   return state.blocks.every((_, i) => blockComplete(i));
 }
 
+/** First unfinished column after the active one, else any unfinished one. */
+function nextIncompleteBlock() {
+  const after = state.blocks.findIndex((_, i) => i > state.active && !blockComplete(i));
+  if (after !== -1) return after;
+  return state.blocks.findIndex((_, i) => !blockComplete(i));
+}
+
+/** First question number in a column — 11 for the second column of Paper K. */
+function firstQuestion(i) {
+  return questionsPerCol().slice(0, i).reduce((a, n) => a + n, 0) + 1;
+}
+
+/** Question range a column covers, e.g. "Q11–Q15". */
+function columnRange(i) {
+  const first = firstQuestion(i);
+  return `Q${first}–Q${first + questionsPerCol()[i] - 1}`;
+}
+
+/**
+ * When the active column is finished, walk into the next unfinished one.
+ *
+ * Both ways of finishing a column must do this. Fit rows used not to, so the
+ * next A/B/C clicks landed on the finished column and overwrote its options —
+ * on Paper K that redrew Q1–Q10 over column 2 and refused every Q11 click.
+ */
+function advanceIfComplete() {
+  if (!blockComplete(state.active)) return false;
+  const next = nextIncompleteBlock();
+  if (next === -1 || next === state.active) return false;
+  const done = state.active;
+  state.active = next;
+  state.explicit = false;
+  setMode("cols");
+  setStatus(
+    `Column ${done + 1} done — now click ${letters().join(", ")} on one row of ` +
+      `column ${next + 1} (${columnRange(next)}).`,
+  );
+  return true;
+}
+
 function renderBlockButtons() {
   const host = $("blockBar");
   while (host.firstChild) host.removeChild(host.firstChild);
@@ -170,6 +211,9 @@ function renderBlockButtons() {
     btn.classList.toggle("done", blockComplete(i));
     btn.onclick = () => {
       state.active = i;
+      // Choosing a column by hand means "work on this one", even if finished,
+      // so clicks re-place it instead of being redirected to the next column.
+      state.explicit = true;
       setMode("cols");
       redraw();
     };
@@ -231,18 +275,23 @@ function canvasPoint(ev) {
   };
 }
 
+/** Apply x/y transforms to one block, carrying the option-click row with it. */
+function mapBlock(b, fx, fy) {
+  return {
+    cols: b.cols.map(fx),
+    rows: b.rows.map(fy),
+    colY: b.colY == null ? b.colY : fy(b.colY),
+  };
+}
+
 function translateGrid(dx, dy) {
-  for (const b of state.blocks) {
-    b.cols = b.cols.map((x) => x + dx);
-    b.rows = b.rows.map((y) => y + dy);
-  }
+  state.blocks = state.blocks.map((b) => mapBlock(b, (x) => x + dx, (y) => y + dy));
 }
 
 function scaleGridFromAnchor(sx, sy, ax, ay) {
-  for (const b of state.blocks) {
-    b.cols = b.cols.map((x) => ax + (x - ax) * sx);
-    b.rows = b.rows.map((y) => ay + (y - ay) * sy);
-  }
+  state.blocks = state.blocks.map((b) =>
+    mapBlock(b, (x) => ax + (x - ax) * sx, (y) => ay + (y - ay) * sy),
+  );
 }
 
 function hasGrid() {
@@ -303,7 +352,7 @@ function hitHandle(p) {
 }
 
 function cloneBlocks(blocks) {
-  return blocks.map((b) => ({ cols: b.cols.slice(), rows: b.rows.slice() }));
+  return blocks.map((b) => mapBlock(b, (x) => x, (y) => y));
 }
 
 function applyResizeFromDrag(p) {
@@ -320,10 +369,9 @@ function applyResizeFromDrag(p) {
   if ((d.kind === "s" || d.kind === "se") && Math.abs(oSpanY) > 1e-3) {
     sy = Math.max(0.05, (p.y - ay) / oSpanY);
   }
-  state.blocks = d.originBlocks.map((b) => ({
-    cols: b.cols.map((x) => ax + (x - ax) * sx),
-    rows: b.rows.map((y) => ay + (y - ay) * sy),
-  }));
+  state.blocks = d.originBlocks.map((b) =>
+    mapBlock(b, (x) => ax + (x - ax) * sx, (y) => ay + (y - ay) * sy),
+  );
   return { sx, sy };
 }
 
@@ -429,12 +477,16 @@ function drawBlock(b, bi, z) {
   }
 
   b.cols.forEach((x, i) => {
-    const yMark = b.rows[0] ? b.rows[0] + bubH() / 2 : 80;
+    // Before a column has rows, draw its option dots on the row that was
+    // clicked — not at the top of the page, where they looked like nothing
+    // had happened.
+    const baseY = b.rows[0] != null ? b.rows[0] : b.colY;
+    const yMark = baseY != null ? baseY + (b.rows[0] != null ? bubH() / 2 : 0) : 80;
     ctx.beginPath();
     ctx.arc(x * z, yMark * z, 4, 0, Math.PI * 2);
     ctx.fillStyle = isActive ? "#5b9fd4" : "#39627f";
     ctx.fill();
-    ctx.fillText(L[i] || "?", x * z - 4, (b.rows[0] ? b.rows[0] - 10 : 70) * z);
+    ctx.fillText(L[i] || "?", x * z - 4, (baseY != null ? baseY - 10 : 70) * z);
   });
 
   b.rows.forEach((y) => {
@@ -556,10 +608,9 @@ canvas.addEventListener("mousemove", (ev) => {
     const dx = p.x - state.drag.startX;
     const dy = p.y - state.drag.startY;
     if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) state.didDrag = true;
-    state.blocks = state.drag.originBlocks.map((b) => ({
-      cols: b.cols.map((x) => x + dx),
-      rows: b.rows.map((y) => y + dy),
-    }));
+    state.blocks = state.drag.originBlocks.map((b) =>
+      mapBlock(b, (x) => x + dx, (y) => y + dy),
+    );
     setStatus(`Moved Δx=${Math.round(dx)} Δy=${Math.round(dy)}  (release to lock)`);
   } else if (state.drag.type === "resize") {
     const { sx, sy } = applyResizeFromDrag(p);
@@ -617,32 +668,42 @@ canvas.addEventListener("click", (ev) => {
     return;
   }
   const p = canvasPoint(ev);
-  const b = block();
+  let b = block();
   const L = letters();
-  const nRow = questionsPerCol()[state.active];
   pushHistory();
   if (state.mode === "cols") {
-    if (b.cols.length >= L.length) b.cols = [];
+    if (b.cols.length >= L.length) {
+      // A finished column is never overwritten by a stray click: the click is
+      // meant for the next unfinished column. Re-placing a finished column is
+      // deliberate — select it with its COL button, then click.
+      if (!state.explicit && blockComplete(state.active) && advanceIfComplete()) {
+        b = block();
+      } else {
+        b.cols = [];
+      }
+    }
     b.cols.push(p.x);
+    b.colY = p.y;
     setStatus(
-      `COL ${L[b.cols.length - 1]} = ${Math.round(p.x)}  (${b.cols.length}/${L.length})`,
+      `COL ${L[b.cols.length - 1]} = ${Math.round(p.x)}  (${b.cols.length}/${L.length})` +
+        (blockCount() > 1 ? `  — column ${state.active + 1}` : ""),
     );
-    if (b.cols.length === L.length) setMode("rows");
+    if (b.cols.length === L.length && !advanceIfComplete()) setMode("rows");
   } else {
+    const nRow = questionsPerCol()[state.active];
     if (b.rows.length >= nRow) {
-      setStatus(`Already have ${nRow} rows for this column — Clear mode or Undo.`);
+      setStatus(
+        `Column ${state.active + 1} already has its ${nRow} rows — ` +
+          "pick another column above, or Clear mode to redo this one.",
+      );
       return;
     }
     b.rows.push(p.y);
     setStatus(
-      `ROW Q${b.rows.length} fill-top Y = ${Math.round(p.y)}  (${b.rows.length}/${nRow})`,
+      `ROW Q${firstQuestion(state.active) + b.rows.length - 1} fill-top Y = ` +
+        `${Math.round(p.y)}  (${b.rows.length}/${nRow})`,
     );
-    // Walking straight into the next column keeps a two-column sheet flowing.
-    if (b.rows.length === nRow && state.active < state.blocks.length - 1) {
-      state.active += 1;
-      setMode("cols");
-      setStatus(`Column ${state.active} done — now place column ${state.active + 1}.`);
-    }
+    advanceIfComplete();
   }
   redraw();
 });
@@ -722,6 +783,7 @@ $("clearAllBtn").onclick = () => {
   pushHistory();
   state.blocks = questionsPerCol().map(() => ({ cols: [], rows: [] }));
   state.active = 0;
+  state.explicit = false;
   redraw();
 };
 $("fitRowsBtn").onclick = () => {
@@ -739,6 +801,7 @@ $("fitRowsBtn").onclick = () => {
     (_, i) => y0 + ((y1 - y0) * i) / Math.max(1, nRow - 1),
   );
   setStatus(`Interpolated ${nRow} rows from Y=${Math.round(y0)} → ${Math.round(y1)}`);
+  advanceIfComplete();
   redraw();
 };
 $("cellW").oninput = $("cellH").oninput = $("bubH").oninput = () => redraw();
