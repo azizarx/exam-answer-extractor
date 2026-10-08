@@ -316,6 +316,54 @@ def test_gemini_header_fallback_when_ocr_fails(monkeypatch):
     assert det.format_b is True
 
 
+@pytest.mark.parametrize("gemini_says_format_b", [False, True])
+def test_gemini_fallback_keeps_the_printed_format_b_marker(monkeypatch, gemini_says_format_b):
+    """Australian 2026 p122: the footer year OCRs as 2045, so the page falls
+    through to Gemini, which sees only the top of the page and called it
+    classic on one run and format B on another. The format-B marker is printed
+    at the bottom and the bands read it, so it must decide the family. Reading
+    the classic layout's answer regions on a format-B sheet shifts every free
+    response by one box."""
+    reg = _FakeRegistry({"seamo_2026_c", "seamo_2026_c_fb"})
+
+    def fake_ocr(image_bgr, *, band):
+        if band == "format_b":
+            return ("BRING A PRINTED COPY OF THIS PAGE WITH YOU TO THE EXAM HALL FOR "
+                    "PEN AND PAPER EXAM, | ANSWER SHEET | SEAMO 2045 Paper C")
+        return ", BRING A PRINTED COPY OF THIS PAGE WITH YOU TO THE EXAM HALL FOR PEN AND PAPER "
+
+    monkeypatch.setattr("backend.services.page_layout_classifier._ocr_band", fake_ocr)
+    det = classify_page_image(
+        np.zeros((100, 80, 3), dtype=np.uint8),
+        registry=reg,
+        gemini_header=lambda image: {
+            "brand": "seamo", "year": "2026", "paper": "c", "format_b": gemini_says_format_b,
+        },
+        use_gemini_fallback=True,
+    )
+    assert det.template_id == "seamo_2026_c_fb"
+    assert det.method == "gemini_header"
+
+
+def test_gemini_fallback_without_a_marker_still_trusts_gemini_family(monkeypatch):
+    """No marker read is not proof of a classic sheet; Gemini's call stands."""
+    reg = _FakeRegistry({"seamo_2026_c", "seamo_2026_c_fb"})
+    monkeypatch.setattr(
+        "backend.services.page_layout_classifier._ocr_band",
+        lambda image_bgr, *, band: "garbage",
+    )
+    for says, expected in ((True, "seamo_2026_c_fb"), (False, "seamo_2026_c")):
+        det = classify_page_image(
+            np.zeros((100, 80, 3), dtype=np.uint8),
+            registry=reg,
+            gemini_header=lambda image, says=says: {
+                "brand": "seamo", "year": "2026", "paper": "c", "format_b": says,
+            },
+            use_gemini_fallback=True,
+        )
+        assert det.template_id == expected
+
+
 def test_gemini_not_called_when_ocr_resolves(monkeypatch):
     reg = _FakeRegistry({"seamo_2025_b", "seamo_2025_b_fb"})
     called = {"n": 0}

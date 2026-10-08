@@ -397,11 +397,15 @@ def classify_page_image(
             detection.warning = detection.warning or "gemini_header_failed"
             return detection
 
+        # Gemini sees only the top of the page; the format-B marker is printed
+        # at the bottom. When the bands read the marker it decides the family,
+        # otherwise Gemini's call stands (no marker read is not proof of a
+        # classic sheet).
         gemini_det = resolve_layout_fields(
             fields.get("brand"),
             fields.get("year"),
             fields.get("paper"),
-            bool(fields.get("format_b")),
+            bool(fields.get("format_b")) or is_format_b(combined_for_fb),
             registry=registry,
             method="gemini_header",
             raw_text=(detection.raw_text or footer_text or header_text or "").strip(),
@@ -416,7 +420,7 @@ def classify_page_image(
             detection.year = str(fields["year"])
         if fields.get("paper"):
             detection.paper = str(fields["paper"]).lower()
-        detection.format_b = bool(fields.get("format_b"))
+        detection.format_b = bool(fields.get("format_b")) or is_format_b(combined_for_fb)
 
     if not detection.warning:
         detection.warning = "unparseable_footer"
