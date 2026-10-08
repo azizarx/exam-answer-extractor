@@ -133,7 +133,7 @@ class Settings(BaseSettings):
     # is known to be wrong — a confident wrong score is worse than an explicit
     # refusal, and an all-blank 0 reads as a real result.
     # Comma-separated template ids.
-    disabled_template_ids: str = "seamo_2026_k"
+    disabled_template_ids: str = ""
 
     # Second opinion on MCQ questions the CV reader would not commit to. The
     # model reports which box is filled, on a crop of that one question's row;

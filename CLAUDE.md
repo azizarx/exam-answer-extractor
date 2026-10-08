@@ -200,23 +200,21 @@ self-primed, and put the grid 80-280 px off.
 
 ### Withdrawn layouts (`DISABLED_TEMPLATE_IDS`)
 
-`seamo_2026_k` is withdrawn from automatic processing. It was withdrawn while
-Paper K was still registered by anchor: the anchor scored 0.169 against a 0.45
-threshold and the grid landed on the letter labels. Paper K now registers by its
-label lattice (above), and the one real 2026 classic page available
-(`backend/examples` Australia PDF, p21) reads 15/15, but the withdrawal stands
-until the id is removed from the setting deliberately. A page detected as a withdrawn layout is still identified
-— so it stays traceable and can be marked by hand — but it is **not extracted
-and not marked**: it stores empty answers with reason `template_disabled`, and
-marking lists it under `missing_templates` as `"<id> (withdrawn)"` rather than
-scoring blanks as a zero. An all-blank 0 is indistinguishable from a candidate
-who answered nothing, which is why this is a refusal rather than a low score.
-
-Only the classic layout is withdrawn. `seamo_2026_k_fb` is mapped from the
-clean vector sheet in `backend/examples/seamo-2026-answer-key-format.pdf`,
-anchors at 0.917 and marks normally. `/capabilities` reports the list as
+Nothing is withdrawn by default. The setting lists template ids to refuse, as
+a comma-separated list. A page detected as a withdrawn layout is still
+identified, so it stays traceable and can be marked by hand, but it is **not
+extracted and not marked**. It stores empty answers with reason
+`template_disabled`, and marking lists it under `missing_templates` as
+`"<id> (withdrawn)"` rather than scoring blanks as a zero. An all-blank 0 is
+indistinguishable from a candidate who answered nothing, which is why this is
+a refusal rather than a low score. `/capabilities` reports the list as
 `withdrawn_templates` so an integrator can route those pages for manual
 handling.
+
+`seamo_2026_k` was withdrawn from 2026-10-02 to 2026-10-08, while Paper K was
+still registered by anchor: the anchor scored 0.169 against a 0.45 threshold
+and the grid landed on the letter labels. It was re-enabled once Paper K
+registered by its label lattice (above).
 
 ### Review-vision second opinion (`review_vision.py`)
 
