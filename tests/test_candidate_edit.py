@@ -278,3 +278,37 @@ def test_unknown_candidate_and_cross_submission_access_are_rejected(api):
     client, sid, ids, _ = api
     assert _edit(client, sid, 999999, answers={"1": "B"}).status_code == 404
     assert _edit(client, sid + 1, ids[0], answers={"1": "B"}).status_code == 404
+
+
+def test_a_refused_edit_releases_its_lock_for_a_concurrent_one(api):
+    """confirm-review runs on the event loop. A 404 that kept the write lock
+    until the session closed left a concurrent edit waiting inside BEGIN
+    IMMEDIATE, on the very loop that had to close it, until SQLite gave up."""
+    import asyncio
+
+    import httpx
+
+    _, sid, ids, _ = api
+
+    async def both():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            url = f"/submission/{sid}/candidates/{{}}/confirm-review"
+            return await asyncio.gather(
+                client.post(url.format(999999), json={"answers": {"1": "B"}}),
+                client.post(url.format(ids[1]), json={"answers": {"1": "C"}}),
+            )
+
+    refused, edited = asyncio.run(both())
+    assert (refused.status_code, edited.status_code) == (404, 200)
+
+
+def test_a_remark_that_cannot_score_says_why(api):
+    """remark_error used to be "AttributeError" whenever the run did not complete."""
+    client, sid, ids, factory = api
+    with factory() as db:
+        db.query(AnswerKey).update({"is_active": False})
+        db.commit()
+    body = _edit(client, sid, ids[0], answers={"1": "C"}, remark=True).json()
+    assert body["remarked"] is False
+    assert body["remark_error"] == "No active answer key is available for this submission"

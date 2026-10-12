@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Exam Answer Sheet Extraction API",
-    "description": "\nPDF answer-sheet extraction and AI marking with a durable processing queue.\n\n1. POST /upload with multipart file (up to 3 GiB) and optional template_id query.\n2. Poll GET /status/{submission_id}; inspect queue stage and page progress.\n3. GET /submission/{submission_id}, inspect marking, and GET /submission/{submission_id}/marked-json.\n\nGET /candidate-page accepts exam_id=31 for the SEAMO 2026 series and a string candidate_number.\nPage lookup does not require answer keys; existing paper codes remain accepted.\nGET /capabilities reports upload and queue limits. Jobs survive API restarts.\nSynchronous extraction routes share the worker queue and return a job reference on timeout.\n\nSend X-API-Key or Authorization: Bearer when authentication is enabled.\nFull guide: https://aimarker.seamo-official.org/integration/\n",
+    "description": "\nPDF answer-sheet extraction and AI marking with a durable processing queue.\n\n1. POST /upload with multipart file (up to 3 GiB) and optional template_id query.\n2. Poll GET /status/{submission_id}; inspect queue stage and page progress.\n3. GET /submission/{submission_id}, inspect marking, and GET /submission/{submission_id}/marked-json.\n\nGET /candidate-page accepts exam_id=31 for the SEAMO 2026 series and a string candidate_number.\nPage lookup does not require answer keys; existing paper codes remain accepted.\nPOST /submission/{submission_id}/candidate-number-corrections fixes misread candidate numbers,\nfinding each candidate by the number the results currently show.\nGET /capabilities reports upload and queue limits. Jobs survive API restarts.\nSynchronous extraction routes share the worker queue and return a job reference on timeout.\n\nSend X-API-Key or Authorization: Bearer when authentication is enabled.\nFull guide: https://aimarker.seamo-official.org/integration/\n",
     "contact": {
       "name": "Exam Extractor API"
     },
@@ -1304,6 +1304,59 @@
         }
       }
     },
+    "/submission/{submission_id}/candidate-number-corrections": {
+      "post": {
+        "tags": [
+          "Marking"
+        ],
+        "summary": "Correct Candidate Numbers",
+        "description": "Correct misread candidate numbers, finding each candidate by the number\nthe results currently show.\n\nBuilt for an integrator whose import rejected an unknown number: send the\nnumber from the export and the right one. The batch is all-or-nothing, so\ntwo numbers can be swapped and a rejected batch changes nothing. A number is\nnever resolved by guessing: when several candidates match, the 409 lists\nthem and ``candidate_id`` or ``page_number`` selects one.\n\nOnly the database changes. Every result read (/submission, /marking,\n/marked-json, /candidate-page) joins the number in at read time, and marks\nare keyed by candidate id, so nothing is re-marked. The raw extraction JSON\nand archived snapshots stay as recorded, and ``extra_fields.manual_edits``\nkeeps the number the extractor read.",
+        "operationId": "correct_candidate_numbers_submission__submission_id__candidate_number_corrections_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateNumberCorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateNumberCorrectionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/submission/{submission_id}/mark": {
       "post": {
         "tags": [
@@ -2074,6 +2127,182 @@
           "file"
         ],
         "title": "Body_upload_student_pdf_exams__exam_id__student_pdfs_post"
+      },
+      "CandidateNumberCorrection": {
+        "properties": {
+          "candidate_number": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Candidate Number",
+            "description": "The number exactly as the results currently show it (the misread one). Surrounding whitespace is ignored; \"\" selects a candidate whose number could not be read."
+          },
+          "corrected_candidate_number": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Corrected Candidate Number",
+            "description": "The right number, as a string so leading zeros survive"
+          },
+          "candidate_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidate Id",
+            "description": "Persisted candidate id (candidates[].id). Needed when the number is ambiguous; lets a resent batch that moved numbers between candidates prove it was already applied"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number",
+            "description": "One-based page; an alternative to candidate_id"
+          },
+          "allow_duplicate": {
+            "type": "boolean",
+            "title": "Allow Duplicate",
+            "description": "Accept a corrected number that another candidate on the same paper in this submission already has, e.g. a sheet scanned twice",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_number",
+          "corrected_candidate_number"
+        ],
+        "title": "CandidateNumberCorrection",
+        "description": "One misread candidate number, keyed by the value our results show."
+      },
+      "CandidateNumberCorrectionRequest": {
+        "properties": {
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateNumberCorrection"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Corrections",
+            "description": "Applied together: either every correction is applied or none is"
+          },
+          "edited_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited By",
+            "description": "Recorded in the edit history; free text, unauthenticated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "corrections"
+        ],
+        "title": "CandidateNumberCorrectionRequest"
+      },
+      "CandidateNumberCorrectionResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "success",
+            "title": "Status",
+            "default": "success"
+          },
+          "submission_id": {
+            "type": "integer",
+            "title": "Submission Id"
+          },
+          "corrected": {
+            "type": "integer",
+            "title": "Corrected",
+            "description": "How many candidates this request actually changed"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateNumberCorrectionResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "One entry per requested correction, in request order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "corrected",
+          "results"
+        ],
+        "title": "CandidateNumberCorrectionResponse"
+      },
+      "CandidateNumberCorrectionResult": {
+        "properties": {
+          "candidate_id": {
+            "type": "integer",
+            "title": "Candidate Id"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "previous_candidate_number": {
+            "type": "string",
+            "title": "Previous Candidate Number"
+          },
+          "candidate_number": {
+            "type": "string",
+            "title": "Candidate Number"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "corrected",
+              "already_applied",
+              "unchanged"
+            ],
+            "title": "Outcome",
+            "description": "already_applied: an earlier request made this exact correction (a resend records nothing); unchanged: the two numbers were the same"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "previous_candidate_number",
+          "candidate_number",
+          "outcome"
+        ],
+        "title": "CandidateNumberCorrectionResult"
       },
       "CandidateResultSchema": {
         "properties": {

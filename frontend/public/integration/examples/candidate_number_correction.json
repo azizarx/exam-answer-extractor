@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "submission_id": 1,
+  "corrected": 1,
+  "results": [
+    {
+      "candidate_id": 1,
+      "page_number": 1,
+      "template_id": "seamo_2025_a",
+      "previous_candidate_number": "000123",
+      "candidate_number": "000132",
+      "outcome": "corrected"
+    }
+  ]
+}

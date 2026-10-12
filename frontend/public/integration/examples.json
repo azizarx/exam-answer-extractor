@@ -762,6 +762,44 @@
       ]
     }
   },
+  "candidate_number_correction_request": {
+    "corrections": [
+      {
+        "candidate_number": "000123",
+        "corrected_candidate_number": "000132"
+      }
+    ],
+    "edited_by": "import-reconciler"
+  },
+  "candidate_number_correction": {
+    "status": "success",
+    "submission_id": 1,
+    "corrected": 1,
+    "results": [
+      {
+        "candidate_id": 1,
+        "page_number": 1,
+        "template_id": "seamo_2025_a",
+        "previous_candidate_number": "000123",
+        "candidate_number": "000132",
+        "outcome": "corrected"
+      }
+    ]
+  },
+  "candidate_number_correction_rejected": {
+    "detail": {
+      "code": "candidate_number_corrections_rejected",
+      "message": "No corrections were applied; fix or remove the listed corrections and resend",
+      "errors": [
+        {
+          "index": 1,
+          "code": "candidate_not_found",
+          "message": "No candidate in this submission shows this number",
+          "candidate_number": "000999"
+        }
+      ]
+    }
+  },
   "cancel_conflict": {
     "detail": "Cannot cancel a completed submission"
   },

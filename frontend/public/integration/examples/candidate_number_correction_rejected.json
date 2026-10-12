@@ -1,0 +1,14 @@
+{
+  "detail": {
+    "code": "candidate_number_corrections_rejected",
+    "message": "No corrections were applied; fix or remove the listed corrections and resend",
+    "errors": [
+      {
+        "index": 1,
+        "code": "candidate_not_found",
+        "message": "No candidate in this submission shows this number",
+        "candidate_number": "000999"
+      }
+    ]
+  }
+}

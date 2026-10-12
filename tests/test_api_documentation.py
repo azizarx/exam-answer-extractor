@@ -110,6 +110,16 @@ def test_documented_http_examples(tmp_path, monkeypatch):
         capture('confirm_review', 'post', '/submission/1/candidates/1/confirm-review', json=outputs['confirm_review_request'])
         outputs['remark_request'] = {'answer_key_id': 1}
         capture('remark', 'post', '/submission/1/mark', json=outputs['remark_request'])
+        outputs['candidate_number_correction_request'] = {
+            'corrections': [{'candidate_number': '000123', 'corrected_candidate_number': '000132'}],
+            'edited_by': 'import-reconciler',
+        }
+        capture('candidate_number_correction', 'post', '/submission/1/candidate-number-corrections',
+                json=outputs['candidate_number_correction_request'])
+        # A repeat of the applied correction alongside an unknown number: nothing is applied.
+        capture('candidate_number_correction_rejected', 'post', '/submission/1/candidate-number-corrections', expected=409,
+                json={'corrections': [{'candidate_number': '000123', 'corrected_candidate_number': '000132'},
+                                      {'candidate_number': '000999', 'corrected_candidate_number': '000998'}]})
         capture('cancel_conflict', 'post', '/submission/1/cancel', expected=409)
         capture('not_found', 'get', '/status/999999', expected=404)
         capture('validation_error', 'post', '/upload', expected=422)
@@ -138,6 +148,7 @@ def test_documented_http_examples(tmp_path, monkeypatch):
         assert outputs['submission']['candidates'][0]['marking']['awarded_marks'] == 2
         assert outputs['sync_mark']['candidates'][0]['marking']['awarded_marks'] == 4
         assert outputs['confirm_review']['remarked'] is True
+        assert outputs['candidate_number_correction']['results'][0]['outcome'] == 'corrected'
         normalized = normalize(outputs)
         if os.environ.get('UPDATE_API_DOC_EXAMPLES') == '1':
             EXAMPLES.write_text(json.dumps(normalized, indent=2, ensure_ascii=False)+'\n')

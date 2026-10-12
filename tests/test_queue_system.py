@@ -414,3 +414,88 @@ def test_external_exam_series_requires_disambiguation_across_papers_and_submissi
     assert selected.headers['x-page-number']=='2'
     # A discriminator may never broaden the requested exam series.
     assert env.client.get('/candidate-page',params={**params,'exam_id':'seamo_2025_a','submission_id':other_sid}).status_code==404
+
+
+def fake_spaces(objects):
+    import io
+    parts={}
+    class Body(io.BytesIO):
+        def iter_chunks(self,chunk_size):
+            while data:=self.read(chunk_size):yield data
+    class Client:
+        class exceptions:
+            class ClientError(Exception):pass
+        def create_multipart_upload(self,**kw):
+            upload_id=f'u{len(parts)+1}';parts[upload_id]={};return {'UploadId':upload_id}
+        def get_paginator(self,name):return SimpleNamespace(paginate=lambda **kw:[{'Parts':[]}])
+        def upload_part(self,**kw):parts[kw['UploadId']][kw['PartNumber']]=kw['Body'];return {'ETag':str(kw['PartNumber'])}
+        def complete_multipart_upload(self,**kw):
+            uploaded=parts[kw['UploadId']];objects[kw['Key']]=b''.join(uploaded[i] for i in sorted(uploaded));return {}
+        def head_object(self,**kw):return {'ContentLength':len(objects[kw['Key']])}
+        def get_object(self,**kw):return {'Body':Body(objects[kw['Key']])}
+        def put_object(self,**kw):objects[kw['Key']]=kw['Body'];return {}
+    return Client()
+
+
+def test_number_correction_reaches_lookup_and_archives_a_new_revision(env,monkeypatch):
+    from backend.db.models import CandidateMarking, MarkingRun, StorageArtifact
+    sid,jid=upload(env)
+    with env.db() as db:
+        db.get(ExamSubmission,sid).status='completed';db.get(ProcessingJob,jid).state='completed'
+        candidate=CandidateResult(submission_id=sid,page_number=1,candidate_number='CAN9815109755',template_id='seamo_x_2026_b',answers={'1':'A'})
+        db.add(candidate);db.flush()
+        run=MarkingRun(submission_id=sid,status='completed');db.add(run);db.flush()
+        db.add(CandidateMarking(marking_run_id=run.id,candidate_result_id=candidate.id,awarded_marks=1,max_marks=1,percentage=100,outcomes=[]))
+        aid=runtime.enqueue(db,'archive',sid).id;run_id=run.id;db.commit()
+    monkeypatch.setattr(env.settings,'archive_enabled',True)
+    monkeypatch.setattr(env.settings,'spaces_bucket','synthetic-bucket')
+    objects={};monkeypatch.setattr(artifact_storage,'spaces',lambda:fake_spaces(objects))
+    runtime.execute(aid)
+    snapshot=env.storage.results_path/f'sub{sid}-marking-{run_id}.json'
+    archived=snapshot.read_bytes()
+    assert b'CAN9815109755' in archived
+    # Marking never reads the number, so a queued re-mark does not block a correction.
+    with env.db() as db:runtime.enqueue(db,'mark',sid);db.commit()
+    fix={'candidate_number':'CAN9815109755','corrected_candidate_number':'CAN9315109755'}
+    response=env.client.post(f'/submission/{sid}/candidate-number-corrections',json={'corrections':[fix]})
+    assert response.status_code==200,response.text
+    params={'exam_id':'seamo_x_2026_b','candidate_number':'CAN9815109755'}
+    assert env.client.get('/candidate-page',params=params).status_code==404
+    assert env.client.get('/candidate-page',params={**params,'candidate_number':'CAN9315109755'}).status_code==200
+    with env.db() as db:aid=runtime.enqueue(db,'archive',sid).id;db.commit()
+    runtime.execute(aid)
+    assert snapshot.read_bytes()==archived  # an archived snapshot is history, never rewritten
+    with env.db() as db:
+        assert db.get(ProcessingJob,aid).state=='completed'
+        marked=db.query(StorageArtifact).filter_by(submission_id=sid,kind='marked').order_by(StorageArtifact.id).all()
+        assert [row.state for row in marked]==['verified','verified']
+        assert marked[0].sha256==hashlib.sha256(archived).hexdigest()
+        assert objects[marked[0].object_key]==archived
+        revision=env.storage.base_path/marked[1].local_path
+    assert b'CAN9315109755' in revision.read_bytes()
+
+
+def test_archive_retry_after_a_correction_keeps_a_hashed_snapshot(env):
+    """A retry regenerating different bytes used to fail the archive permanently."""
+    with env.db() as db:
+        path=env.storage.results_path/'sub7-marking-3.json'
+        assert artifact_storage.marked_snapshot_path(db,env.storage,7,3,b'old')==path
+        path.write_bytes(b'old')
+        row=pipeline.artifact(db,7,path,'marked');db.flush()
+        assert artifact_storage.marked_snapshot_path(db,env.storage,7,3,b'new')==path  # never hashed or uploaded
+        row.sha256=hashlib.sha256(b'old').hexdigest();db.flush()  # hashed for upload, not yet verified
+        assert artifact_storage.marked_snapshot_path(db,env.storage,7,3,b'old')==path
+        revision=artifact_storage.marked_snapshot_path(db,env.storage,7,3,b'new')
+        assert revision.parent==path.parent and revision.name.startswith('sub7-marking-3-')
+
+
+def test_number_correction_waits_for_processing_to_finish(env):
+    sid,_=upload(env)
+    with env.db() as db:
+        db.add(CandidateResult(submission_id=sid,page_number=1,candidate_number='000123',template_id='seamo_x_2026_b',answers={}))
+        db.commit()
+    fix={'candidate_number':'000123','corrected_candidate_number':'000124'}
+    response=env.client.post(f'/submission/{sid}/candidate-number-corrections',json={'corrections':[fix]})
+    assert response.status_code==409
+    assert response.json()['detail']=={'code':'submission_not_completed','status':'pending',
+        'message':'Candidate numbers can be corrected once processing has completed'}

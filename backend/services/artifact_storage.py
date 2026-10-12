@@ -92,6 +92,23 @@ def artifact_response(relative, media_type='image/png', headers=None):
     return StreamingResponse(chunks(),media_type=media_type,headers=headers)
 
 
+def marked_snapshot_path(db,storage,sid,run_id,body):
+    """Where to write a run's marked export without changing an archived snapshot.
+
+    An archived export is immutable history. Rewriting a hashed snapshot with new
+    bytes leaves Spaces holding the old ones and makes eviction refuse the changed
+    file for good. A correction that creates no new marking run (a candidate
+    number, or answers edited without a re-mark) therefore archives a new revision.
+    """
+    digest=hashlib.sha256(body).hexdigest()
+    for path in (storage.results_path/f'sub{sid}-marking-{run_id}.json',
+                 storage.results_path/f'sub{sid}-marking-{run_id}-{digest[:16]}.json'):
+        row=db.query(StorageArtifact).filter_by(local_path=str(path.resolve().relative_to(storage.base_path))).first()
+        # Unhashed means nothing was uploaded yet; identical bytes change nothing.
+        if row is None or not row.sha256 or row.sha256==digest:return path
+    raise ValueError('Marked snapshot revision collides with different content')
+
+
 def archive_submission(sid,execution):
     settings=get_settings()
     if not settings.archive_enabled:raise ValueError('Spaces archiving is disabled; local files retained')
@@ -116,7 +133,7 @@ def archive_submission(sid,execution):
             from backend.api.marking_routes import get_marked_json
             try:
                 response=asyncio.run(get_marked_json(sid,db))
-                target=storage.results_path/f'sub{sid}-marking-{latest.id}.json'
+                target=marked_snapshot_path(db,storage,sid,latest.id,response.body)
                 target.write_bytes(response.body)
                 artifact(db,sid,target,'marked')
             except HTTPException as exc:

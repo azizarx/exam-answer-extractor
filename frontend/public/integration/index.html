@@ -138,7 +138,7 @@ a{color:var(--accent);text-underline-offset:3px}header{background:#112640;color:
 <ul>
 <li>Request and response JSON is UTF-8. File uploads use <code>multipart/form-data</code> with a field named <strong><code>file</code></strong>. Let your HTTP library generate the multipart boundary.</li>
 <li>Submission, candidate, marking-run, and answer-key IDs are integers with different meanings. Store the IDs returned by the API; do not predict the next task number.</li>
-<li>Candidate numbers are <strong>strings</strong> and may contain leading zeros. They are extracted identifiers, not guaranteed unique database IDs.</li>
+<li>Candidate numbers are <strong>strings</strong> and may contain leading zeros. They are extracted identifiers, not guaranteed unique database IDs. Correct a misread number with <code>POST /submission/{id}/candidate-number-corrections</code> (section 6).</li>
 <li>PDF page numbers start at <strong>1</strong>. Question keys in <code>answers</code> are strings such as <code>"12"</code>; <code>outcomes[].question_number</code> is an integer.</li>
 <li>Timestamps represent UTC. Most current responses serialize UTC timestamps <strong>without a trailing <code>Z</code> or offset</strong>; interpret these as UTC. Human-edit audit timestamps include <code>Z</code>.</li>
 <li>Missing identity fields can be <code>null</code> in raw extraction and are normalized to <code>""</code> in persisted candidate responses. Empty drawing payloads commonly serialize as <code>null</code>.</li>
@@ -617,7 +617,7 @@ python integration_client.py --submission-id 1 --output example-exam.marked.json
 <p>A full <a href="https://aimarker.seamo-official.org/integration/examples/marked_export.json">marked-export response example</a> is included in the integration pack.</p>
 <p>The latest marking run must be completed and cover every candidate. The endpoint returns <strong>409</strong> when there are no candidates, the latest run is not completed, or any candidate is missing a marking. A partially marked mixed-layout submission can therefore have a completed run and still be ineligible for export. Retrieve <code>/submission/{id}</code> or <code>/submission/{id}/marking</code> to inspect available results and missing coverage.</p>
 <h3 id="get-submissionsubmission_idjson">GET /submission/{submission_id}/json</h3>
-<p>Returns the <strong>original extraction JSON snapshot</strong>, not the marked export. Its shape matches <code>/extract/json</code> in section 7. It is not refreshed after manual answer edits or re-marking. It has no persisted candidate IDs and removes each candidate's <code>page_number</code>.</p>
+<p>Returns the <strong>original extraction JSON snapshot</strong>, not the marked export. Its shape matches <code>/extract/json</code> in section 7. It is not refreshed after manual edits (answers, identity fields, or candidate-number corrections) or re-marking. It has no persisted candidate IDs and removes each candidate's <code>page_number</code>.</p>
 <p>Use <code>/submission/{id}</code> for current corrected answers and <code>/marked-json</code> for current scores. A missing result reference returns <strong>404</strong>; a referenced file that cannot be read can currently return <strong>500</strong>. Do not use availability of this raw snapshot as the task-completion signal.</p>
 <h2 id="5-scoring-marking-runs-and-review-flags">5. Scoring, marking runs, and review flags</h2>
 <h3 id="answer-values-versus-grading-outcomes">Answer values versus grading outcomes</h3>
@@ -670,7 +670,7 @@ python integration_client.py --submission-id 1 --output example-exam.marked.json
 <tr>
 <td><code>candidate_number</code></td>
 <td>String</td>
-<td>Extracted candidate number (persisted marking responses)</td>
+<td>Current candidate number, including any correction (persisted marking responses)</td>
 </tr>
 <tr>
 <td><code>awarded_marks</code></td>
@@ -928,6 +928,162 @@ python integration_client.py --submission-id 1 --output example-exam.marked.json
 <p>The response includes the full current answer map, identity strings, remaining <code>needs_review_questions</code>, number of actual edits, and re-mark outcome. Supplying an answer also clears its extraction review flag, even when the value is unchanged. <code>clear_all_review</code> confirms all flagged answers, so use it only after actual review.</p>
 <p>Edits are committed before re-marking. <strong>HTTP 200 can mean the edit succeeded but re-marking did not</strong>: check <code>remarked</code>, <code>marking_run_id</code>, and <code>remark_error</code>. With <code>remark: false</code>, existing scores remain unchanged and can be stale relative to edited answers. Re-fetch submission details after a successful re-mark.</p>
 <p>Actual value changes append <code>extra_fields.manual_edits</code> entries with <code>target</code>, <code>from</code>, <code>to</code>, <code>at</code>, and <code>by</code>. Clearing a review flag without changing the value does not add a value-change entry. Missing submission or a candidate belonging to another submission returns <strong>404</strong>. Wait until submission processing and marking are complete before editing.</p>
+<h3 id="post-submissionsubmission_idcandidate-number-corrections">POST /submission/{submission_id}/candidate-number-corrections</h3>
+<p>Correct candidate numbers that extraction misread, once processing has completed. Each candidate is found <strong>by the number the results currently show</strong>, so when your import rejects an unknown candidate number you can send that number together with the right one from your records. You do not need the persisted candidate ID unless the number is shared. Corrections apply to one submission, because the same number legitimately appears in other submissions and re-uploads.</p>
+<p><strong>Input — <code>application/json</code></strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default / behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>corrections</code></td>
+<td>Array of 1–10,000 objects</td>
+<td>Required. Applied together: every correction or none</td>
+</tr>
+<tr>
+<td><code>corrections[].candidate_number</code></td>
+<td>String, up to 1,000 characters</td>
+<td>Required. The number exactly as the results show it now, e.g. <code>candidates[].candidate_number</code> from <code>/marked-json</code>. Surrounding whitespace is ignored; <code>""</code> selects a candidate whose number was not read</td>
+</tr>
+<tr>
+<td><code>corrections[].corrected_candidate_number</code></td>
+<td>String, 1–100 characters after surrounding whitespace is removed</td>
+<td>Required. Control characters are rejected. Send a JSON string so leading zeros survive</td>
+</tr>
+<tr>
+<td><code>corrections[].candidate_id</code></td>
+<td>Integer or null</td>
+<td>Optional persisted candidate <code>id</code>. Needed when the number is ambiguous; recommended when a batch moves numbers between candidates (see retries below)</td>
+</tr>
+<tr>
+<td><code>corrections[].page_number</code></td>
+<td>Integer ≥ 1 or null</td>
+<td>Optional one-based page, an alternative to <code>candidate_id</code></td>
+</tr>
+<tr>
+<td><code>corrections[].allow_duplicate</code></td>
+<td>Boolean</td>
+<td><code>false</code>. When true, accepts a number that another candidate on the same paper in this submission already has</td>
+</tr>
+<tr>
+<td><code>edited_by</code></td>
+<td>String or null</td>
+<td>Audit label supplied by your application; not an authenticated user identity</td>
+</tr>
+</tbody>
+</table></div>
+<p>Example: your import rejected candidate <code>000123</code>, and your records show the sheet belongs to <code>000132</code>:</p>
+<pre><code class="language-json">{
+  &quot;corrections&quot;: [
+    {
+      &quot;candidate_number&quot;: &quot;000123&quot;,
+      &quot;corrected_candidate_number&quot;: &quot;000132&quot;
+    }
+  ],
+  &quot;edited_by&quot;: &quot;import-reconciler&quot;
+}
+</code></pre>
+<p><strong>Output — 200:</strong></p>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;submission_id&quot;: 1,
+  &quot;corrected&quot;: 1,
+  &quot;results&quot;: [
+    {
+      &quot;candidate_id&quot;: 1,
+      &quot;page_number&quot;: 1,
+      &quot;template_id&quot;: &quot;seamo_2025_a&quot;,
+      &quot;previous_candidate_number&quot;: &quot;000123&quot;,
+      &quot;candidate_number&quot;: &quot;000132&quot;,
+      &quot;outcome&quot;: &quot;corrected&quot;
+    }
+  ]
+}
+</code></pre>
+<p><code>results</code> has one entry per correction, in request order, with the candidate's persisted <code>candidate_id</code>, <code>page_number</code>, <code>template_id</code>, the <code>previous_candidate_number</code>, and the current <code>candidate_number</code>. <code>corrected</code> counts candidates this request actually changed. <code>outcome</code> is one of:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>outcome</code></th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>corrected</code></td>
+<td>The number was changed</td>
+</tr>
+<tr>
+<td><code>already_applied</code></td>
+<td>An earlier request (or a review-screen edit) made this exact correction, and the candidate still shows the corrected number. Nothing new is recorded</td>
+</tr>
+<tr>
+<td><code>unchanged</code></td>
+<td>The candidate already shows exactly the corrected number. A stored number that differs only by surrounding whitespace is rewritten trimmed and reported as <code>corrected</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Matching is exact and case-sensitive apart from surrounding whitespace; numbers are never reformatted, so <code>000123</code> does not match <code>123</code>.</p>
+<p><strong>Retries.</strong> A correction is never applied twice. A candidate matches a correction when it shows <code>candidate_number</code>, or when its edit history proves this exact correction was already made. One match is applied or reported as <code>already_applied</code>; more than one is refused as ambiguous. Resending a lost request therefore returns <code>already_applied</code>, with two exceptions that are refused rather than applied again. If the old number has since moved to another candidate, as after a swap or a chain such as <code>A→B, C→A</code>, a resend returns 409 <code>ambiguous_candidate_number</code> instead of swapping back. If the candidate's number has changed since, for example a reviewer undid the correction, it returns 409 <code>correction_superseded</code>. Include <code>candidate_id</code> in corrections that move numbers between candidates, so a resend of the identical body proves itself and returns <code>already_applied</code>. To re-apply a correction that was undone deliberately, edit that candidate with <code>confirm-review</code>.</p>
+<p><strong>Rejections.</strong> A batch that cannot be applied in full changes nothing and returns <strong>409</strong> with <code>detail.code: "candidate_number_corrections_rejected"</code> and one <code>detail.errors</code> entry per refused correction. Each entry has the correction's zero-based <code>index</code>, a <code>code</code>, and a <code>message</code>:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th><code>errors[].code</code></th>
+<th>Meaning / action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>candidate_not_found</code></td>
+<td>No candidate in this submission shows <code>candidate_number</code>; or <code>candidate_id</code> is not in this submission, no candidate is on <code>page_number</code>, or the two select different candidates (<code>message</code> says which). Re-read the results</td>
+</tr>
+<tr>
+<td><code>ambiguous_candidate_number</code></td>
+<td>Several candidates show it, or one shows it while another already carries this exact correction (a resent swap or chain). <code>matches</code> lists their <code>candidate_id</code>, <code>page_number</code>, <code>template_id</code> and current <code>candidate_number</code> (up to 100, with <code>truncated</code>). Resend with <code>candidate_id</code> or <code>page_number</code>; the API never chooses one</td>
+</tr>
+<tr>
+<td><code>candidate_number_mismatch</code></td>
+<td>The candidate selected by <code>candidate_id</code>/<code>page_number</code> shows a different number, listed in <code>candidates</code>. Your copy of the results is stale</td>
+</tr>
+<tr>
+<td><code>correction_superseded</code></td>
+<td>The selected candidate already received this exact correction, and its number has changed since; <code>candidates</code> shows the current number. Nothing is re-applied</td>
+</tr>
+<tr>
+<td><code>duplicate_target</code></td>
+<td>Two corrections in the request select the same candidate; <code>first_index</code> is the earlier one</td>
+</tr>
+<tr>
+<td><code>candidate_number_in_use</code></td>
+<td>After this batch, another candidate on the same paper in this submission would show the corrected number (<code>conflicts</code>, up to 100, with <code>truncated</code>). Check your records; if both sheets really are that candidate's, resend with <code>allow_duplicate: true</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>Example: the first correction repeats the one above (it would be <code>already_applied</code>); the second number is unknown, so neither is applied:</p>
+<pre><code class="language-json">{
+  &quot;detail&quot;: {
+    &quot;code&quot;: &quot;candidate_number_corrections_rejected&quot;,
+    &quot;message&quot;: &quot;No corrections were applied; fix or remove the listed corrections and resend&quot;,
+    &quot;errors&quot;: [
+      {
+        &quot;index&quot;: 1,
+        &quot;code&quot;: &quot;candidate_not_found&quot;,
+        &quot;message&quot;: &quot;No candidate in this submission shows this number&quot;,
+        &quot;candidate_number&quot;: &quot;000999&quot;
+      }
+    ]
+  }
+}
+</code></pre>
+<p>A paper means one exam paper across its layout variants, for example both SEAMO 2025 Paper A layouts. A page whose layout was never identified may be any paper, so it conflicts with every paper. The same student can sit two different papers in one PDF, so a number shared between two identified papers is accepted. Duplicates are checked against the numbers the whole batch leaves behind, so two numbers can be swapped in one request.</p>
+<p>An unknown submission returns <strong>404</strong>. A submission that has not completed processing returns <strong>409</strong> with <code>detail.code: "submission_not_completed"</code> and its <code>status</code>. A malformed body returns <strong>422</strong>, for example a JSON number instead of a string, a blank corrected number, or an empty <code>corrections</code> array.</p>
+<p><strong>What changes.</strong> Only the stored candidate number. Each actual change appends an <code>extra_fields.manual_edits</code> entry (<code>target: "candidate_number"</code>, <code>from</code>, <code>to</code>, <code>at</code>, <code>by</code>), so the number extraction read stays on record. <code>/submission/{id}</code>, <code>/submission/{id}/marking</code>, <code>/marked-json</code> and <code>/candidate-page</code> return the corrected number immediately; re-fetch the marked export and import it again. Marks are untouched and nothing is re-marked, because marking never reads the candidate number. The raw extraction snapshot (<code>/submission/{id}/json</code>) and finished job results keep the number as extracted, and an archived snapshot keeps the number it was archived with, because archives are never rewritten.</p>
 <h3 id="image-endpoints">Image endpoints</h3>
 <p>All return PNG bytes (<code>Content-Type: image/png</code>), not JSON or base64:</p>
 <div class="table-wrap"><table>
@@ -1309,7 +1465,7 @@ response is HTTP 200 with <code>status</code> and <code>message</code>.</p>
 </tr>
 <tr>
 <td>409</td>
-<td>Operation conflicts with current task/marking state or marked-export coverage requirements</td>
+<td>Operation conflicts with current task/marking state or marked-export coverage requirements, or a candidate-number correction batch was rejected</td>
 </tr>
 <tr>
 <td>410</td>
@@ -1347,6 +1503,7 @@ response is HTTP 200 with <code>status</code> and <code>message</code>.</p>
 <li>There is no upload deduplication or <code>Idempotency-Key</code> support. Repeating <code>/upload</code> creates another task and can repeat billable processing. If the upload response is lost, reconcile recent submissions with your records/operator before retrying; filenames alone are not unique.</li>
 <li>Retrying a GET after a network error is normally appropriate. Use bounded backoff for timeouts and transient 429/502/503/504 responses. Do not retry every 4xx blindly.</li>
 <li>After a lost manual-mark response, fetch <code>/marking</code> before deciding to start another run. Edits and re-marks are separate commit boundaries.</li>
+<li>A candidate-number correction can be resent after a lost response: it is never applied twice. An applied correction returns <code>outcome: "already_applied"</code>; a resent batch that moved numbers between candidates without <code>candidate_id</code>, or a correction changed since, returns 409 instead.</li>
 <li>Retain source PDFs and final exports in your own system according to your retention requirements. The API has no source-PDF download endpoint, durable webhook delivery, automatic resume, or result-finalization acknowledgment.</li>
 <li>Keep human review in the integration: display the scan, corrections, question outcomes, and provisional scores before publishing final results.</li>
 </ul>
@@ -1357,6 +1514,7 @@ response is HTTP 200 with <code>status</code> and <code>message</code>.</p>
 <li>Upload a representative PDF, retain the returned ID, and complete the status/marking/export flow.</li>
 <li>Verify leading-zero candidate numbers, mixed templates, absent header fields, and one-based page links.</li>
 <li>Exercise blank/invalid answers and <code>needs_review</code>; confirm an edit with <code>remark: true</code> changes the latest scores while preserving the raw snapshot.</li>
+<li>Correct a misread candidate number by the number the export shows; confirm <code>/marked-json</code> returns the corrected number with unchanged marks, and that repeating the request returns <code>already_applied</code>.</li>
 <li>Exercise unavailable/partial key coverage, a failed marking attempt, a cancelled task, and a lost polling connection.</li>
 <li>Confirm file-size and timeout settings against the client application's infrastructure. Reconcile errors without blindly re-uploading.</li>
 </ol>
@@ -1419,7 +1577,7 @@ X-API-Key: YOUR_API_KEY
 <h3 id="spaces-archival">Spaces archival</h3>
 <p>After processing, the archive worker copies the original PDF, all retained converted page images, diagram crops and available result exports into a private <code>aimarker/</code> namespace. Large files use resumable multipart transfers and an end-to-end checksum readback. Image endpoints keep the same authentication and return bytes from local storage or Spaces.</p>
 <p>Processing and archiving have independent statuses. Archive failure preserves local files and does not re-run extraction. <code>archive_status</code> is <code>disabled</code>, <code>not_started</code>, <code>pending</code>, <code>running</code>, <code>completed</code>, <code>failed</code> or <code>cancelled</code>. <strong>Pre-rollout submissions remain pinned locally</strong> and are not automatically modified or backfilled. New submissions archive immediately after processing and retain a 24-hour local cache before verified cleanup. <code>local_eviction_enabled</code> reports whether this cleanup is enabled.</p>
-<p>The database remains authoritative for corrected answers and current scores. Marked snapshots are archived by marking-run ID. Human re-marking queues another archive when enabled. Temporary remote-storage errors return 503; an unavailable retained image returns 410.</p>
+<p>The database remains authoritative for corrected answers, candidate numbers and current scores. Marked snapshots are archived by marking-run ID. Human re-marking queues another archive when enabled. An archived snapshot is never rewritten: archiving again after a correction that created no new run, such as a candidate-number correction, stores a new revision beside it. Candidate-number corrections do not queue an archive themselves. Temporary remote-storage errors return 503; an unavailable retained image returns 410.</p>
 <h3 id="explicit-deletion-and-local-retention">Explicit deletion and local retention</h3>
 <p>In queued deployments, <code>DELETE /submission/{submission_id}</code> returns HTTP 202:</p>
 <pre><code class="language-json">{&quot;status&quot;:&quot;deleting&quot;,&quot;submission_id&quot;:123,&quot;job_id&quot;:456}

@@ -85,6 +85,14 @@ authenticated PNG for the SEAMO 2026 exam series, without requiring answer keys.
 Existing paper codes remain accepted. Repeated candidate/exam matches return 409 and require a
 `submission_id` (and sometimes `page_number`) to select the intended scan.
 
+`POST /submission/{id}/candidate-number-corrections` fixes misread candidate
+numbers after processing, finding each candidate by the number the results
+show. A batch applies in full or not at all, a shared number is never guessed,
+and a correction is never applied twice: a resend is reported as
+`already_applied` or refused as ambiguous. Only the database
+changes, so marked exports update without re-marking; the raw extraction keeps
+the number as extracted, and archived snapshots are never rewritten.
+
 ## Documentation maintenance
 
 The guide has one source, [docs/api/guide.md](docs/api/guide.md). Its examples

@@ -1,7 +1,9 @@
 """
 Pydantic schemas for API request/response validation
 """
-from pydantic import BaseModel, ConfigDict, Field
+import unicodedata
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Any, Dict, List, Literal, Optional, Union
 from datetime import datetime
 
@@ -120,6 +122,97 @@ class ConfirmReviewResponse(BaseModel):
     marking_run_id: Optional[int] = None
     remark_error: Optional[str] = None
     remark_job_id: Optional[int] = None
+
+
+class CandidateNumberCorrection(BaseModel):
+    """One misread candidate number, keyed by the value our results show."""
+
+    candidate_number: str = Field(
+        ...,
+        # Extraction does not cap what it stores, so neither may the lookup.
+        max_length=1000,
+        description=(
+            "The number exactly as the results currently show it (the misread "
+            "one). Surrounding whitespace is ignored; \"\" selects a candidate "
+            "whose number could not be read."
+        ),
+    )
+    corrected_candidate_number: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="The right number, as a string so leading zeros survive",
+    )
+    candidate_id: Optional[int] = Field(
+        None,
+        description=(
+            "Persisted candidate id (candidates[].id). Needed when the number is "
+            "ambiguous; lets a resent batch that moved numbers between candidates "
+            "prove it was already applied"
+        ),
+    )
+    page_number: Optional[int] = Field(
+        None, ge=1, description="One-based page; an alternative to candidate_id"
+    )
+    allow_duplicate: bool = Field(
+        False,
+        description=(
+            "Accept a corrected number that another candidate on the same paper "
+            "in this submission already has, e.g. a sheet scanned twice"
+        ),
+    )
+
+    @field_validator("candidate_number", "corrected_candidate_number", mode="before")
+    @classmethod
+    def _strip(cls, value: Any) -> Any:
+        # Before the length checks, so only the number itself counts. Anything
+        # but a string falls through to the type check: 123 would lose zeros.
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("corrected_candidate_number")
+    @classmethod
+    def _printable(cls, value: str) -> str:
+        if any(unicodedata.category(ch) == "Cc" for ch in value):
+            raise ValueError("must not contain control characters")
+        return value
+
+
+class CandidateNumberCorrectionRequest(BaseModel):
+    corrections: List[CandidateNumberCorrection] = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="Applied together: either every correction is applied or none is",
+    )
+    edited_by: Optional[str] = Field(
+        None, description="Recorded in the edit history; free text, unauthenticated"
+    )
+
+
+class CandidateNumberCorrectionResult(BaseModel):
+    candidate_id: int
+    page_number: Optional[int] = None
+    template_id: Optional[str] = None
+    previous_candidate_number: str
+    candidate_number: str
+    outcome: Literal["corrected", "already_applied", "unchanged"] = Field(
+        ...,
+        description=(
+            "already_applied: an earlier request made this exact correction "
+            "(a resend records nothing); unchanged: the two numbers were the same"
+        ),
+    )
+
+
+class CandidateNumberCorrectionResponse(BaseModel):
+    status: Literal["success"] = "success"
+    submission_id: int
+    corrected: int = Field(
+        ..., description="How many candidates this request actually changed"
+    )
+    results: List[CandidateNumberCorrectionResult] = Field(
+        ..., description="One entry per requested correction, in request order"
+    )
 
 
 class AnswerKeyMetadataSchema(BaseModel):

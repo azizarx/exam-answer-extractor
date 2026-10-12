@@ -6,17 +6,22 @@ import logging
 import re
 import unicodedata
 from datetime import datetime
+from itertools import islice
 from typing import Any, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.api.schemas import (
     AnswerKeyMetadataSchema,
     AnswerKeyProvenanceSchema,
+    CandidateNumberCorrectionRequest,
+    CandidateNumberCorrectionResponse,
+    CandidateNumberCorrectionResult,
     CandidateWeightedMarkingSchema,
     ConfirmReviewRequest,
     ConfirmReviewResponse,
@@ -297,16 +302,20 @@ async def confirm_candidate_review(
     Re-marking is opt-in via ``remark`` so existing callers keep the old
     behaviour of leaving scores untouched.
     """
-    from backend.config import get_settings
-    if get_settings().queue_enabled:
-        from sqlalchemy import text
-        db.rollback();db.execute(text('BEGIN IMMEDIATE'))
-    submission = db.get(ExamSubmission, submission_id)
+    def reject(status_code: int, detail: Any):
+        # This route runs on the event loop: a lock held until the session
+        # closes would stall every other edit waiting on it.
+        db.rollback()
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    # The lock number corrections take, in every mode, so neither edit can
+    # drop the other's manual_edits entry.
+    submission = _lock_submission_for_edit(db, submission_id)
     if submission is None:
-        raise HTTPException(status_code=404, detail="Submission not found")
+        reject(404, "Submission not found")
     candidate = db.get(CandidateResult, candidate_id)
     if candidate is None or candidate.submission_id != submission_id:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+        reject(404, "Candidate not found")
 
     from backend.config import get_settings
     if get_settings().queue_enabled:
@@ -316,7 +325,7 @@ async def confirm_candidate_review(
             ProcessingJob.kind.in_(['mark','review_mark']),
             ProcessingJob.state.in_(['pending','running']),
         ).first():
-            raise HTTPException(409, 'Wait for extraction and marking to finish before editing')
+            reject(409, 'Wait for extraction and marking to finish before editing')
 
     edited_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     edits: list[dict[str, Any]] = []
@@ -398,7 +407,7 @@ async def confirm_candidate_review(
                 remarked = run.status == "completed"
                 marking_run_id = run.id
                 if not remarked:
-                    remark_error = _sanitize_error(run.error_message) or run.status
+                    remark_error = _sanitize_error(run) or run.status
         except MarkingInProgressError:
             remark_error = "another marking run is already in progress"
         except HTTPException as exc:
@@ -423,6 +432,367 @@ async def confirm_candidate_review(
         marking_run_id=marking_run_id,
         remark_error=remark_error,
         remark_job_id=remark_job_id,
+    )
+
+
+_MATCH_LIMIT = 100
+_LOAD_CHUNK = 500
+
+
+def _number(value: Any) -> str:
+    """A candidate number as clients compare it: a string, surrounding space ignored."""
+    return "" if value is None else str(value).strip()
+
+
+def _lock_submission_for_edit(
+    db: Session, submission_id: int
+) -> Optional[ExamSubmission]:
+    """Load the submission holding the write lock until commit.
+
+    Every read a candidate edit makes must see one state: two corrections could
+    otherwise each pass the duplicate check and then collide, and a concurrent
+    edit could drop the other's ``manual_edits`` entry. SQLite serializes
+    writers with BEGIN IMMEDIATE; other databases lock the submission row.
+    """
+    db.rollback()
+    if db.get_bind().dialect.name == "sqlite":
+        db.execute(text("BEGIN IMMEDIATE"))
+        return db.get(ExamSubmission, submission_id)
+    return (
+        db.query(ExamSubmission)
+        .filter(ExamSubmission.id == submission_id)
+        .with_for_update()
+        .one_or_none()
+    )
+
+
+def _paper_key(template_id: Optional[str]) -> Optional[tuple]:
+    """Which paper a layout belongs to, or None when the layout is unknown.
+
+    One student can sit two papers in the same PDF, so a shared number is only
+    suspicious within a paper. Layout variants of a paper share brand, year and
+    paper.
+    """
+    if not template_id:
+        return None
+    from backend.services.template_service import get_template_registry
+
+    template = get_template_registry().get(template_id)
+    if template is not None and template.brand and template.year and template.paper:
+        return ("paper", template.brand, template.year, template.paper)
+    return ("template", template_id)
+
+
+def _candidate_ref(row: Any, template_id: Optional[str], **extra: Any) -> dict[str, Any]:
+    return {
+        "candidate_id": row.id,
+        "page_number": row.page_number,
+        "template_id": template_id,
+        **extra,
+    }
+
+
+@router.post(
+    "/submission/{submission_id}/candidate-number-corrections",
+    response_model=CandidateNumberCorrectionResponse,
+)
+def correct_candidate_numbers(
+    submission_id: int,
+    body: CandidateNumberCorrectionRequest,
+    db: Session = Depends(get_db),
+):
+    """Correct misread candidate numbers, finding each candidate by the number
+    the results currently show.
+
+    Built for an integrator whose import rejected an unknown number: send the
+    number from the export and the right one. The batch is all-or-nothing, so
+    two numbers can be swapped and a rejected batch changes nothing. A number is
+    never resolved by guessing: when several candidates match, the 409 lists
+    them and ``candidate_id`` or ``page_number`` selects one.
+
+    Only the database changes. Every result read (/submission, /marking,
+    /marked-json, /candidate-page) joins the number in at read time, and marks
+    are keyed by candidate id, so nothing is re-marked. The raw extraction JSON
+    and archived snapshots stay as recorded, and ``extra_fields.manual_edits``
+    keeps the number the extractor read.
+    """
+
+    def reject(status_code: int, detail: Any):
+        # Release the write lock now rather than when the session closes.
+        db.rollback()
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    submission = _lock_submission_for_edit(db, submission_id)
+    if submission is None:
+        reject(404, "Submission not found")
+    # Marking neither reads nor writes candidate_number, so unlike answer edits
+    # this needs no wait for marking jobs. Archiving needs none either: an
+    # archive never rewrites a snapshot it has already registered.
+    if submission.status != "completed":
+        reject(409, {
+            "code": "submission_not_completed",
+            "status": submission.status,
+            "message": "Candidate numbers can be corrected once processing has completed",
+        })
+
+    rows = (
+        db.query(
+            CandidateResult.id,
+            CandidateResult.page_number,
+            CandidateResult.candidate_number,
+            CandidateResult.template_id,
+        )
+        .filter(CandidateResult.submission_id == submission_id)
+        .order_by(CandidateResult.page_number, CandidateResult.id)
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+    current = {row.id: _number(row.candidate_number) for row in rows}
+    template_of = {row.id: row.template_id or submission.template_id for row in rows}
+    by_number: dict[str, list[Any]] = {}
+    by_page: dict[Optional[int], list[Any]] = {}
+    for row in rows:
+        by_number.setdefault(current[row.id], []).append(row)
+        by_page.setdefault(row.page_number, []).append(row)
+    paper_keys: dict[Optional[str], Optional[tuple]] = {}
+
+    def paper_of(row: Any) -> Optional[tuple]:
+        template_id = template_of[row.id]
+        if template_id not in paper_keys:
+            paper_keys[template_id] = _paper_key(template_id)
+        return paper_keys[template_id]
+
+    # Every number correction already made in this submission, by (from, to).
+    # A resend is recognised by the candidate that received the correction,
+    # whatever that candidate shows now.
+    applied: dict[tuple[str, str], dict[int, dict]] = {}
+    for row_id, edits in (
+        db.query(CandidateResult.id, CandidateResult.extra_fields["manual_edits"])
+        .filter(CandidateResult.submission_id == submission_id)
+    ):
+        for edit in edits if isinstance(edits, list) else []:
+            if isinstance(edit, dict) and edit.get("target") == "candidate_number":
+                key = (_number(edit.get("from")), _number(edit.get("to")))
+                applied.setdefault(key, {}).setdefault(row_id, edit)
+
+    errors: list[dict[str, Any]] = []
+    # (correction, candidate row, outcome, number before this request)
+    resolved: list[tuple[Any, Any, str, str]] = []
+    first_index: dict[int, int] = {}
+
+    def not_found(index: int, wrong: str, message: str) -> None:
+        errors.append({
+            "index": index,
+            "code": "candidate_not_found",
+            "message": message,
+            "candidate_number": wrong,
+        })
+
+    for index, item in enumerate(body.corrections):
+        wrong, right = item.candidate_number, item.corrected_candidate_number
+        if item.candidate_id is not None:
+            selected = by_id.get(item.candidate_id)
+            if selected is None:
+                not_found(index, wrong, f"candidate_id {item.candidate_id} is not in this submission")
+                continue
+            if item.page_number is not None and selected.page_number != item.page_number:
+                not_found(index, wrong, (
+                    f"candidate_id {selected.id} is on page {selected.page_number}, "
+                    f"not page {item.page_number}"
+                ))
+                continue
+            scope = [selected]
+        elif item.page_number is not None:
+            scope = by_page.get(item.page_number, [])
+            if not scope:
+                not_found(index, wrong, f"No candidate is on page {item.page_number}")
+                continue
+        else:
+            scope = None  # the whole submission
+
+        # A candidate matches when it shows the wrong number, or when its edit
+        # history shows it already received this exact correction (a resend
+        # after a lost response), whatever it shows now. Counting both means a
+        # correction is never applied twice: a resent swap is ambiguous, and a
+        # correction changed since is refused rather than redone.
+        showing = by_number.get(wrong, []) if scope is None else [
+            row for row in scope if current[row.id] == wrong
+        ]
+        matches = {row.id: row for row in showing}
+        received: dict[int, dict] = {}
+        if wrong != right:
+            in_scope = None if scope is None else {row.id for row in scope}
+            received = {
+                row_id: edit
+                for row_id, edit in applied.get((wrong, right), {}).items()
+                if in_scope is None or row_id in in_scope
+            }
+            matches.update((row_id, by_id[row_id]) for row_id in received)
+
+        if len(matches) > 1:
+            ordered = sorted(matches.values(), key=lambda row: (row.page_number or 0, row.id))
+            errors.append({
+                "index": index,
+                "code": "ambiguous_candidate_number",
+                "message": (
+                    f"{len(ordered)} candidates in this submission show this number or "
+                    "already received this correction; add candidate_id or page_number"
+                ),
+                "candidate_number": wrong,
+                "matches": [
+                    _candidate_ref(row, template_of[row.id], candidate_number=row.candidate_number or "")
+                    for row in ordered[:_MATCH_LIMIT]
+                ],
+                "truncated": len(ordered) > _MATCH_LIMIT,
+            })
+            continue
+        if not matches and scope:
+            errors.append({
+                "index": index,
+                "code": "candidate_number_mismatch",
+                "message": "The selected candidate shows a different number; re-read the results",
+                "candidate_number": wrong,
+                "candidates": [
+                    _candidate_ref(row, template_of[row.id], candidate_number=row.candidate_number or "")
+                    for row in scope[:_MATCH_LIMIT]
+                ],
+            })
+            continue
+        if not matches:
+            not_found(index, wrong, "No candidate in this submission shows this number")
+            continue
+
+        row = next(iter(matches.values()))
+        if row.id in received:
+            if current[row.id] != right:
+                errors.append({
+                    "index": index,
+                    "code": "correction_superseded",
+                    "message": (
+                        "This candidate already received this correction and its "
+                        "number has changed since; re-read the results"
+                    ),
+                    "candidate_number": wrong,
+                    "candidates": [
+                        _candidate_ref(row, template_of[row.id], candidate_number=row.candidate_number or "")
+                    ],
+                })
+                continue
+            outcome, previous = "already_applied", str(received[row.id].get("from") or "")
+        else:
+            previous = row.candidate_number or ""
+            # Equal once trimmed still rewrites a padded stored number.
+            outcome = "unchanged" if previous == right else "corrected"
+        if row.id in first_index:
+            errors.append({
+                "index": index,
+                "code": "duplicate_target",
+                "message": "Another correction in this request already targets this candidate",
+                "candidate_id": row.id,
+                "first_index": first_index[row.id],
+            })
+            continue
+        first_index[row.id] = index
+        resolved.append((item, row, outcome, previous))
+
+    # Check the numbers the whole batch leaves behind, so a swap passes and two
+    # corrections cannot both claim one number. A page whose layout was never
+    # identified may be any paper, so it conflicts with every paper.
+    final = dict(current)
+    checked: set[str] = set()
+    for item, row, outcome, _ in resolved:
+        if outcome == "corrected":
+            final[row.id] = item.corrected_candidate_number
+            if not item.allow_duplicate:
+                checked.add(item.corrected_candidate_number)
+    holders_of: dict[str, dict[Optional[tuple], list[Any]]] = {}
+    for row in rows:
+        if final[row.id] in checked:
+            holders_of.setdefault(final[row.id], {}).setdefault(paper_of(row), []).append(row)
+    for item, row, outcome, _ in resolved:
+        if outcome != "corrected" or item.allow_duplicate:
+            continue
+        groups = holders_of[item.corrected_candidate_number]
+        paper = paper_of(row)
+        same_paper = (
+            list(groups.values()) if paper is None
+            else [groups.get(paper, []), groups.get(None, [])]
+        )
+        # Every group holding this row includes it once.
+        others = sum(len(group) for group in same_paper) - 1
+        if others:
+            conflicts = islice(
+                (other for group in same_paper for other in group if other.id != row.id),
+                _MATCH_LIMIT,
+            )
+            errors.append({
+                "index": first_index[row.id],
+                "code": "candidate_number_in_use",
+                "message": (
+                    "Another candidate on the same paper in this submission would "
+                    "share this number; set allow_duplicate if both sheets are "
+                    "really this candidate's"
+                ),
+                "corrected_candidate_number": item.corrected_candidate_number,
+                "conflicts": [_candidate_ref(other, template_of[other.id]) for other in conflicts],
+                "truncated": others > _MATCH_LIMIT,
+            })
+
+    if errors:
+        errors.sort(key=lambda error: error["index"])
+        reject(409, {
+            "code": "candidate_number_corrections_rejected",
+            "message": "No corrections were applied; fix or remove the listed corrections and resend",
+            "errors": errors,
+        })
+
+    edited_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    targets = [entry for entry in resolved if entry[2] == "corrected"]
+    for start in range(0, len(targets), _LOAD_CHUNK):
+        chunk = targets[start:start + _LOAD_CHUNK]
+        loaded = {
+            candidate.id: candidate
+            for candidate in db.query(CandidateResult)
+            .filter(CandidateResult.id.in_([row.id for _, row, _, _ in chunk]))
+            .all()
+        }
+        for item, row, _, _ in chunk:
+            candidate = loaded[row.id]
+            extra = dict(candidate.extra_fields or {})
+            # Same audit shape as confirm-review, so the history reads as one.
+            extra["manual_edits"] = list(extra.get("manual_edits") or []) + [{
+                "target": "candidate_number",
+                "from": candidate.candidate_number or "",
+                "to": item.corrected_candidate_number,
+                "at": edited_at,
+                "by": body.edited_by,
+            }]
+            candidate.extra_fields = extra
+            candidate.candidate_number = item.corrected_candidate_number
+    db.commit()
+    if targets:
+        logger.info(
+            "Corrected %d candidate number(s) in submission %s", len(targets), submission_id
+        )
+
+    return CandidateNumberCorrectionResponse(
+        submission_id=submission_id,
+        corrected=len(targets),
+        results=[
+            CandidateNumberCorrectionResult(
+                candidate_id=row.id,
+                page_number=row.page_number,
+                template_id=template_of[row.id],
+                previous_candidate_number=previous,
+                candidate_number=(
+                    item.corrected_candidate_number
+                    if outcome == "corrected"
+                    else row.candidate_number or ""
+                ),
+                outcome=outcome,
+            )
+            for item, row, outcome, previous in resolved
+        ],
     )
 
 

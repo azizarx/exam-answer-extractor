@@ -55,7 +55,7 @@ The browser application prompts for the API key when authentication is enabled. 
 
 - Request and response JSON is UTF-8. File uploads use `multipart/form-data` with a field named **`file`**. Let your HTTP library generate the multipart boundary.
 - Submission, candidate, marking-run, and answer-key IDs are integers with different meanings. Store the IDs returned by the API; do not predict the next task number.
-- Candidate numbers are **strings** and may contain leading zeros. They are extracted identifiers, not guaranteed unique database IDs.
+- Candidate numbers are **strings** and may contain leading zeros. They are extracted identifiers, not guaranteed unique database IDs. Correct a misread number with `POST /submission/{id}/candidate-number-corrections` (section 6).
 - PDF page numbers start at **1**. Question keys in `answers` are strings such as `"12"`; `outcomes[].question_number` is an integer.
 - Timestamps represent UTC. Most current responses serialize UTC timestamps **without a trailing `Z` or offset**; interpret these as UTC. Human-edit audit timestamps include `Z`.
 - Missing identity fields can be `null` in raw extraction and are normalized to `""` in persisted candidate responses. Empty drawing payloads commonly serialize as `null`.
@@ -399,7 +399,7 @@ The latest marking run must be completed and cover every candidate. The endpoint
 
 ### GET /submission/{submission_id}/json
 
-Returns the **original extraction JSON snapshot**, not the marked export. Its shape matches `/extract/json` in section 7. It is not refreshed after manual answer edits or re-marking. It has no persisted candidate IDs and removes each candidate's `page_number`.
+Returns the **original extraction JSON snapshot**, not the marked export. Its shape matches `/extract/json` in section 7. It is not refreshed after manual edits (answers, identity fields, or candidate-number corrections) or re-marking. It has no persisted candidate IDs and removes each candidate's `page_number`.
 
 Use `/submission/{id}` for current corrected answers and `/marked-json` for current scores. A missing result reference returns **404**; a referenced file that cannot be read can currently return **500**. Do not use availability of this raw snapshot as the task-completion signal.
 
@@ -422,7 +422,7 @@ Read `marking.outcomes` for grades. The current weighted API does not replace an
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `candidate_result_id` | Integer | Persisted candidate ID (absent from synchronous marking output) |
-| `candidate_number` | String | Extracted candidate number (persisted marking responses) |
+| `candidate_number` | String | Current candidate number, including any correction (persisted marking responses) |
 | `awarded_marks` | Number | Sum of awarded question marks |
 | `max_marks` | Number | Sum of marks in the selected key |
 | `percentage` | Number | `100 × awarded_marks / max_marks`; do not assume fixed rounding |
@@ -548,6 +548,104 @@ The response includes the full current answer map, identity strings, remaining `
 Edits are committed before re-marking. **HTTP 200 can mean the edit succeeded but re-marking did not**: check `remarked`, `marking_run_id`, and `remark_error`. With `remark: false`, existing scores remain unchanged and can be stale relative to edited answers. Re-fetch submission details after a successful re-mark.
 
 Actual value changes append `extra_fields.manual_edits` entries with `target`, `from`, `to`, `at`, and `by`. Clearing a review flag without changing the value does not add a value-change entry. Missing submission or a candidate belonging to another submission returns **404**. Wait until submission processing and marking are complete before editing.
+
+### POST /submission/{submission_id}/candidate-number-corrections
+
+Correct candidate numbers that extraction misread, once processing has completed. Each candidate is found **by the number the results currently show**, so when your import rejects an unknown candidate number you can send that number together with the right one from your records. You do not need the persisted candidate ID unless the number is shared. Corrections apply to one submission, because the same number legitimately appears in other submissions and re-uploads.
+
+**Input — `application/json`**
+
+| Field | Type | Default / behavior |
+| --- | --- | --- |
+| `corrections` | Array of 1–10,000 objects | Required. Applied together: every correction or none |
+| `corrections[].candidate_number` | String, up to 1,000 characters | Required. The number exactly as the results show it now, e.g. `candidates[].candidate_number` from `/marked-json`. Surrounding whitespace is ignored; `""` selects a candidate whose number was not read |
+| `corrections[].corrected_candidate_number` | String, 1–100 characters after surrounding whitespace is removed | Required. Control characters are rejected. Send a JSON string so leading zeros survive |
+| `corrections[].candidate_id` | Integer or null | Optional persisted candidate `id`. Needed when the number is ambiguous; recommended when a batch moves numbers between candidates (see retries below) |
+| `corrections[].page_number` | Integer ≥ 1 or null | Optional one-based page, an alternative to `candidate_id` |
+| `corrections[].allow_duplicate` | Boolean | `false`. When true, accepts a number that another candidate on the same paper in this submission already has |
+| `edited_by` | String or null | Audit label supplied by your application; not an authenticated user identity |
+
+Example: your import rejected candidate `000123`, and your records show the sheet belongs to `000132`:
+
+```json
+{
+  "corrections": [
+    {
+      "candidate_number": "000123",
+      "corrected_candidate_number": "000132"
+    }
+  ],
+  "edited_by": "import-reconciler"
+}
+```
+
+**Output — 200:**
+
+```json
+{
+  "status": "success",
+  "submission_id": 1,
+  "corrected": 1,
+  "results": [
+    {
+      "candidate_id": 1,
+      "page_number": 1,
+      "template_id": "seamo_2025_a",
+      "previous_candidate_number": "000123",
+      "candidate_number": "000132",
+      "outcome": "corrected"
+    }
+  ]
+}
+```
+
+`results` has one entry per correction, in request order, with the candidate's persisted `candidate_id`, `page_number`, `template_id`, the `previous_candidate_number`, and the current `candidate_number`. `corrected` counts candidates this request actually changed. `outcome` is one of:
+
+| `outcome` | Meaning |
+| --- | --- |
+| `corrected` | The number was changed |
+| `already_applied` | An earlier request (or a review-screen edit) made this exact correction, and the candidate still shows the corrected number. Nothing new is recorded |
+| `unchanged` | The candidate already shows exactly the corrected number. A stored number that differs only by surrounding whitespace is rewritten trimmed and reported as `corrected` |
+
+Matching is exact and case-sensitive apart from surrounding whitespace; numbers are never reformatted, so `000123` does not match `123`.
+
+**Retries.** A correction is never applied twice. A candidate matches a correction when it shows `candidate_number`, or when its edit history proves this exact correction was already made. One match is applied or reported as `already_applied`; more than one is refused as ambiguous. Resending a lost request therefore returns `already_applied`, with two exceptions that are refused rather than applied again. If the old number has since moved to another candidate, as after a swap or a chain such as `A→B, C→A`, a resend returns 409 `ambiguous_candidate_number` instead of swapping back. If the candidate's number has changed since, for example a reviewer undid the correction, it returns 409 `correction_superseded`. Include `candidate_id` in corrections that move numbers between candidates, so a resend of the identical body proves itself and returns `already_applied`. To re-apply a correction that was undone deliberately, edit that candidate with `confirm-review`.
+
+**Rejections.** A batch that cannot be applied in full changes nothing and returns **409** with `detail.code: "candidate_number_corrections_rejected"` and one `detail.errors` entry per refused correction. Each entry has the correction's zero-based `index`, a `code`, and a `message`:
+
+| `errors[].code` | Meaning / action |
+| --- | --- |
+| `candidate_not_found` | No candidate in this submission shows `candidate_number`; or `candidate_id` is not in this submission, no candidate is on `page_number`, or the two select different candidates (`message` says which). Re-read the results |
+| `ambiguous_candidate_number` | Several candidates show it, or one shows it while another already carries this exact correction (a resent swap or chain). `matches` lists their `candidate_id`, `page_number`, `template_id` and current `candidate_number` (up to 100, with `truncated`). Resend with `candidate_id` or `page_number`; the API never chooses one |
+| `candidate_number_mismatch` | The candidate selected by `candidate_id`/`page_number` shows a different number, listed in `candidates`. Your copy of the results is stale |
+| `correction_superseded` | The selected candidate already received this exact correction, and its number has changed since; `candidates` shows the current number. Nothing is re-applied |
+| `duplicate_target` | Two corrections in the request select the same candidate; `first_index` is the earlier one |
+| `candidate_number_in_use` | After this batch, another candidate on the same paper in this submission would show the corrected number (`conflicts`, up to 100, with `truncated`). Check your records; if both sheets really are that candidate's, resend with `allow_duplicate: true` |
+
+Example: the first correction repeats the one above (it would be `already_applied`); the second number is unknown, so neither is applied:
+
+```json
+{
+  "detail": {
+    "code": "candidate_number_corrections_rejected",
+    "message": "No corrections were applied; fix or remove the listed corrections and resend",
+    "errors": [
+      {
+        "index": 1,
+        "code": "candidate_not_found",
+        "message": "No candidate in this submission shows this number",
+        "candidate_number": "000999"
+      }
+    ]
+  }
+}
+```
+
+A paper means one exam paper across its layout variants, for example both SEAMO 2025 Paper A layouts. A page whose layout was never identified may be any paper, so it conflicts with every paper. The same student can sit two different papers in one PDF, so a number shared between two identified papers is accepted. Duplicates are checked against the numbers the whole batch leaves behind, so two numbers can be swapped in one request.
+
+An unknown submission returns **404**. A submission that has not completed processing returns **409** with `detail.code: "submission_not_completed"` and its `status`. A malformed body returns **422**, for example a JSON number instead of a string, a blank corrected number, or an empty `corrections` array.
+
+**What changes.** Only the stored candidate number. Each actual change appends an `extra_fields.manual_edits` entry (`target: "candidate_number"`, `from`, `to`, `at`, `by`), so the number extraction read stays on record. `/submission/{id}`, `/submission/{id}/marking`, `/marked-json` and `/candidate-page` return the corrected number immediately; re-fetch the marked export and import it again. Marks are untouched and nothing is re-marked, because marking never reads the candidate number. The raw extraction snapshot (`/submission/{id}/json`) and finished job results keep the number as extracted, and an archived snapshot keeps the number it was archived with, because archives are never rewritten.
 
 ### Image endpoints
 
@@ -787,7 +885,7 @@ The legacy `ErrorResponse` schema (`error`, `detail`, `timestamp`) is not the co
 | 401 | Missing or invalid API credential |
 | 404 | Unknown ID, unavailable image/reference, or missing result reference |
 | 405 | Unsupported method, including public answer-key mutations |
-| 409 | Operation conflicts with current task/marking state or marked-export coverage requirements |
+| 409 | Operation conflicts with current task/marking state or marked-export coverage requirements, or a candidate-number correction batch was rejected |
 | 410 | Retained source PDF is no longer available for page preview |
 | 413 | Upload rejected by deployment/proxy body-size limits, when configured |
 | 422 | Missing/invalid multipart field, path/query value, or typed JSON body |
@@ -809,6 +907,7 @@ Endpoint-specific rules in the sections above take precedence. HTTP 200 can stil
 - There is no upload deduplication or `Idempotency-Key` support. Repeating `/upload` creates another task and can repeat billable processing. If the upload response is lost, reconcile recent submissions with your records/operator before retrying; filenames alone are not unique.
 - Retrying a GET after a network error is normally appropriate. Use bounded backoff for timeouts and transient 429/502/503/504 responses. Do not retry every 4xx blindly.
 - After a lost manual-mark response, fetch `/marking` before deciding to start another run. Edits and re-marks are separate commit boundaries.
+- A candidate-number correction can be resent after a lost response: it is never applied twice. An applied correction returns `outcome: "already_applied"`; a resent batch that moved numbers between candidates without `candidate_id`, or a correction changed since, returns 409 instead.
 - Retain source PDFs and final exports in your own system according to your retention requirements. The API has no source-PDF download endpoint, durable webhook delivery, automatic resume, or result-finalization acknowledgment.
 - Keep human review in the integration: display the scan, corrections, question outcomes, and provisional scores before publishing final results.
 
@@ -820,8 +919,9 @@ Before connecting the client application's production workflow:
 2. Upload a representative PDF, retain the returned ID, and complete the status/marking/export flow.
 3. Verify leading-zero candidate numbers, mixed templates, absent header fields, and one-based page links.
 4. Exercise blank/invalid answers and `needs_review`; confirm an edit with `remark: true` changes the latest scores while preserving the raw snapshot.
-5. Exercise unavailable/partial key coverage, a failed marking attempt, a cancelled task, and a lost polling connection.
-6. Confirm file-size and timeout settings against the client application's infrastructure. Reconcile errors without blindly re-uploading.
+5. Correct a misread candidate number by the number the export shows; confirm `/marked-json` returns the corrected number with unchanged marks, and that repeating the request returns `already_applied`.
+6. Exercise unavailable/partial key coverage, a failed marking attempt, a cancelled task, and a lost polling connection.
+7. Confirm file-size and timeout settings against the client application's infrastructure. Reconcile errors without blindly re-uploading.
 
 ### Contract verification and maintenance
 
@@ -877,7 +977,7 @@ After processing, the archive worker copies the original PDF, all retained conve
 
 Processing and archiving have independent statuses. Archive failure preserves local files and does not re-run extraction. `archive_status` is `disabled`, `not_started`, `pending`, `running`, `completed`, `failed` or `cancelled`. **Pre-rollout submissions remain pinned locally** and are not automatically modified or backfilled. New submissions archive immediately after processing and retain a 24-hour local cache before verified cleanup. `local_eviction_enabled` reports whether this cleanup is enabled.
 
-The database remains authoritative for corrected answers and current scores. Marked snapshots are archived by marking-run ID. Human re-marking queues another archive when enabled. Temporary remote-storage errors return 503; an unavailable retained image returns 410.
+The database remains authoritative for corrected answers, candidate numbers and current scores. Marked snapshots are archived by marking-run ID. Human re-marking queues another archive when enabled. An archived snapshot is never rewritten: archiving again after a correction that created no new run, such as a candidate-number correction, stores a new revision beside it. Candidate-number corrections do not queue an archive themselves. Temporary remote-storage errors return 503; an unavailable retained image returns 410.
 
 ### Explicit deletion and local retention
 
