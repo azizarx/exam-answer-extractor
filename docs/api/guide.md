@@ -628,11 +628,13 @@ X-API-Key: YOUR_API_KEY
 
 Required `exam_id=31` identifies the client’s **SEAMO 2026 series**, across all papers (K, A–F) and supported layout variants. This is the current production exam mapping, independent of the separate `/exams` database IDs. Matching uses explicit exam brand/year metadata. Existing paper codes from `/templates/all` remain accepted for compatibility.
 
-`candidate_number` is a string; leading zeros are significant and only surrounding whitespace is trimmed. Optional integer `submission_id` and one-based `page_number` disambiguate repeated scans or matches across papers.
+`candidate_number` is a string; leading zeros are significant and only surrounding whitespace is trimmed. Optional integer `submission_id` and one-based `page_number` select a specific scan.
 
 Page lookup does **not** require answer keys, scores, or completed marking. SEAMO 2026 answer keys are pending; extraction and image retrieval remain available, but marking cannot be completed until the appropriate keys are provisioned.
 
-Success is HTTP 200 with PNG bytes for the full source page and `X-Submission-ID`, `X-Candidate-ID`, `X-Page-Number` headers. No match returns 404; unknown exam ID/paper code or malformed input returns 422. Multiple matches return 409 with `detail.code: "ambiguous_candidate_page"` and `detail.matches` containing submission, candidate and page IDs. The API never chooses a scan silently. A discriminator must belong to the matching candidate and exam series (or the selected paper when using a paper code).
+Success is HTTP 200 with PNG bytes for the full source page and `X-Submission-ID`, `X-Candidate-ID`, `X-Page-Number` headers. No match returns 404; unknown exam ID/paper code or malformed input returns 422. A discriminator must belong to the matching candidate and exam series (or the selected paper when using a paper code).
+
+**Several matches.** A candidate number identifies one sheet per exam, so every match is treated as a copy of that sheet, whatever its paper, page or extracted name. The lookup returns the newest one: uploads that completed processing come first, then the newest upload, then the sheet written last within it. The headers name the sheet returned. Pass `submission_id` (and `page_number`) to fetch a specific scan instead.
 
 ### Spaces archival
 

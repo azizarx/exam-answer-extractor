@@ -137,12 +137,10 @@ def candidate_page(
     )
     if submission_id is not None:query=query.filter(CandidateResult.submission_id==submission_id)
     if page_number is not None:query=query.filter(CandidateResult.page_number==page_number)
-    matches=query.order_by(CandidateResult.id).limit(101).all()
-    if not matches:raise HTTPException(404,'Candidate not found for this exam')
-    if len(matches)>1:
-        raise HTTPException(409,{'code':'ambiguous_candidate_page','message':'Provide submission_id and, if needed, page_number.',
-            'matches':[{'submission_id':c.submission_id,'candidate_id':c.id,'page_number':c.page_number} for c in matches[:100]],'truncated':len(matches)>100})
-    candidate=matches[0]
+    # A candidate number identifies one sheet per exam, so every match is a copy
+    # of it: return the newest, preferring uploads that finished processing.
+    candidate=query.order_by((ExamSubmission.status=='completed').desc(),CandidateResult.submission_id.desc(),CandidateResult.id.desc()).first()
+    if candidate is None:raise HTTPException(404,'Candidate not found for this exam')
     if not candidate.page_number:raise HTTPException(409,{'code':'page_not_ready'})
     from backend.api.routes import get_submission_page_image
     response=get_submission_page_image(candidate.submission_id,candidate.page_number,db)

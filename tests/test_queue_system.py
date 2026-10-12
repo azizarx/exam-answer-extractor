@@ -113,15 +113,15 @@ def test_pages_checkpoint_and_duplicate_delivery_do_not_duplicate_candidates(env
     assert image.headers['x-page-number']=='1'
 
 
-def test_candidate_lookup_refuses_ambiguous_match_and_preserves_leading_zero(env):
+def test_candidate_lookup_returns_newest_match_and_preserves_leading_zero(env):
     sid,_=upload(env)
     with env.db() as db:
-        db.add_all([CandidateResult(submission_id=sid,page_number=i,candidate_number='000123',template_id='seamo_x_2026_b',answers={}) for i in [1,2]])
+        db.add_all([CandidateResult(submission_id=sid,page_number=i,candidate_number='000123',template_id='seamo_x_2026_b',answers={}) for i in [2,1]])
         db.commit()
     params={'exam_id':'seamo_x_2026_b','candidate_number':'000123'}
-    ambiguous=env.client.get('/candidate-page',params=params)
-    assert ambiguous.status_code==409
-    assert len(ambiguous.json()['detail']['matches'])==2
+    newest=env.client.get('/candidate-page',params=params)
+    assert newest.status_code==200
+    assert newest.headers['x-page-number']=='1'
     assert env.client.get('/candidate-page',params={**params,'candidate_number':'123'}).status_code==404
     selected=env.client.get('/candidate-page',params={**params,'submission_id':sid,'page_number':2})
     assert selected.status_code==200
@@ -396,7 +396,7 @@ def test_external_exam_series_excludes_other_years_and_seamo_x(env):
     assert env.client.get('/candidate-page',params={'exam_id':'seamo_x_2026_b','candidate_number':'000123'}).status_code==200
 
 
-def test_external_exam_series_requires_disambiguation_across_papers_and_submissions(env):
+def test_external_exam_series_selects_across_papers_and_submissions(env):
     sid,_=upload(env);other_sid,_=upload(env)
     with env.db() as db:
         db.get(ExamSubmission,sid).template_id='seamo_2026_a'
@@ -406,14 +406,36 @@ def test_external_exam_series_requires_disambiguation_across_papers_and_submissi
         ])
         db.commit()
     params={'exam_id':31,'candidate_number':'000123'}
-    response=env.client.get('/candidate-page',params=params)
-    assert response.status_code==409
-    assert len(response.json()['detail']['matches'])==2
-    selected=env.client.get('/candidate-page',params={**params,'submission_id':other_sid})
+    selected=env.client.get('/candidate-page',params={**params,'submission_id':sid})
     assert selected.status_code==200
-    assert selected.headers['x-page-number']=='2'
+    assert selected.headers['x-page-number']=='1'
     # A discriminator may never broaden the requested exam series.
     assert env.client.get('/candidate-page',params={**params,'exam_id':'seamo_2025_a','submission_id':other_sid}).status_code==404
+
+
+def test_external_exam_series_returns_newest_completed_match(env):
+    # One sheet per candidate number per exam: every match is treated as a copy,
+    # even on another paper or under another name.
+    first,_=upload(env);second,_=upload(env);third,_=upload(env)
+    with env.db() as db:
+        for sid in (first,second):db.get(ExamSubmission,sid).status='completed'
+        db.get(ExamSubmission,third).status='failed'
+        db.add_all([CandidateResult(submission_id=sid,page_number=page,candidate_number='CAN614088633',candidate_name=name,template_id=template,answers={})
+            # Uploads process concurrently, so an older upload's row can be written last.
+            for sid,page,name,template in [(second,3,'Tran Thi Binh','seamo_2026_b'),(second,2,None,'seamo_2026_a_fb'),
+                                           (first,1,'Nguyen Van An','seamo_2026_a'),(third,1,'Nguyen Van An','seamo_2026_a')]])
+        db.commit()
+    response=env.client.get('/candidate-page',params={'exam_id':31,'candidate_number':'CAN614088633'})
+    assert response.status_code==200,response.text
+    assert response.content.startswith(b'\x89PNG')
+    # The newest row of the newest completed upload, not the failed upload after it.
+    assert (response.headers['x-submission-id'],response.headers['x-page-number'])==(str(second),'2')
+    # Nothing completed yet: the newest upload still answers.
+    with env.db() as db:
+        for sid in (first,second):db.get(ExamSubmission,sid).status='processing'
+        db.commit()
+    response=env.client.get('/candidate-page',params={'exam_id':31,'candidate_number':'CAN614088633'})
+    assert (response.headers['x-submission-id'],response.headers['x-page-number'])==(str(third),'1')
 
 
 def fake_spaces(objects):

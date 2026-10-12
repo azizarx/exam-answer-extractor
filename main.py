@@ -38,6 +38,7 @@ PDF answer-sheet extraction and AI marking with a durable processing queue.
 
 GET /candidate-page accepts exam_id=31 for the SEAMO 2026 series and a string candidate_number.
 Page lookup does not require answer keys; existing paper codes remain accepted.
+When several sheets match a candidate number, the newest one is returned.
 POST /submission/{submission_id}/candidate-number-corrections fixes misread candidate numbers,
 finding each candidate by the number the results currently show.
 GET /capabilities reports upload and queue limits. Jobs survive API restarts.

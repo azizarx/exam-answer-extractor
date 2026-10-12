@@ -82,8 +82,9 @@ submissions remain pinned locally.
 
 `GET /candidate-page?exam_id=31&candidate_number=000123` returns an
 authenticated PNG for the SEAMO 2026 exam series, without requiring answer keys.
-Existing paper codes remain accepted. Repeated candidate/exam matches return 409 and require a
-`submission_id` (and sometimes `page_number`) to select the intended scan.
+Existing paper codes remain accepted. A candidate number identifies one sheet per exam, so
+when several sheets match, the newest one wins (completed uploads first); `submission_id`
+and `page_number` select a specific scan.
 
 `POST /submission/{id}/candidate-number-corrections` fixes misread candidate
 numbers after processing, finding each candidate by the number the results
