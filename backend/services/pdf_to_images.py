@@ -8,11 +8,32 @@ from backend.services.cancellation import CancellationExecutor as ThreadPoolExec
 from typing import List, Optional, Tuple
 from PIL import Image
 import logging
+import math
 import tempfile
 import os
 import io
 
 logger = logging.getLogger(__name__)
+
+# The area of an A4 sheet in points; every template is drawn for one.
+A4_AREA_POINTS = 595.0 * 842.0
+DEFAULT_MAX_PAGE_PIXELS = 25_000_000
+
+
+def render_zoom(rect, dpi: int, max_pixels: int = DEFAULT_MAX_PAGE_PIXELS) -> float:
+    """Zoom that renders a page at ``dpi``, or at A4 size if that would exceed ``max_pixels``.
+
+    Some PDF tools write a scan's page size in pixels instead of points, so an
+    A4 sheet scanned at 300 dpi claims to be 2480x3507 points (34x48 inches)
+    and would render at 151 MP. Such a page is rendered with the pixel count of
+    A4 at ``dpi``, which is the scan's own resolution, so it reaches extraction
+    like any other A4 page. A page within the limit renders exactly as before.
+    """
+    zoom = dpi / 72.0
+    area = rect.width * rect.height
+    if area <= 0 or area * zoom * zoom <= max_pixels:
+        return zoom
+    return zoom * math.sqrt(A4_AREA_POINTS / area)
 
 
 def _render_page_chunk(
@@ -21,18 +42,19 @@ def _render_page_chunk(
     image_paths: List[str],
     dpi: int,
     grayscale: bool,
+    max_pixels: int = DEFAULT_MAX_PAGE_PIXELS,
 ) -> int:
     """Render a contiguous set of pages with one document handle."""
-    zoom = dpi / 72.0
-    mat = pymupdf.Matrix(zoom, zoom)
     doc = pymupdf.open(pdf_path)
     try:
         for i in page_indices:
             check_cancelled()
-            render_options = {"matrix": mat, "alpha": False}
+            page = doc[i]
+            zoom = render_zoom(page.rect, dpi, max_pixels)
+            render_options = {"matrix": pymupdf.Matrix(zoom, zoom), "alpha": False}
             if grayscale:
                 render_options["colorspace"] = pymupdf.csGRAY
-            pix = doc[i].get_pixmap(**render_options)
+            pix = page.get_pixmap(**render_options)
             pix.save(image_paths[i])
     finally:
         doc.close()
@@ -57,6 +79,12 @@ class PDFConverter:
     ):
         self.dpi = dpi
         self.fmt = fmt
+        self.max_pixels = DEFAULT_MAX_PAGE_PIXELS
+        try:
+            from backend.config import get_settings
+            self.max_pixels = int(get_settings().max_page_pixels)
+        except Exception:
+            pass
         if max_workers is None or grayscale is None:
             try:
                 from backend.config import get_settings
@@ -99,6 +127,7 @@ class PDFConverter:
             if len(chunks) == 1:
                 _render_page_chunk(
                     pdf_path, chunks[0], image_paths, self.dpi, self.grayscale,
+                    self.max_pixels,
                 )
             else:
                 with ThreadPoolExecutor(max_workers=len(chunks)) as pool:
@@ -110,6 +139,7 @@ class PDFConverter:
                             image_paths,
                             self.dpi,
                             self.grayscale,
+                            self.max_pixels,
                         )
                         for chunk in chunks
                     ]
@@ -169,12 +199,10 @@ class PDFConverter:
             pdf_document = pymupdf.open(pdf_path)
             images = []
 
-            zoom = self.dpi / 72
-            mat = pymupdf.Matrix(zoom, zoom)
-
             for page_num in range(len(pdf_document)):
                 page = pdf_document[page_num]
-                render_options = {"matrix": mat, "alpha": False}
+                zoom = render_zoom(page.rect, self.dpi, self.max_pixels)
+                render_options = {"matrix": pymupdf.Matrix(zoom, zoom), "alpha": False}
                 if self.grayscale:
                     render_options["colorspace"] = pymupdf.csGRAY
                 pix = page.get_pixmap(**render_options)

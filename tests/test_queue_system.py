@@ -521,3 +521,30 @@ def test_number_correction_waits_for_processing_to_finish(env):
     assert response.status_code==409
     assert response.json()['detail']=={'code':'submission_not_completed','status':'pending',
         'message':'Candidate numbers can be corrected once processing has completed'}
+
+
+def test_page_sized_in_pixels_renders_as_a4(env,monkeypatch):
+    # Some PDF tools write a scan's size in pixels: an A4 sheet scanned at 150 dpi
+    # claims 1240x1753 points, which at 300 dpi would exceed the raster limit.
+    from PIL import Image
+    from backend.services import template_extractor, marking_workflow
+    from backend.services.pdf_to_images import render_zoom
+    sizes=[]
+    def extract(path,images,**kwargs):
+        sizes.extend(Image.open(p).size for p in images)
+        return {'candidates':[{'page_number':1,'candidate_number':'0100','candidate_name':'Synthetic',
+            'template_id':'seamo_x_2026_b','answers':{'1':'A'},'extra_fields':{}}]}
+    monkeypatch.setattr(template_extractor,'extract_pdf_auto',extract)
+    monkeypatch.setattr(marking_workflow,'mark_submission_answers',lambda db,sid:SimpleNamespace(id=1,status='unavailable'))
+    with pymupdf.open() as pdf:
+        pdf.new_page(width=1240,height=1753).insert_text((60,60),'Scan sized in pixels')
+        env.pdf=pdf.tobytes()
+    sid,jid=upload(env)
+    for _ in range(3):runtime.execute(jid)
+    with env.db() as db:
+        assert db.get(ExamSubmission,sid).status=='completed',db.get(ExamSubmission,sid).error_message
+    # Rendered at the pixel size of A4 at 300 dpi, the size every template expects.
+    (width,height),=sizes
+    assert abs(width-2480)<=2 and abs(height-3507)<=2
+    # A page within the limit renders exactly as before.
+    assert render_zoom(pymupdf.Rect(0,0,595,842),300,25_000_000)==300/72

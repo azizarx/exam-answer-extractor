@@ -1525,7 +1525,10 @@ def get_submission_page_image(
                     status_code=404,
                     detail=f"Page {page_number} is outside this submission",
                 )
-            pixmap = document[page_number - 1].get_pixmap(dpi=dpi)
+            from backend.services.pdf_to_images import render_zoom
+            page = document[page_number - 1]
+            zoom = render_zoom(page.rect, dpi, int(settings.max_page_pixels))
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
             png_bytes = pixmap.tobytes("png")
     except HTTPException:
         raise

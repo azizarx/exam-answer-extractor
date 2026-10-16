@@ -105,13 +105,14 @@ def process_unit(sid, execution):
         total=original.page_count
         if total<1 or total>settings.max_pdf_pages:raise ValueError(f'PDF page count must be between 1 and {settings.max_pdf_pages}')
         end=min(total,start+settings.queue_batch_pages)
-        from backend.services.pdf_to_images import get_pdf_converter
+        from backend.services.pdf_to_images import get_pdf_converter, render_zoom
         converter=get_pdf_converter()
         workspace_bytes=source.stat().st_size
         crop_workspace_bytes=0
         for number in range(start,end):
             page=original[number]
-            pixels=(page.rect.width*converter.dpi/72)*(page.rect.height*converter.dpi/72)
+            zoom=render_zoom(page.rect,converter.dpi,settings.max_page_pixels)
+            pixels=page.rect.width*zoom*page.rect.height*zoom
             if pixels>settings.max_page_pixels:raise ValueError(f'Page {number+1} exceeds the raster pixel limit')
             crop_workspace_bytes+=int(pixels)*4
             workspace_bytes+=int(pixels)*8  # Conversion images plus bounded crop workspace.
